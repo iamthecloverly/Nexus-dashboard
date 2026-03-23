@@ -65,7 +65,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
             onMouseEnter={e => { if (currentView !== item.id) (e.currentTarget as HTMLElement).style.cssText += ';color:#fff;background:rgba(255,255,255,0.04)'; }}
             onMouseLeave={e => { if (currentView !== item.id) { (e.currentTarget as HTMLElement).style.color = '#71717A'; (e.currentTarget as HTMLElement).style.background = ''; } }}
           >
-            <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{item.icon}</span>
             <span className="text-[13px]">{item.label}</span>
             {currentView === item.id && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r-full" style={{ background: '#06E8F9' }} />}
           </button>
@@ -111,12 +111,16 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
           }
           title="YouTube Music"
         >
-          <span className="material-symbols-outlined text-[20px]">music_note</span>
+          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">music_note</span>
           <span className="text-[13px] font-medium">{musicActive ? 'Now Playing' : 'Music'}</span>
           {musicActive && (
-            <div className="ml-auto flex items-end gap-[2px] h-3">
+            <div className="ml-auto flex items-end gap-[2px] h-3" aria-hidden="true">
               {[50, 80, 35].map((h, i) => (
-                <div key={i} className="w-[2px] rounded-full" style={{ height: `${h}%`, background: '#06E8F9', animation: `pulse 0.${7+i}s ease-in-out infinite alternate` }} />
+                <div
+                  key={i}
+                  className="eq-bar eq-bar-playing w-[2px] rounded-full"
+                  style={{ height: `${h}%`, background: '#06E8F9', ['--eq-dur' as string]: `0.${7+i}s` }}
+                />
               ))}
             </div>
           )}
@@ -131,7 +135,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
             : { color: '#52525B' }
           }
         >
-          <span className="material-symbols-outlined text-[20px]">settings</span>
+          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">settings</span>
           <span className="text-[13px] font-medium">Settings</span>
         </button>
       </div>

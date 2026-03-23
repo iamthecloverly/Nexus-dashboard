@@ -246,11 +246,11 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
             </div>
             <div className="w-px h-6 bg-white/10 mx-1"></div>
             <div className="flex items-center gap-1">
-              <button onClick={toggleTimer} className="tooltip w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-all active:scale-90" data-tooltip={isActive ? "Pause Focus" : "Resume Focus"}>
-                <span className="material-symbols-outlined text-xl">{isActive ? 'pause' : 'play_arrow'}</span>
+              <button onClick={toggleTimer} aria-label={isActive ? 'Pause focus timer' : 'Resume focus timer'} className="tooltip w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" data-tooltip={isActive ? "Pause Focus" : "Resume Focus"}>
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">{isActive ? 'pause' : 'play_arrow'}</span>
               </button>
-              <button onClick={resetTimer} className="tooltip w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-all active:scale-90" data-tooltip="Reset Timer">
-                <span className="material-symbols-outlined text-xl">replay</span>
+              <button onClick={resetTimer} aria-label="Reset timer" className="tooltip w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" data-tooltip="Reset Timer">
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">replay</span>
               </button>
             </div>
           </div>
@@ -288,8 +288,9 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                   <span className="material-symbols-outlined text-primary/60 text-[20px] group-focus-within:text-primary transition-colors">add_circle</span>
                 </div>
                 <input
-                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder:text-white/20 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-                  placeholder="Add a quick task..."
+                  aria-label="Add a task"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder:text-white/20 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 transition-colors"
+                  placeholder="Add a quick task…"
                   type="text"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
@@ -312,6 +313,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                       <input
                         className="glass-checkbox mt-0.5 cursor-pointer"
                         type="checkbox"
+                        aria-label={task.title}
                         checked={task.completed}
                         onChange={() => toggleTask(task.id)}
                       />
@@ -329,17 +331,17 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button
                           onClick={() => updateTask(task.id, { group: 'next' })}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-orange-400 hover:bg-white/10 transition-all"
-                          title="Move to Next"
+                          aria-label="Move to Next"
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-orange-400 hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
-                          <span className="material-symbols-outlined !text-sm">arrow_downward</span>
+                          <span className="material-symbols-outlined !text-sm" aria-hidden="true">arrow_downward</span>
                         </button>
                         <button
                           onClick={() => deleteTask(task.id)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-all"
-                          title="Delete"
+                          aria-label={`Delete task: ${task.title}`}
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
-                          <span className="material-symbols-outlined !text-sm">close</span>
+                          <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                         </button>
                       </div>
                     </div>
@@ -363,6 +365,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                       <input
                         className="glass-checkbox mt-0.5 cursor-pointer"
                         type="checkbox"
+                        aria-label={task.title}
                         checked={task.completed}
                         onChange={() => toggleTask(task.id)}
                       />
@@ -374,17 +377,17 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button
                           onClick={() => updateTask(task.id, { group: 'now' })}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-primary hover:bg-white/10 transition-all"
-                          title="Move to Now"
+                          aria-label="Move to Now"
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
-                          <span className="material-symbols-outlined !text-sm">arrow_upward</span>
+                          <span className="material-symbols-outlined !text-sm" aria-hidden="true">arrow_upward</span>
                         </button>
                         <button
                           onClick={() => deleteTask(task.id)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-all"
-                          title="Delete"
+                          aria-label={`Delete task: ${task.title}`}
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
-                          <span className="material-symbols-outlined !text-sm">close</span>
+                          <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                         </button>
                       </div>
                     </div>

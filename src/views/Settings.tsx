@@ -14,6 +14,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   const [isEditingName, setIsEditingName] = useState(false);
   const [connections, setConnections] = useState<ConnectionStatus>({ google: false, github: false, discord: false });
   const [cleared, setCleared] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -41,7 +42,6 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   };
 
   const clearAllData = () => {
-    if (!confirm('Clear all local data (tasks, checklist, profile, onboarding)? This cannot be undone.')) return;
     [
       'dashboard_tasks', 'dashboard_checklist', 'dashboard_checklist_title',
       'dashboard_profile_name', 'dashboard_onboarding_dismissed', 'dashboard_yt_video',
@@ -64,9 +64,10 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
           <h1 className="font-heading font-semibold text-2xl text-[#F4F4F5]">Settings</h1>
           <button
             onClick={() => setCurrentView('MainHub')}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-all text-[#A1A1AA] hover:text-[#F4F4F5]"
+            aria-label="Close settings"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-[#A1A1AA] hover:text-[#F4F4F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
           </button>
         </div>
 
@@ -75,29 +76,32 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
           <section>
             <h2 className="text-xs font-bold text-[#A1A1AA] uppercase tracking-widest mb-4">Profile</h2>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-heading font-bold text-xl flex-shrink-0">
+              <div className="w-12 h-12 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-heading font-bold text-xl flex-shrink-0" aria-hidden="true">
                 {profileName ? profileName.charAt(0).toUpperCase() : '?'}
               </div>
               {isEditingName ? (
                 <div className="flex-1 flex gap-2">
                   <input
                     autoFocus
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+                    aria-label="Profile name"
+                    name="profile-name"
+                    autoComplete="name"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
                     placeholder="Your name…"
                     value={nameDraft}
                     onChange={e => setNameDraft(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { e.stopPropagation(); setIsEditingName(false); } }}
                   />
-                  <button onClick={saveName} className="px-3 py-2 rounded-lg bg-primary/20 border border-primary/30 text-sm text-primary hover:bg-primary/30 transition-colors">Save</button>
+                  <button onClick={saveName} className="px-3 py-2 rounded-lg bg-primary/20 border border-primary/30 text-sm text-primary hover:bg-primary/30 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Save</button>
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-between">
                   <span className="text-white">{profileName || <span className="text-[#A1A1AA] italic">Not set</span>}</span>
                   <button
                     onClick={() => { setNameDraft(profileName); setIsEditingName(true); }}
-                    className="text-xs text-[#A1A1AA] hover:text-primary transition-colors flex items-center gap-1"
+                    className="text-xs text-[#A1A1AA] hover:text-primary transition-colors flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
-                    <span className="material-symbols-outlined !text-sm">edit</span>
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">edit</span>
                     Edit
                   </button>
                 </div>
@@ -109,12 +113,12 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-bold text-[#A1A1AA] uppercase tracking-widest">Connected Accounts</h2>
-              <button onClick={() => setCurrentView('Integrations')} className="text-xs text-primary hover:underline">Manage</button>
+              <button onClick={() => setCurrentView('Integrations')} className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Manage</button>
             </div>
             <div className="flex flex-col gap-3">
               {connectedServices.map(svc => (
                 <div key={svc.label} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
-                  <span className="material-symbols-outlined text-text-muted !text-[20px]">{svc.icon}</span>
+                  <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">{svc.icon}</span>
                   <span className="flex-1 text-sm text-white">{svc.label}</span>
                   <span className={`text-xs font-bold uppercase tracking-wider ${svc.connected ? 'text-green-400' : 'text-[#A1A1AA]'}`}>
                     {svc.connected ? 'Connected' : 'Not connected'}
@@ -127,13 +131,33 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
           {/* Danger zone */}
           <section>
             <h2 className="text-xs font-bold text-[#A1A1AA] uppercase tracking-widest mb-4">Data</h2>
-            <button
-              onClick={clearAllData}
-              disabled={cleared}
-              className="w-full py-2.5 rounded-lg border border-red-500/30 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-            >
-              {cleared ? 'Cleared — reloading…' : 'Clear all local data'}
-            </button>
+            {confirmClear ? (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 flex flex-col gap-3">
+                <p className="text-sm text-red-300 font-medium">This will erase all tasks, checklist items, and your profile name. Are you sure?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearAllData}
+                    disabled={cleared}
+                    className="flex-1 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-sm font-semibold text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
+                  >
+                    {cleared ? 'Clearing…' : 'Yes, clear everything'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    className="flex-1 py-2 rounded-lg border border-white/10 text-sm font-medium text-[#A1A1AA] hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmClear(true)}
+                className="w-full py-2.5 rounded-lg border border-red-500/30 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
+              >
+                Clear all local data
+              </button>
+            )}
             <p className="text-[10px] text-[#A1A1AA] mt-2">Resets tasks, checklist, and profile name stored in this browser. OAuth tokens are unaffected.</p>
           </section>
         </div>

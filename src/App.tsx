@@ -121,6 +121,13 @@ function YouTubeAudioPlayer({
     setProgress(t);
   };
 
+  const seekKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); skip(5); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); skip(-5); }
+    if (e.key === 'Home') { e.preventDefault(); skip(-progress); }
+    if (e.key === 'End')  { e.preventDefault(); skip(duration - progress); }
+  };
+
   const skip = (delta: number) => {
     if (!playerRef.current) return;
     const t = Math.max(0, Math.min(duration, progress + delta));
@@ -136,6 +143,7 @@ function YouTubeAudioPlayer({
       {/* Off-screen hidden player — always mounted so audio never stops */}
       <div
         ref={playerDivRef}
+        aria-hidden="true"
         style={{ position: 'fixed', left: -9999, top: 0, width: 320, height: 180, pointerEvents: 'none' }}
       />
 
@@ -150,16 +158,16 @@ function YouTubeAudioPlayer({
               {thumb && <img src={thumb} className="w-9 h-9 rounded-lg object-cover flex-shrink-0 shadow-lg" alt="cover" />}
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest font-mono">Now Playing</p>
-                <div className="flex items-end gap-[3px] h-3 mt-0.5">
+                <div className="flex items-end gap-[3px] h-3 mt-0.5" aria-hidden="true">
                   {[50, 80, 35, 90, 55].map((h, i) => (
                     <div
                       key={i}
-                      className="w-[2px] rounded-full"
+                      className={`eq-bar w-[2px] rounded-full${playing ? ' eq-bar-playing' : ''}`}
                       style={{
                         height: playing ? `${h}%` : '20%',
                         background: '#06E8F9',
                         opacity: playing ? 0.8 : 0.3,
-                        animation: playing ? `pulse 0.${7 + i}s ease-in-out infinite alternate` : 'none',
+                        ['--eq-dur' as string]: `0.${7 + i}s`,
                       }}
                     />
                   ))}
@@ -167,9 +175,10 @@ function YouTubeAudioPlayer({
               </div>
               <button
                 onClick={onClose}
+                aria-label="Close player"
                 className="w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
               >
-                <span className="material-symbols-outlined !text-sm">close</span>
+                <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
               </button>
             </div>
           </div>
@@ -180,9 +189,17 @@ function YouTubeAudioPlayer({
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-white/30 font-mono w-7 text-right tabular-nums">{fmt(progress)}</span>
               <div
-                className="flex-1 h-1.5 rounded-full cursor-pointer relative"
+                role="slider"
+                aria-label="Seek"
+                aria-valuemin={0}
+                aria-valuemax={Math.floor(duration)}
+                aria-valuenow={Math.floor(progress)}
+                aria-valuetext={`${fmt(progress)} of ${fmt(duration)}`}
+                tabIndex={0}
+                className="flex-1 h-1.5 rounded-full cursor-pointer relative focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 style={{ background: 'rgba(255,255,255,0.1)' }}
                 onClick={seek}
+                onKeyDown={seekKeyDown}
               >
                 <div
                   className="h-full rounded-full transition-all duration-100"
@@ -199,25 +216,26 @@ function YouTubeAudioPlayer({
             {/* Playback buttons + volume */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <button onClick={() => skip(-10)} className="text-white/30 hover:text-white transition-colors" title="-10s">
-                  <span className="material-symbols-outlined !text-[20px]">replay_10</span>
+                <button onClick={() => skip(-10)} aria-label="Skip back 10 seconds" className="text-white/30 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                  <span className="material-symbols-outlined !text-[20px]" aria-hidden="true">replay_10</span>
                 </button>
                 <button
                   onClick={togglePlay}
-                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                  aria-label={playing ? 'Pause' : 'Play'}
+                  className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   style={{ background: 'rgba(6,232,249,0.15)', border: '1px solid rgba(6,232,249,0.3)' }}
                 >
-                  <span className="material-symbols-outlined !text-[22px]" style={{ color: '#06E8F9' }}>
+                  <span className="material-symbols-outlined !text-[22px]" aria-hidden="true" style={{ color: '#06E8F9' }}>
                     {playing ? 'pause' : 'play_arrow'}
                   </span>
                 </button>
-                <button onClick={() => skip(10)} className="text-white/30 hover:text-white transition-colors" title="+10s">
-                  <span className="material-symbols-outlined !text-[20px]">forward_10</span>
+                <button onClick={() => skip(10)} aria-label="Skip forward 10 seconds" className="text-white/30 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                  <span className="material-symbols-outlined !text-[20px]" aria-hidden="true">forward_10</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="material-symbols-outlined !text-[16px] text-white/20">
+                <span className="material-symbols-outlined !text-[16px] text-white/20" aria-hidden="true">
                   {volume === 0 ? 'volume_off' : volume < 50 ? 'volume_down' : 'volume_up'}
                 </span>
                 <input
@@ -225,8 +243,9 @@ function YouTubeAudioPlayer({
                   min={0}
                   max={100}
                   value={volume}
+                  aria-label="Volume"
                   onChange={e => setVolume(Number(e.target.value))}
-                  className="w-16 h-1 cursor-pointer accent-primary"
+                  className="w-16 h-1 cursor-pointer accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                 />
               </div>
             </div>
@@ -234,7 +253,8 @@ function YouTubeAudioPlayer({
             {/* Load new URL */}
             <div className="flex gap-1.5 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
               <input
-                className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none focus:border-primary/40 transition-colors"
+                aria-label="Paste YouTube URL to change track"
+                className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 placeholder="Paste YouTube URL to change…"
                 onKeyDown={e => {
@@ -300,7 +320,7 @@ export default function App() {
     <ToastProvider>
       <TaskProvider>
         <EmailProvider>
-          <div className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
+          <div id="main-content" className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
               <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/4 rounded-full blur-[120px]"></div>
@@ -323,16 +343,17 @@ export default function App() {
                 style={{ background: '#13131A', borderColor: 'rgba(255,255,255,0.1)', width: 248 }}
               >
                 <div className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                  <span className="material-symbols-outlined !text-[16px] text-primary">music_note</span>
+                  <span className="material-symbols-outlined !text-[16px] text-primary" aria-hidden="true">music_note</span>
                   <span className="text-[12px] text-white/60 font-medium">YouTube Music</span>
-                  <button onClick={() => setShowMusicInput(false)} className="ml-auto text-white/30 hover:text-white">
-                    <span className="material-symbols-outlined !text-sm">close</span>
+                  <button onClick={() => setShowMusicInput(false)} aria-label="Close music panel" className="ml-auto text-white/30 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                   </button>
                 </div>
                 <div className="p-2.5 flex gap-2">
                   <input
                     ref={musicInputRef}
-                    className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none"
+                    aria-label="YouTube music URL"
+                    className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-primary/40"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                     placeholder="Paste YouTube URL…"
                     onKeyDown={e => {
@@ -345,7 +366,8 @@ export default function App() {
                     }}
                   />
                   <button
-                    className="px-2.5 py-1.5 rounded-lg text-[11px] flex-shrink-0 transition-colors"
+                    aria-label="Play"
+                    className="px-2.5 py-1.5 rounded-lg text-[11px] flex-shrink-0 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     style={{ background: 'rgba(6,232,249,0.12)', border: '1px solid rgba(6,232,249,0.2)', color: '#06E8F9' }}
                     onClick={() => {
                       const val = musicInputRef.current?.value ?? '';
@@ -353,7 +375,7 @@ export default function App() {
                       if (m) handleYtLoad(m[1]);
                     }}
                   >
-                    <span className="material-symbols-outlined !text-sm">play_arrow</span>
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">play_arrow</span>
                   </button>
                 </div>
               </div>

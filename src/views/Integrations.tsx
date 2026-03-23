@@ -156,10 +156,11 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     </div>
   );
 
-  const ConnectButton = ({ onClick }: { onClick: () => void }) => (
+  const ConnectButton = ({ onClick, service }: { onClick: () => void; service: string }) => (
     <button
       onClick={onClick}
-      className="px-4 py-1.5 rounded-full bg-primary text-[#0B0C10] text-xs font-bold hover:bg-primary/90 transition-colors shadow-[0_0_10px_rgba(6,232,249,0.3)]"
+      aria-label={`Connect ${service}`}
+      className="px-4 py-1.5 rounded-full bg-primary text-[#0B0C10] text-xs font-bold hover:bg-primary/90 transition-colors shadow-[0_0_10px_rgba(6,232,249,0.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
       Connect
     </button>
@@ -176,9 +177,10 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
           </div>
           <button
             onClick={() => setCurrentView('MainHub')}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-all text-[#A1A1AA] hover:text-[#F4F4F5]"
+            aria-label="Close integrations"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-[#A1A1AA] hover:text-[#F4F4F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
           </button>
         </div>
 
@@ -195,7 +197,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 </div>
                 {isLoading ? (
                   <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                ) : status.google ? <ConnectedBadge /> : <ConnectButton onClick={handleConnectGoogle} />}
+                ) : status.google ? <ConnectedBadge /> : <ConnectButton onClick={handleConnectGoogle} service="Google" />}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google</h3>
               <p className="text-sm text-[#A1A1AA] mb-6 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
@@ -221,7 +223,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 ) : status.github ? (
                   <ConnectedBadge />
                 ) : (
-                  <ConnectButton onClick={() => setShowGithubInput(v => !v)} />
+                  <ConnectButton onClick={() => setShowGithubInput(v => !v)} service="GitHub" />
                 )}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">GitHub</h3>
@@ -232,11 +234,13 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                   <input
                     autoFocus
                     type="password"
+                    aria-label="GitHub Personal Access Token"
+                    autoComplete="off"
                     placeholder="Paste your Personal Access Token…"
                     value={githubPat}
                     onChange={e => setGithubPat(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSaveGithub()}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
                   />
                   {githubError && <p className="text-xs text-red-400">{githubError}</p>}
                   <button
@@ -303,7 +307,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 ) : status.discord ? (
                   <ConnectedBadge />
                 ) : (
-                  <ConnectButton onClick={() => setShowDiscordInput(v => !v)} />
+                  <ConnectButton onClick={() => setShowDiscordInput(v => !v)} service="Discord" />
                 )}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Discord</h3>
@@ -314,11 +318,13 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                   <input
                     autoFocus
                     type="url"
+                    aria-label="Discord webhook URL"
+                    autoComplete="off"
                     placeholder="https://discord.com/api/webhooks/…"
                     value={discordUrl}
                     onChange={e => setDiscordUrl(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSaveDiscord()}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
                   />
                   {discordError && <p className="text-xs text-red-400">{discordError}</p>}
                   <button

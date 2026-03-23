@@ -253,8 +253,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
             Online
           </div>
-          <button onClick={() => setCurrentView('Settings')} className="glass-panel p-2.5 rounded-full flex items-center justify-center group btn-interact" title="Settings">
-            <span className="material-symbols-outlined text-text-muted group-hover:text-primary transition-colors text-[20px]">tune</span>
+          <button onClick={() => setCurrentView('Settings')} aria-label="Settings" className="glass-panel p-2.5 rounded-full flex items-center justify-center group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            <span className="material-symbols-outlined text-text-muted group-hover:text-primary transition-colors text-[20px]" aria-hidden="true">tune</span>
           </button>
         </div>
       </header>
@@ -271,9 +271,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
           </div>
           <button
             onClick={() => { localStorage.setItem('dashboard_onboarding_dismissed', '1'); setShowOnboarding(false); }}
-            className="text-text-muted hover:text-white transition-colors flex-shrink-0"
+            aria-label="Dismiss welcome banner"
+            className="text-text-muted hover:text-white transition-colors flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
           >
-            <span className="material-symbols-outlined !text-sm">close</span>
+            <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
           </button>
         </div>
       )}
@@ -290,9 +291,9 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 Schedule
               </h2>
               <div className="flex items-center gap-1">
-                <button onClick={fetchEvents} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-all" title="Refresh"><span className="material-symbols-outlined !text-sm">refresh</span></button>
+                <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
                 <div className="relative" ref={null}>
-                  <button onClick={() => setShowCalendarMenu(v => !v)} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-all"><span className="material-symbols-outlined !text-sm">more_vert</span></button>
+                  <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
                   {showCalendarMenu && (
                     <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[180px]">
                       <button
@@ -380,16 +381,18 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded mr-1">{remainingTasks} LEFT</span>
                 <button
                   onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
-                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-all"
-                  title="Add task"
+                  aria-label="Add task"
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  <span className="material-symbols-outlined !text-sm">add</span>
+                  <span className="material-symbols-outlined !text-sm" aria-hidden="true">add</span>
                 </button>
                 <button
                   onClick={() => setShowTaskMenu(v => !v)}
-                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-white hover:bg-white/5 transition-all"
+                  aria-label="Task options"
+                  aria-expanded={showTaskMenu}
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-white hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  <span className="material-symbols-outlined !text-sm">more_vert</span>
+                  <span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span>
                 </button>
                 {showTaskMenu && (
                   <div className="absolute top-16 right-6 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[160px]">
@@ -413,12 +416,15 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
               {tasks.filter(t => !t.completed).map(task => (
                 <div key={task.id} className="group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all border border-transparent hover:border-border-glass">
-                  <div
+                  <button
                     onClick={() => toggleTask(task.id)}
-                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 relative transition-colors cursor-pointer ${task.priority === 'Critical' ? 'border-accent/50 group-hover/task:border-accent' : 'border-border-glass group-hover/task:border-primary/50'}`}
+                    role="checkbox"
+                    aria-checked={task.completed}
+                    aria-label={task.title}
+                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 relative transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${task.priority === 'Critical' ? 'border-accent/50 group-hover/task:border-accent' : 'border-border-glass group-hover/task:border-primary/50'}`}
                   >
                     {task.priority === 'Critical' && <div className="absolute inset-1 bg-accent rounded-sm"></div>}
-                  </div>
+                  </button>
                   <div className="flex flex-col flex-1 min-w-0">
                     {editingTaskId === task.id ? (
                       <input
@@ -441,9 +447,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   </div>
                   <button
                     onClick={() => deleteTask(task.id)}
-                    className="opacity-0 group-hover/task:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0 mt-0.5"
+                    aria-label={`Delete task: ${task.title}`}
+                    className="opacity-0 group-hover/task:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0 mt-0.5 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
-                    <span className="material-symbols-outlined !text-sm">close</span>
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                   </button>
                 </div>
               ))}
@@ -451,12 +458,18 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <div className="mt-4 pt-4 border-t border-border-glass">
                   {tasks.filter(t => t.completed).map(task => (
                     <div key={task.id} className="group/done flex items-start gap-3 p-3 rounded-xl opacity-40 hover:opacity-70 transition-opacity">
-                      <div onClick={() => toggleTask(task.id)} className="mt-1 w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center text-primary cursor-pointer flex-shrink-0">
-                        <span className="material-symbols-outlined !text-[14px] !font-bold">check</span>
-                      </div>
+                      <button
+                        onClick={() => toggleTask(task.id)}
+                        role="checkbox"
+                        aria-checked={true}
+                        aria-label={`Mark incomplete: ${task.title}`}
+                        className="mt-1 w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center text-primary cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      >
+                        <span className="material-symbols-outlined !text-[14px] !font-bold" aria-hidden="true">check</span>
+                      </button>
                       <span className="text-sm text-text-muted line-through flex-1">{task.title}</span>
-                      <button onClick={() => deleteTask(task.id)} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0">
-                        <span className="material-symbols-outlined !text-sm">close</span>
+                      <button onClick={() => deleteTask(task.id)} aria-label={`Delete task: ${task.title}`} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                       </button>
                     </div>
                   ))}
@@ -467,9 +480,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
           </div>
 
           {/* Triage */}
-          <div
+          <button
             onClick={() => setCurrentView('Communications')}
-            className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/box cursor-pointer overflow-hidden"
+            className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            aria-label="Open email inbox"
           >
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/70 via-orange-400/20 to-transparent pointer-events-none"></div>
             {unreadCount > 0 && (
@@ -499,8 +513,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <p className="text-xs text-text-muted group-hover/box:text-white transition-colors">Connect Gmail to see your inbox.</p>
               )}
             </div>
-            <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-all duration-700"></div>
-          </div>
+            <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-all duration-700" aria-hidden="true"></div>
+          </button>
 
           {/* Dynamic Checklist */}
           <div className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/checklist overflow-hidden">
@@ -520,8 +534,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               )}
               <button
                 onClick={() => { setTitleDraft(checklistTitle); setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
-                className="material-symbols-outlined text-text-muted !text-sm cursor-pointer hover:text-white hover:scale-110 transition-all flex-shrink-0"
-              >edit</button>
+                aria-label="Edit checklist title"
+                className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-white hover:scale-110 transition-all flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              >
+                <span className="material-symbols-outlined !text-sm" aria-hidden="true">edit</span>
+              </button>
             </div>
             <div className="flex flex-col gap-1 flex-1 overflow-y-auto custom-scrollbar pr-1">
               {checklist.map(item => (
@@ -529,26 +546,31 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   key={item.id}
                   className="flex items-center gap-2 py-1 text-xs group/item"
                 >
-                  <span
+                  <button
                     onClick={(e) => toggleChecklistItem(item.id, e)}
-                    className={`material-symbols-outlined !text-sm cursor-pointer flex-shrink-0 ${item.completed ? 'text-primary' : 'text-text-muted hover:text-white'}`}
+                    role="checkbox"
+                    aria-checked={item.completed}
+                    aria-label={item.text}
+                    className={`material-symbols-outlined !text-sm cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded ${item.completed ? 'text-primary' : 'text-text-muted hover:text-white'}`}
                   >
                     {item.completed ? 'check_box' : 'check_box_outline_blank'}
-                  </span>
-                  <span className={`flex-1 cursor-pointer ${item.completed ? 'line-through text-text-muted opacity-60' : 'text-white'}`} onClick={(e) => toggleChecklistItem(item.id, e)}>
+                  </button>
+                  <span className={`flex-1 ${item.completed ? 'line-through text-text-muted opacity-60' : 'text-white'}`}>
                     {item.text}
                   </span>
                   <button
                     onClick={(e) => deleteChecklistItem(item.id, e)}
-                    className="opacity-0 group-hover/item:opacity-100 transition-opacity text-text-muted hover:text-accent"
+                    aria-label={`Delete: ${item.text}`}
+                    className="opacity-0 group-hover/item:opacity-100 transition-opacity text-text-muted hover:text-accent focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
-                    <span className="material-symbols-outlined !text-sm">close</span>
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                   </button>
                 </div>
               ))}
               <input
                 ref={newItemRef}
-                className="mt-1 bg-transparent border-b border-white/10 text-xs text-white placeholder-white/20 focus:outline-none focus:border-primary/40 py-1"
+                aria-label="Add checklist item"
+                className="mt-1 bg-transparent border-b border-white/10 text-xs text-white placeholder-white/20 focus-visible:outline-none focus-visible:border-primary/40 py-1 transition-colors"
                 placeholder="+ Add item…"
                 value={newItemText}
                 onChange={e => setNewItemText(e.target.value)}
@@ -603,11 +625,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       {/* FAB */}
       <button
         onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
-        className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-[#0B0C10] rounded-2xl flex items-center justify-center shadow-[0_10px_30px_rgba(0,240,255,0.4)] hover:shadow-[0_15px_40px_rgba(0,240,255,0.6)] transition-all z-50 overflow-hidden group btn-interact"
-        title="Add task"
+        aria-label="Add task"
+        className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-[#0B0C10] rounded-2xl flex items-center justify-center shadow-[0_10px_30px_rgba(0,240,255,0.4)] hover:shadow-[0_15px_40px_rgba(0,240,255,0.6)] transition-shadow z-50 overflow-hidden group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
       >
-        <span className="material-symbols-outlined !text-[32px] !font-bold relative z-10">add</span>
-        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
+        <span className="material-symbols-outlined !text-[32px] !font-bold relative z-10" aria-hidden="true">add</span>
+        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" aria-hidden="true"></div>
       </button>
 
       {showQuickAdd && (
@@ -616,7 +638,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <p className="text-xs text-primary font-bold uppercase tracking-widest mb-3">Quick Add Task</p>
             <input
               ref={quickAddRef}
-              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+              aria-label="Task title"
+              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 transition-colors"
               placeholder="Task title… (Enter to add)"
               value={quickAddTitle}
               onChange={e => setQuickAddTitle(e.target.value)}
