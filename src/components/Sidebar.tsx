@@ -14,6 +14,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
 
   useEffect(() => {
     const fetchMetrics = async () => {
+      if (document.hidden) return; // skip when tab is not visible
       try {
         const res = await fetch('/api/system');
         if (res.ok) {
@@ -25,7 +26,12 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
     };
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 5000);
-    return () => clearInterval(interval);
+    // Refresh immediately when the user returns to the tab
+    document.addEventListener('visibilitychange', fetchMetrics);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', fetchMetrics);
+    };
   }, []);
 
   const navItems = [

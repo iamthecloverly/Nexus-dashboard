@@ -6,6 +6,7 @@ import { useTaskContext } from '../contexts/TaskContext';
 import { useEmailContext } from '../contexts/EmailContext';
 import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
 
 interface ChecklistItem {
   id: string;
@@ -38,10 +39,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const { state: { emails, gmailConnected } } = useEmailContext();
   const { showToast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
 
   // Checklist
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => {
@@ -83,11 +81,19 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const [quickAddGroup, setQuickAddGroup] = useState<'now' | 'next'>('now');
   const quickAddRef = useRef<HTMLInputElement>(null);
 
-  const { remainingTasks, unreadEmails, unreadCount, lastUnreadEmail } = useMemo(() => {
-    let remaining = 0;
-    for (const t of tasks) { if (!t.completed) remaining++; }
+  const { remainingTasks, activeTasks, completedTasks, unreadEmails, unreadCount, lastUnreadEmail } = useMemo(() => {
+    const active: Task[] = [];
+    const completed: Task[] = [];
+    for (const t of tasks) { (t.completed ? completed : active).push(t); }
     const unread = emails.filter(e => e.unread && !e.archived && !e.deleted);
-    return { remainingTasks: remaining, unreadEmails: unread, unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
+    return {
+      remainingTasks: active.length,
+      activeTasks: active,
+      completedTasks: completed,
+      unreadEmails: unread,
+      unreadCount: unread.length,
+      lastUnreadEmail: unread[0] ?? null,
+    };
   }, [tasks, emails]);
 
   // Clocks
@@ -95,33 +101,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  // Calendar
-  useEffect(() => { fetchEvents(); }, []);
-
-  const fetchEvents = async () => {
-    try {
-      setIsLoadingEvents(true);
-      setCalendarError(null);
-      const res = await fetch('/api/calendar/events');
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(data.events || []);
-        setIsCalendarConnected(true);
-      } else if (res.status === 401) {
-        setIsCalendarConnected(false);
-      } else if (res.status === 503) {
-        const data = await res.json().catch(() => ({}));
-        setIsCalendarConnected(true);
-        setCalendarError(data.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
-      } else {
-        setIsCalendarConnected(true);
-        setCalendarError('fetch_error');
-      }
-    } catch { setIsCalendarConnected(false); }
-    finally { setIsLoadingEvents(false); }
-  };
-
 
   // GitHub notifications
   useEffect(() => {
@@ -415,7 +394,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               </div>
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
-              {tasks.filter(t => !t.completed).map(task => (
+              {activeTasks.map(task => (
                 <div key={task.id} className="group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all border border-transparent hover:border-border-glass">
                   <button
                     onClick={() => toggleTask(task.id)}
@@ -455,9 +434,9 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   </button>
                 </div>
               ))}
-              {tasks.some(t => t.completed) && (
+              {completedTasks.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border-glass">
-                  {tasks.filter(t => t.completed).map(task => (
+                  {completedTasks.map(task => (
                     <div key={task.id} className="group/done flex items-start gap-3 p-3 rounded-xl opacity-40 hover:opacity-70 transition-opacity">
                       <button
                         onClick={() => toggleTask(task.id)}

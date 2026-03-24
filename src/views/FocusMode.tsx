@@ -4,16 +4,14 @@ import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { Task } from '../App';
 import { useTaskContext } from '../contexts/TaskContext';
 import { CalendarEvent } from '../types/calendar';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
 
 export default function FocusMode({ setCurrentView }: { setCurrentView: (view: string) => void }) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask } } = useTaskContext();
   const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes
   const [isActive, setIsActive] = useState(false);
 
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Tick: interval is created once when active, not every second
@@ -31,34 +29,6 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);
     return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const res = await fetch('/api/calendar/events');
-        if (res.ok) {
-          const data = await res.json();
-          setEvents(data.events || []);
-          setIsCalendarConnected(true);
-        } else if (res.status === 401) {
-          setIsCalendarConnected(false);
-        } else if (res.status === 503) {
-          const data = await res.json().catch(() => ({}));
-          setIsCalendarConnected(true);
-          setCalendarError(data.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
-        } else {
-          setIsCalendarConnected(true);
-          setCalendarError('fetch_error');
-        }
-      } catch (error) {
-        console.error('Failed to fetch events:', error);
-        setIsCalendarConnected(false);
-      } finally {
-        setIsLoadingEvents(false);
-      }
-    };
-    fetchEvents();
   }, []);
 
   const toggleTimer = () => setIsActive(!isActive);
