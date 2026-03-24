@@ -95,15 +95,16 @@ function YouTubeAudioPlayer({
     }
   }, [videoId]);
 
-  // Progress polling
+  // Progress polling — only run while playing
   useEffect(() => {
+    if (!playing) return;
     const id = setInterval(() => {
       if (playerRef.current?.getCurrentTime) {
         setProgress(playerRef.current.getCurrentTime());
       }
     }, 500);
     return () => clearInterval(id);
-  }, []);
+  }, [playing]);
 
   // Sync volume
   useEffect(() => { playerRef.current?.setVolume?.(volume); }, [volume]);

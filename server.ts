@@ -70,12 +70,13 @@ app.get('/api/auth/google/callback', async (req, res) => {
     res.cookie('google_tokens', JSON.stringify(tokens), COOKIE_OPTS);
 
     const appOrigin = (process.env.APP_URL || `https://${req.get('host')}`).replace(/\/$/, '');
+    const safeOrigin = JSON.stringify(appOrigin);
     res.send(`
       <html>
         <body>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '${appOrigin}');
+              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, ${safeOrigin});
               window.close();
             } else {
               window.location.href = '/';
@@ -113,7 +114,7 @@ app.get('/api/calendar/events', async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     // Persist refreshed tokens back to the cookie automatically
-    oauth2Client.on('tokens', (newTokens) => {
+    oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
       res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
@@ -191,7 +192,7 @@ app.get('/api/gmail/messages', async (req, res) => {
     const tokens = JSON.parse(tokensCookie);
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
-    oauth2Client.on('tokens', (newTokens) => {
+    oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
       res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
@@ -272,7 +273,7 @@ app.get('/api/gmail/message/:id', async (req, res) => {
     const tokens = JSON.parse(tokensCookie);
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
-    oauth2Client.on('tokens', (newTokens) => {
+    oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
       res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
@@ -336,6 +337,11 @@ app.post('/api/gmail/send', async (req, res) => {
     return res.status(400).json({ error: 'Missing to, subject, or body' });
   }
 
+  // Sanitize headers to prevent CRLF injection
+  const sanitize = (s: string) => s.replace(/[\r\n]/g, '');
+  const safeTO = sanitize(to);
+  const safeSubject = sanitize(subject);
+
   try {
     const tokens = JSON.parse(tokensCookie);
     const oauth2Client = getOAuth2Client(req);
@@ -344,8 +350,8 @@ app.post('/api/gmail/send', async (req, res) => {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const raw = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
+      `To: ${safeTO}`,
+      `Subject: ${safeSubject}`,
       'Content-Type: text/plain; charset=utf-8',
       'MIME-Version: 1.0',
       '',

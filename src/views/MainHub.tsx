@@ -203,8 +203,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
 
   const renderEvent = (event: CalendarEvent) => {
-    const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date!);
-    const endTime = event.end.dateTime ? parseISO(event.end.dateTime) : parseISO(event.end.date!);
+    const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
+    const endTime = event.end.dateTime ? parseISO(event.end.dateTime) : parseISO(event.end.date ?? '');
     const isAllDay = !event.start.dateTime;
     const isPast = isBefore(endTime, currentTime) && !isAllDay;
     const isCurrent = isBefore(startTime, currentTime) && isAfter(endTime, currentTime) && !isAllDay;
@@ -292,7 +292,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               </h2>
               <div className="flex items-center gap-1">
                 <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
-                <div className="relative" ref={null}>
+                <div className="relative">
                   <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
                   {showCalendarMenu && (
                     <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[180px]">
