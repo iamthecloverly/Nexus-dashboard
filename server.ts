@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
+import OpenAI from 'openai';
 
 const app = express();
 const PORT = 3000;
@@ -474,6 +476,176 @@ app.post('/api/discord/send', async (req, res) => {
   } catch (error) {
     console.error('Discord webhook error:', error);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// ── AI / OpenAI ───────────────────────────────────────────────────────────────
+
+/** Recursively extract plain-text body from a Gmail MIME payload */
+function extractGmailBody(payload: any): string {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const result = extractGmailBody(part);
+      if (result) return result;
+    }
+  }
+  if (payload.mimeType === 'text/html' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  return '';
+}
+
+const AI_SYSTEM_PROMPT = `You are a productivity assistant. Read the email and extract every actionable task the recipient needs to do.
+Return ONLY valid JSON in this exact format: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
+Rules:
+- title: concise, starts with a verb (e.g. "Review proposal", "Reply to John", "Schedule meeting")
+- priority: "Critical" = hard deadline or blocker; "Priority" = important but flexible; "Normal" = nice to have
+- group: "now" = due today or very urgent; "next" = can be done later
+- reason: one short sentence explaining why this task was extracted
+- max 5 tasks per email
+- if no actionable tasks exist, return {"tasks": []}`;
+
+/** Shared logic: fetch one email's metadata + body, call GPT-4o-mini, return suggestions */
+async function extractTasksFromEmail(
+  gmail: ReturnType<typeof google.gmail>,
+  openai: OpenAI,
+  emailId: string,
+): Promise<any[]> {
+  const [meta, full] = await Promise.all([
+    gmail.users.messages.get({ userId: 'me', id: emailId, format: 'metadata', metadataHeaders: ['From', 'Subject'] }),
+    gmail.users.messages.get({ userId: 'me', id: emailId, format: 'full' }),
+  ]);
+
+  const headers = meta.data.payload?.headers ?? [];
+  const subject = headers.find((h: any) => h.name === 'Subject')?.value ?? '(no subject)';
+  const from    = headers.find((h: any) => h.name === 'From')?.value ?? '';
+  const body    = extractGmailBody(full.data.payload).slice(0, 3000);
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    response_format: { type: 'json_object' },
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: AI_SYSTEM_PROMPT },
+      { role: 'user', content: `From: ${from}\nSubject: ${subject}\n\n${body}` },
+    ],
+  });
+
+  const raw = JSON.parse(completion.choices[0].message.content ?? '{"tasks":[]}');
+  return (raw.tasks ?? [])
+    .filter((t: any) => t.title?.trim())
+    .map((t: any) => ({
+      id: randomUUID(),
+      emailId,
+      title: (t.title as string).trim(),
+      priority: (['Normal', 'Priority', 'Critical'] as const).includes(t.priority) ? t.priority : 'Normal',
+      group: t.group === 'next' ? 'next' : 'now',
+      reason: (t.reason as string | undefined)?.trim() ?? '',
+      accepted: true,
+    }));
+}
+
+app.post('/api/ai/key', (req, res) => {
+  const { key } = req.body as { key: string };
+  if (!key?.trim()) return res.status(400).json({ error: 'Missing key' });
+  res.cookie('openai_key', key.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  res.json({ success: true });
+});
+
+app.get('/api/ai/status', (req, res) => {
+  const key = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  res.json({ configured: !!key });
+});
+
+app.post('/api/ai/disconnect', (req, res) => {
+  const { maxAge: _, ...clearOpts } = COOKIE_OPTS;
+  res.clearCookie('openai_key', clearOpts);
+  res.json({ success: true });
+});
+
+app.post('/api/ai/extract-tasks', async (req, res) => {
+  const tokensCookie = req.cookies.google_tokens;
+  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
+
+  const openAIKey = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
+
+  const { emailId } = req.body as { emailId: string };
+  if (!emailId?.trim()) return res.status(400).json({ error: 'Missing emailId' });
+
+  try {
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(tokens);
+    oauth2Client.once('tokens', (newTokens) => {
+      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+    });
+
+    const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
+    const openai = new OpenAI({ apiKey: openAIKey });
+
+    const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
+    res.json({ suggestions });
+  } catch (error: any) {
+    console.error('AI extract-tasks error:', error?.message ?? error);
+    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
+    res.status(500).json({ error: 'Failed to extract tasks' });
+  }
+});
+
+app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
+  const tokensCookie = req.cookies.google_tokens;
+  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
+
+  const openAIKey = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
+
+  const { emailIds } = req.body as { emailIds: string[] };
+  if (!Array.isArray(emailIds) || emailIds.length === 0) return res.status(400).json({ error: 'Missing emailIds' });
+
+  try {
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(tokens);
+    oauth2Client.once('tokens', (newTokens) => {
+      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+    });
+
+    const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
+    const openai = new OpenAI({ apiKey: openAIKey });
+
+    const allSuggestions: any[] = [];
+    for (const emailId of emailIds.slice(0, 10)) {
+      try {
+        const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
+        allSuggestions.push(...suggestions);
+      } catch {
+        // Skip failed emails, continue processing the rest
+      }
+    }
+
+    res.json({ suggestions: allSuggestions });
+  } catch (error: any) {
+    console.error('AI extract-tasks-bulk error:', error?.message ?? error);
+    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
+    res.status(500).json({ error: 'Failed to extract tasks' });
   }
 });
 

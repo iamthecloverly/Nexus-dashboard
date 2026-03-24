@@ -16,21 +16,49 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   const [cleared, setCleared] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
+  // AI / OpenAI key
+  const [aiConfigured, setAiConfigured] = useState(false);
+  const [aiKeyDraft, setAiKeyDraft] = useState('');
+  const [aiKeySaving, setAiKeySaving] = useState(false);
+
   useEffect(() => {
     const fetchStatuses = async () => {
-      const [googleRes, githubRes, discordRes] = await Promise.allSettled([
+      const [googleRes, githubRes, discordRes, aiRes] = await Promise.allSettled([
         fetch('/api/auth/status').then(r => r.json()),
         fetch('/api/github/status').then(r => r.json()),
         fetch('/api/discord/status').then(r => r.json()),
+        fetch('/api/ai/status').then(r => r.json()),
       ]);
       setConnections({
         google: googleRes.status === 'fulfilled' ? googleRes.value.connected : false,
         github: githubRes.status === 'fulfilled' ? githubRes.value.connected : false,
         discord: discordRes.status === 'fulfilled' ? discordRes.value.connected : false,
       });
+      setAiConfigured(aiRes.status === 'fulfilled' ? aiRes.value.configured : false);
     };
     fetchStatuses();
   }, []);
+
+  const saveAiKey = async () => {
+    if (!aiKeyDraft.trim()) { showToast('Please enter an API key', 'error'); return; }
+    setAiKeySaving(true);
+    try {
+      const res = await fetch('/api/ai/key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: aiKeyDraft.trim() }),
+      });
+      if (res.ok) { setAiConfigured(true); setAiKeyDraft(''); showToast('OpenAI key saved', 'success'); }
+      else showToast('Failed to save key', 'error');
+    } catch { showToast('Failed to save key', 'error'); }
+    finally { setAiKeySaving(false); }
+  };
+
+  const disconnectAi = async () => {
+    await fetch('/api/ai/disconnect', { method: 'POST' });
+    setAiConfigured(false);
+    showToast('OpenAI key removed', 'info');
+  };
 
   const saveName = () => {
     const name = nameDraft.trim();
@@ -125,6 +153,50 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
                   </span>
                 </div>
               ))}
+            </div>
+          </section>
+
+          {/* AI */}
+          <section>
+            <h2 className="text-xs font-bold text-[#A1A1AA] uppercase tracking-widest mb-4">AI — Task Extraction</h2>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">auto_awesome</span>
+                <span className="flex-1 text-sm text-white">OpenAI (gpt-4o-mini)</span>
+                <span className={`text-xs font-bold uppercase tracking-wider ${aiConfigured ? 'text-green-400' : 'text-[#A1A1AA]'}`}>
+                  {aiConfigured ? 'Configured' : 'Not configured'}
+                </span>
+              </div>
+              {aiConfigured ? (
+                <button
+                  onClick={disconnectAi}
+                  className="w-full py-2 rounded-lg border border-white/10 text-sm font-medium text-[#A1A1AA] hover:bg-white/5 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  Remove API key
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    aria-label="OpenAI API key"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 font-mono"
+                    placeholder="sk-..."
+                    value={aiKeyDraft}
+                    onChange={e => setAiKeyDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveAiKey(); }}
+                  />
+                  <button
+                    onClick={saveAiKey}
+                    disabled={aiKeySaving || !aiKeyDraft.trim()}
+                    className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/30 text-sm font-semibold text-primary hover:bg-primary/30 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex-shrink-0"
+                  >
+                    {aiKeySaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              )}
+              <p className="text-[10px] text-[#A1A1AA]">
+                Used to extract tasks from emails. Key is stored in an HTTP-only cookie, never sent to any third party. Get yours at <span className="text-primary">platform.openai.com</span>
+              </p>
             </div>
           </section>
 
