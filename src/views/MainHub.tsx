@@ -65,8 +65,9 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   // Onboarding banner
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('dashboard_onboarding_dismissed'));
 
-  // Calendar context menu
+  // Calendar context menu & full-screen schedule
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   // Task inline edit
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -181,6 +182,13 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     }
   }, [showTaskMenu, showCalendarMenu]);
 
+  // Close full-screen schedule on Escape
+  useEffect(() => {
+    if (!showSchedule) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowSchedule(false); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showSchedule]);
 
   const renderEvent = (event: CalendarEvent) => {
     const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
@@ -189,29 +197,34 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     const isPast = isBefore(endTime, currentTime) && !isAllDay;
     const isCurrent = isBefore(startTime, currentTime) && isAfter(endTime, currentTime) && !isAllDay;
 
-    if (isCurrent) {
-      return (
-        <div key={event.id} className="relative pl-8 group/event">
-          <div className="absolute -left-[3px] top-1.5 w-2 h-2 rounded-full bg-primary border border-background-dark shadow-glow"></div>
-          <div className="bg-primary-subtle border border-primary/25 rounded-2xl p-5 -mt-3 group-hover/event:bg-primary/10 transition-colors">
-            <p className="text-[10px] text-primary mb-2 font-mono uppercase font-bold tracking-wider">
-              {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')} • In Progress
-            </p>
-            <p className="text-lg font-semibold text-white">{event.summary || 'Busy'}</p>
-            <a href={event.htmlLink} target="_blank" rel="noreferrer" className="mt-4 text-xs text-primary/60 font-medium group-hover/event:text-primary transition-colors hover:underline block">
-              View Details
-            </a>
-          </div>
-        </div>
-      );
-    }
     return (
-      <div key={event.id} className={`relative pl-8 ${isPast ? 'opacity-40' : ''}`}>
-        <div className={`absolute -left-[3px] top-1.5 w-2 h-2 rounded-full ${isPast ? 'bg-border-glass border border-background-dark' : 'bg-surface border border-border-glass'}`}></div>
-        <p className="text-[10px] text-text-muted mb-1 font-mono uppercase">
-          {isAllDay ? 'All Day' : `${format(startTime, 'HH:mm')} - ${format(endTime, 'HH:mm')}`}
+      <div key={event.id} className={`relative pl-8 transition-opacity ${isPast ? 'opacity-35' : ''}`}>
+        {/* Current-time bar — anchored to the very left of the outer container */}
+        {isCurrent && (
+          <div
+            className="absolute -left-6 top-1/2 -translate-y-1/2 w-[3px] h-9 bg-primary rounded-full shadow-glow"
+            aria-hidden="true"
+          />
+        )}
+        {/* Timeline dot */}
+        <div
+          className={`absolute -left-[3px] top-[5px] w-[7px] h-[7px] rounded-full transition-colors ${
+            isCurrent
+              ? 'bg-primary shadow-glow'
+              : isPast
+                ? 'bg-white/15'
+                : 'bg-white/10 border border-white/20'
+          }`}
+          aria-hidden="true"
+        />
+        {/* Time label */}
+        <p className={`text-[11px] font-mono mb-0.5 ${isCurrent ? 'text-primary font-semibold' : 'text-text-muted'}`}>
+          {isAllDay
+            ? 'All Day'
+            : `${format(startTime, 'HH:mm')} – ${format(endTime, 'HH:mm')}${isCurrent ? ' • Now' : ''}`}
         </p>
-        <p className={`text-base font-medium ${isPast ? 'text-white/80 line-through' : 'text-white/90'}`}>
+        {/* Event title */}
+        <p className={`text-sm font-semibold leading-snug ${isPast ? 'text-white/50' : 'text-white'}`}>
           {event.summary || 'Busy'}
         </p>
       </div>
@@ -266,10 +279,14 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
           <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-8 flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/30 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-8">
-              <h2 className="font-heading text-xl text-white flex items-center gap-3">
+              <button
+                onClick={() => setShowSchedule(true)}
+                className="font-heading text-xl text-white flex items-center gap-3 hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                aria-label="Open full schedule"
+              >
                 <span className="material-symbols-outlined text-primary text-[24px]" aria-hidden="true">event_note</span>
                 Schedule
-              </h2>
+              </button>
               <div className="flex items-center gap-1">
                 <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
                 <div className="relative" ref={calendarMenuRef}>
@@ -282,6 +299,13 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                       >
                         <span className="material-symbols-outlined !text-sm">refresh</span>
                         Refresh
+                      </button>
+                      <button
+                        onClick={() => { setShowSchedule(true); setShowCalendarMenu(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-white/80 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined !text-sm">open_in_full</span>
+                        Full schedule
                       </button>
                       <a
                         href="https://calendar.google.com"
@@ -305,10 +329,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 </button>
               </div>
             </div>
-            <div className="relative flex-1 flex flex-col gap-8 pl-6">
-              <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass">
-                <div className="absolute top-[38%] -left-[3.5px] w-2 h-10 bg-primary rounded-full shadow-glow"></div>
-              </div>
+            <div className="relative flex-1 flex flex-col gap-7 pl-6">
+              <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
               {isLoadingEvents ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
@@ -636,6 +658,106 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               >Next</button>
             </div>
             <p className="text-[10px] text-text-muted mt-2">Press Esc to cancel</p>
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen schedule modal */}
+      {showSchedule && (
+        <div
+          className="fixed inset-0 z-[500] flex flex-col"
+          style={{ background: 'rgba(11,12,16,0.97)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full schedule"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-8 py-5 border-b flex-shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-[24px]" aria-hidden="true">event_note</span>
+              <h2 className="font-heading text-xl text-white">Schedule</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchEvents}
+                aria-label="Refresh calendar"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span>
+              </button>
+              <a
+                href="https://calendar.google.com"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open Google Calendar"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined !text-sm" aria-hidden="true">open_in_new</span>
+              </a>
+              <div className="w-px h-4 bg-white/10 mx-1" aria-hidden="true" />
+              <button
+                onClick={() => { setShowSchedule(false); setCurrentView('FocusMode'); }}
+                className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full hover:bg-primary/20 transition-all border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Focus Mode
+              </button>
+              <button
+                onClick={() => setShowSchedule(false)}
+                aria-label="Close schedule"
+                className="ml-2 w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-white hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Event list */}
+          <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+            <div className="max-w-2xl mx-auto">
+              <div className="relative flex flex-col gap-7 pl-6">
+                <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
+                {isLoadingEvents ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="Loading events" />
+                  </div>
+                ) : !isCalendarConnected ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                    <span className="material-symbols-outlined text-4xl text-text-muted" aria-hidden="true">calendar_today</span>
+                    <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
+                    <button
+                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
+                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      Go to Integrations
+                    </button>
+                  </div>
+                ) : calendarError === 'api_disabled' ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">warning</span>
+                    <p className="text-sm text-white font-medium">Google Calendar API not enabled</p>
+                    <p className="text-xs text-text-muted max-w-[260px]">Enable it in your Google Cloud project, then reconnect.</p>
+                    <a
+                      href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-all border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      Enable Calendar API →
+                    </a>
+                  </div>
+                ) : calendarError === 'fetch_error' ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">sync_problem</span>
+                    <p className="text-sm text-text-muted">Failed to load events.</p>
+                    <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry</button>
+                  </div>
+                ) : events.length === 0 ? (
+                  <div className="flex items-center justify-center py-16">
+                    <p className="text-sm text-text-muted">No events today.</p>
+                  </div>
+                ) : events.map(renderEvent)}
+              </div>
+            </div>
           </div>
         </div>
       )}

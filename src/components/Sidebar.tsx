@@ -42,16 +42,16 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
   ];
 
   return (
-    <aside className="w-64 flex-none !rounded-none border-r flex flex-col z-50" style={{ background: '#0E0E12', borderColor: 'rgba(255,255,255,0.05)' }}>
+    <aside className="w-64 flex-none !rounded-none border-r flex flex-col z-50" style={{ background: 'linear-gradient(180deg, #080B1A 0%, #060915 100%)', borderColor: 'rgba(255,255,255,0.08)' }}>
       {/* Logo */}
       <div className="p-6 pb-8">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #06E8F9, #06E8F940)' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #00D9FF 0%, rgba(139,92,246,0.7) 100%)' }}>
             <span className="material-symbols-outlined font-bold text-[20px] relative z-10" style={{ color: '#0B0C10' }} aria-hidden="true">hub</span>
           </div>
           <div className="flex flex-col">
             <span className="font-heading font-bold text-[16px] tracking-widest text-white leading-none">NEXUS</span>
-            <span className="text-[9px] tracking-[0.25em] uppercase font-medium" style={{ color: 'rgba(6,232,249,0.5)' }}>Dashboard</span>
+            <span className="text-[9px] tracking-[0.25em] uppercase font-medium" style={{ color: 'rgba(0,217,255,0.5)' }}>Dashboard</span>
           </div>
         </div>
       </div>
@@ -66,7 +66,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
             onClick={() => setCurrentView(item.id)}
             className="nav-link w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors"
             style={currentView === item.id
-              ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)', fontWeight: 600 }
+              ? { color: '#00D9FF', background: 'rgba(0,217,255,0.08)', fontWeight: 600 }
               : hoveredId === item.id
                 ? { color: '#fff', background: 'rgba(255,255,255,0.04)' }
                 : { color: '#71717A' }
@@ -76,7 +76,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{item.icon}</span>
             <span className="text-[13px]">{item.label}</span>
-            {currentView === item.id && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r-full" style={{ background: '#06E8F9' }} />}
+            {currentView === item.id && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r-full" style={{ background: '#00D9FF' }} />}
           </button>
         ))}
 
@@ -94,14 +94,14 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
                 <span className="font-mono" style={{ color: '#71717A' }}>{cpuLoad}%</span>
               </div>
               <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${cpuLoad}%`, background: 'rgba(6,232,249,0.5)' }} />
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${cpuLoad}%`, background: 'rgba(0,217,255,0.5)' }} />
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span style={{ color: '#52525B' }}>Memory</span>
                 <span className="font-mono" style={{ color: '#71717A' }}>{memUsed}%</span>
               </div>
               <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${memUsed}%`, background: 'rgba(6,232,249,0.35)' }} />
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${memUsed}%`, background: 'rgba(0,217,255,0.35)' }} />
               </div>
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
           aria-label={musicActive ? 'Now playing — YouTube Music' : 'Open YouTube Music'}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={musicActive
-            ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)', border: '1px solid rgba(6,232,249,0.15)' }
+            ? { color: '#00D9FF', background: 'rgba(0,217,255,0.08)', border: '1px solid rgba(0,217,255,0.15)' }
             : { color: '#52525B', border: '1px solid rgba(255,255,255,0.04)' }
           }
         >
@@ -128,7 +128,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
                 <div
                   key={i}
                   className="eq-bar eq-bar-playing w-[2px] rounded-full"
-                  style={{ height: `${h}%`, background: '#06E8F9', ['--eq-dur' as string]: `0.${7+i}s` }}
+                  style={{ height: `${h}%`, background: '#00D9FF', ['--eq-dur' as string]: `0.${7+i}s` }}
                 />
               ))}
             </div>
@@ -140,7 +140,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
           onClick={() => setCurrentView('Settings')}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={currentView === 'Settings'
-            ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)' }
+            ? { color: '#00D9FF', background: 'rgba(0,217,255,0.08)' }
             : { color: '#52525B' }
           }
         >

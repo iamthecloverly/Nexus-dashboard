@@ -61,7 +61,10 @@ function YouTubeAudioPlayer({
       return;
     }
 
+    let active = true;
+
     const init = () => {
+      if (!active) return;
       if (playerRef.current) {
         playerRef.current.loadVideoById(videoId);
         return;
@@ -71,17 +74,31 @@ function YouTubeAudioPlayer({
         height: '180',
         width: '320',
         videoId,
-        playerVars: { autoplay: 1, controls: 0, rel: 0, modestbranding: 1, enablejsapi: 1 },
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          rel: 0,
+          modestbranding: 1,
+          enablejsapi: 1,
+          // Required for JS API calls (playVideo/pauseVideo) to work cross-origin
+          origin: window.location.origin,
+        },
         events: {
           onReady: (e: any) => {
+            if (!active) return;
             e.target.setVolume(volume);
-            setDuration(e.target.getDuration());
-            setPlaying(true);
+            // Don't call getDuration() here — metadata not ready yet; it returns 0
+            e.target.playVideo();
           },
           onStateChange: (e: any) => {
-            // YT.PlayerState: PLAYING=1, PAUSED=2, ENDED=0
+            if (!active) return;
+            // YT.PlayerState: PLAYING=1, PAUSED=2, ENDED=0, BUFFERING=3
             setPlaying(e.data === 1);
-            if (e.data === 1) setDuration(e.target.getDuration());
+            // Read duration once playback starts (metadata guaranteed to be loaded)
+            if (e.data === 1 || e.data === 3) {
+              const d = e.target.getDuration();
+              if (d > 0) setDuration(d);
+            }
           },
         },
       });
@@ -93,6 +110,12 @@ function YouTubeAudioPlayer({
       const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => { prev?.(); init(); };
     }
+
+    return () => {
+      active = false;
+      playerRef.current?.destroy?.();
+      playerRef.current = null;
+    };
   }, [videoId]);
 
   // Progress polling — only run while playing
@@ -150,11 +173,11 @@ function YouTubeAudioPlayer({
 
       {/* Audio player UI — only shown when a video is loaded */}
       {videoId && (
-        <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl overflow-hidden shadow-2xl border border-white/[0.08]" style={{ background: '#13131A' }}>
+        <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl overflow-hidden shadow-2xl border border-white/[0.08]" style={{ background: '#0C0F1E' }}>
           {/* Blurred thumbnail header */}
           <div className="relative h-14 overflow-hidden flex-shrink-0">
             {thumb && <img src={thumb} width={320} height={56} className="absolute inset-0 w-full h-full object-cover scale-110 blur-md" alt="" />}
-            <div className="absolute inset-0" style={{ background: 'rgba(10,10,15,0.75)' }} />
+            <div className="absolute inset-0" style={{ background: 'rgba(5,8,18,0.8)' }} />
             <div className="relative flex items-center gap-2.5 px-3 h-full">
               {thumb && <img src={thumb} width={36} height={36} className="w-9 h-9 rounded-lg object-cover flex-shrink-0 shadow-lg" alt="Video thumbnail" />}
               <div className="flex-1 min-w-0">
@@ -166,7 +189,7 @@ function YouTubeAudioPlayer({
                       className={`eq-bar w-[2px] rounded-full${playing ? ' eq-bar-playing' : ''}`}
                       style={{
                         height: playing ? `${h}%` : '20%',
-                        background: '#06E8F9',
+                        background: '#00D9FF',
                         opacity: playing ? 0.8 : 0.3,
                         ['--eq-dur' as string]: `0.${7 + i}s`,
                       }}
@@ -204,7 +227,7 @@ function YouTubeAudioPlayer({
               >
                 <div
                   className="h-full rounded-full transition-[width] duration-100"
-                  style={{ width: `${pct}%`, background: '#06E8F9' }}
+                  style={{ width: `${pct}%`, background: '#00D9FF' }}
                 />
                 <div
                   className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md"
@@ -224,9 +247,9 @@ function YouTubeAudioPlayer({
                   onClick={togglePlay}
                   aria-label={playing ? 'Pause' : 'Play'}
                   className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  style={{ background: 'rgba(6,232,249,0.15)', border: '1px solid rgba(6,232,249,0.3)' }}
+                  style={{ background: 'rgba(0,217,255,0.15)', border: '1px solid rgba(6,232,249,0.3)' }}
                 >
-                  <span className="material-symbols-outlined !text-[22px]" aria-hidden="true" style={{ color: '#06E8F9' }}>
+                  <span className="material-symbols-outlined !text-[22px]" aria-hidden="true" style={{ color: '#00D9FF' }}>
                     {playing ? 'pause' : 'play_arrow'}
                   </span>
                 </button>
@@ -323,9 +346,15 @@ export default function App() {
         <EmailProvider>
           <div id="main-content" className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
-            <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-              <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/4 rounded-full blur-[120px]"></div>
-              <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-500/4 rounded-full blur-[150px]"></div>
+            <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">
+              {/* Cyan halo — top-left */}
+              <div className="absolute top-[-15%] left-[-8%] w-[55%] h-[55%] rounded-full blur-[130px]" style={{ background: 'radial-gradient(circle, rgba(0,217,255,0.18) 0%, transparent 70%)' }} />
+              {/* Violet halo — bottom-right */}
+              <div className="absolute bottom-[-20%] right-[-8%] w-[55%] h-[65%] rounded-full blur-[150px]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.16) 0%, transparent 70%)' }} />
+              {/* Indigo halo — center */}
+              <div className="absolute top-[30%] left-[35%] w-[40%] h-[40%] rounded-full blur-[120px]" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)' }} />
+              {/* Subtle noise grain overlay */}
+              <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\' opacity=\'1\'/%3E%3C/svg%3E")', backgroundSize: '256px 256px' }} />
             </div>
 
             <Sidebar
@@ -341,7 +370,7 @@ export default function App() {
             {showMusicInput && !ytVideoId && (
               <div
                 className="fixed bottom-20 left-4 z-[300] rounded-xl overflow-hidden shadow-2xl border"
-                style={{ background: '#13131A', borderColor: 'rgba(255,255,255,0.1)', width: 248 }}
+                style={{ background: '#0C0F1E', borderColor: 'rgba(255,255,255,0.1)', width: 248 }}
               >
                 <div className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="material-symbols-outlined !text-[16px] text-primary" aria-hidden="true">music_note</span>
@@ -369,7 +398,7 @@ export default function App() {
                   <button
                     aria-label="Play"
                     className="px-2.5 py-1.5 rounded-lg text-[11px] flex-shrink-0 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    style={{ background: 'rgba(6,232,249,0.12)', border: '1px solid rgba(6,232,249,0.2)', color: '#06E8F9' }}
+                    style={{ background: 'rgba(0,217,255,0.12)', border: '1px solid rgba(6,232,249,0.2)', color: '#00D9FF' }}
                     onClick={() => {
                       const val = musicInputRef.current?.value ?? '';
                       const m = val.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/);
