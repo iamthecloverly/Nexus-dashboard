@@ -152,10 +152,10 @@ function YouTubeAudioPlayer({
         <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl overflow-hidden shadow-2xl border border-white/[0.08]" style={{ background: '#13131A' }}>
           {/* Blurred thumbnail header */}
           <div className="relative h-14 overflow-hidden flex-shrink-0">
-            {thumb && <img src={thumb} className="absolute inset-0 w-full h-full object-cover scale-110 blur-md" alt="" />}
+            {thumb && <img src={thumb} width={320} height={56} className="absolute inset-0 w-full h-full object-cover scale-110 blur-md" alt="" />}
             <div className="absolute inset-0" style={{ background: 'rgba(10,10,15,0.75)' }} />
             <div className="relative flex items-center gap-2.5 px-3 h-full">
-              {thumb && <img src={thumb} className="w-9 h-9 rounded-lg object-cover flex-shrink-0 shadow-lg" alt="cover" />}
+              {thumb && <img src={thumb} width={36} height={36} className="w-9 h-9 rounded-lg object-cover flex-shrink-0 shadow-lg" alt="Video thumbnail" />}
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest font-mono">Now Playing</p>
                 <div className="flex items-end gap-[3px] h-3 mt-0.5" aria-hidden="true">
@@ -176,7 +176,7 @@ function YouTubeAudioPlayer({
               <button
                 onClick={onClose}
                 aria-label="Close player"
-                className="w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                className="w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
               >
                 <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
               </button>
@@ -202,7 +202,7 @@ function YouTubeAudioPlayer({
                 onKeyDown={seekKeyDown}
               >
                 <div
-                  className="h-full rounded-full transition-all duration-100"
+                  className="h-full rounded-full transition-[width] duration-100"
                   style={{ width: `${pct}%`, background: '#06E8F9' }}
                 />
                 <div
@@ -254,7 +254,7 @@ function YouTubeAudioPlayer({
             <div className="flex gap-1.5 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
               <input
                 aria-label="Paste YouTube URL to change track"
-                className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
+                className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 transition-colors"
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 placeholder="Paste YouTube URL to change…"
                 onKeyDown={e => {
@@ -353,7 +353,7 @@ export default function App() {
                   <input
                     ref={musicInputRef}
                     aria-label="YouTube music URL"
-                    className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                     placeholder="Paste YouTube URL…"
                     onKeyDown={e => {

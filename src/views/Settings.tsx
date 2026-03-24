@@ -86,7 +86,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
                     aria-label="Profile name"
                     name="profile-name"
                     autoComplete="name"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                     placeholder="Your name…"
                     value={nameDraft}
                     onChange={e => setNameDraft(e.target.value)}

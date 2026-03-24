@@ -261,12 +261,12 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
       {showOnboarding && tasks.length === 0 && !isCalendarConnected && (
         <div className="flex-shrink-0 mb-6 glass-panel rounded-xl p-4 border-l-4 border-primary/60 flex items-start gap-4">
-          <span className="material-symbols-outlined text-primary text-[24px] flex-shrink-0 mt-0.5">waving_hand</span>
+          <span className="material-symbols-outlined text-primary text-[24px] flex-shrink-0 mt-0.5" aria-hidden="true">waving_hand</span>
           <div className="flex-1">
             <p className="text-sm font-semibold text-white mb-1">Welcome to your dashboard!</p>
             <p className="text-xs text-text-muted">Get started by connecting your Google account for Calendar &amp; Gmail, or hit <span className="text-primary font-mono">+</span> to add your first task.</p>
-            <button onClick={() => setCurrentView('Integrations')} className="mt-2 text-xs text-primary hover:underline font-medium">
-              Connect integrations →
+            <button onClick={() => setCurrentView('Integrations')} className="mt-2 text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+              Connect integrations
             </button>
           </div>
           <button
@@ -287,7 +287,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/30 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-8">
               <h2 className="font-heading text-xl text-white flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary text-[24px]">event_note</span>
+                <span className="material-symbols-outlined text-primary text-[24px]" aria-hidden="true">event_note</span>
                 Schedule
               </h2>
               <div className="flex items-center gap-1">
@@ -374,7 +374,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/70 via-green-400/20 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-8">
               <h2 className="font-heading text-lg text-white flex items-center gap-3">
-                <span className="material-symbols-outlined text-text-muted text-[22px]">checklist</span>
+                <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">checklist</span>
                 Tasks
               </h2>
               <div className="flex items-center gap-1" ref={taskMenuRef}>
@@ -584,7 +584,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-6 flex flex-col relative">
               <div className="flex justify-between items-center mb-5">
                 <h2 className="font-heading text-lg text-white flex items-center gap-3">
-                  <span className="material-symbols-outlined text-text-muted text-[22px]">code</span>
+                  <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">code</span>
                   GitHub
                 </h2>
                 {githubNotifs.length > 0 && (
@@ -593,7 +593,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               </div>
               {githubNotifs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 text-center">
-                  <span className="material-symbols-outlined text-3xl text-text-muted mb-2">check_circle</span>
+                  <span className="material-symbols-outlined text-3xl text-text-muted mb-2" aria-hidden="true">check_circle</span>
                   <p className="text-sm text-text-muted">All caught up!</p>
                 </div>
               ) : (

@@ -193,7 +193,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-colors"></div>
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-lg">
-                  <span className="material-symbols-outlined text-blue-500 text-3xl">calendar_today</span>
+                  <span className="material-symbols-outlined text-blue-500 text-3xl" aria-hidden="true">calendar_today</span>
                 </div>
                 {isLoading ? (
                   <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
@@ -240,7 +240,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                     value={githubPat}
                     onChange={e => setGithubPat(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSaveGithub()}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                   />
                   {githubError && <p className="text-xs text-red-400">{githubError}</p>}
                   <button
@@ -324,7 +324,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                     value={discordUrl}
                     onChange={e => setDiscordUrl(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSaveDiscord()}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                   />
                   {discordError && <p className="text-xs text-red-400">{discordError}</p>}
                   <button

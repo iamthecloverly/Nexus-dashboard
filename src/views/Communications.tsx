@@ -209,7 +209,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative">
               {!gmailConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
-                  <span className="material-symbols-outlined text-4xl">mail</span>
+                  <span className="material-symbols-outlined text-4xl" aria-hidden="true">mail</span>
                   <p className="text-sm">Connect Gmail to see your inbox.</p>
                   <button
                     onClick={() => setCurrentView('Integrations')}
@@ -220,7 +220,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 </div>
               ) : visibleEmails.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
-                  <span className="material-symbols-outlined text-4xl">inbox</span>
+                  <span className="material-symbols-outlined text-4xl" aria-hidden="true">inbox</span>
                   <p>{searchQuery ? 'No emails match your search.' : 'Inbox zero!'}</p>
                 </div>
               ) : (
@@ -241,7 +241,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       onClick={() => { setSelectedIndex(index); openDetail(email); }}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedIndex(index); openDetail(email); } }}
                     >
-                      <div className={`w-2 h-2 rounded-full mt-3 shrink-0 ${email.urgent ? 'bg-[#FF0055] shadow-[0_0_12px_rgba(255,0,85,0.6)]' : email.unread ? 'bg-primary neon-pulse-unread' : 'bg-transparent'}`}></div>
+                      <div aria-hidden="true" className={`w-2 h-2 rounded-full mt-3 shrink-0 ${email.urgent ? 'bg-[#FF0055] shadow-[0_0_12px_rgba(255,0,85,0.6)]' : email.unread ? 'bg-primary neon-pulse-unread' : 'bg-transparent'}`}></div>
                       <div className={`w-8 h-8 rounded-full glass-avatar flex items-center justify-center text-sm font-semibold shrink-0 mt-0.5 hover:scale-110 transition-transform ${email.urgent ? 'border-[#FF0055]/30 text-[#FF0055]' : email.unread ? 'text-white' : 'text-[#A1A1AA]'}`}>
                         {email.initials}
                       </div>

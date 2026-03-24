@@ -40,7 +40,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
       <div className="p-6 pb-8">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #06E8F9, #06E8F940)' }}>
-            <span className="material-symbols-outlined font-bold text-[20px] relative z-10" style={{ color: '#0B0C10' }}>hub</span>
+            <span className="material-symbols-outlined font-bold text-[20px] relative z-10" style={{ color: '#0B0C10' }} aria-hidden="true">hub</span>
           </div>
           <div className="flex flex-col">
             <span className="font-heading font-bold text-[16px] tracking-widest text-white leading-none">NEXUS</span>
@@ -57,7 +57,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
           <button
             key={item.id}
             onClick={() => setCurrentView(item.id)}
-            className="nav-link w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all"
+            className="nav-link w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors"
             style={currentView === item.id
               ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)', fontWeight: 600 }
               : { color: '#71717A' }
@@ -104,12 +104,12 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
         {/* Music button */}
         <button
           onClick={onOpenMusic}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+          aria-label={musicActive ? 'Now playing — YouTube Music' : 'Open YouTube Music'}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={musicActive
             ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)', border: '1px solid rgba(6,232,249,0.15)' }
             : { color: '#52525B', border: '1px solid rgba(255,255,255,0.04)' }
           }
-          title="YouTube Music"
         >
           <span className="material-symbols-outlined text-[20px]" aria-hidden="true">music_note</span>
           <span className="text-[13px] font-medium">{musicActive ? 'Now Playing' : 'Music'}</span>
@@ -129,7 +129,7 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
         {/* Settings */}
         <button
           onClick={() => setCurrentView('Settings')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={currentView === 'Settings'
             ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)' }
             : { color: '#52525B' }

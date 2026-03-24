@@ -166,7 +166,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
         <div className="flex flex-col items-center justify-center h-full text-center gap-4">
           <span className="material-symbols-outlined text-4xl text-[#A1A1AA]">calendar_today</span>
           <p className="text-sm text-[#A1A1AA]">Connect your Google Calendar to see your schedule.</p>
-          <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10">
+          <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             Go to Integrations
           </button>
         </div>
@@ -285,7 +285,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
 
               <div className="relative group">
                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <span className="material-symbols-outlined text-primary/60 text-[20px] group-focus-within:text-primary transition-colors">add_circle</span>
+                  <span className="material-symbols-outlined text-primary/60 text-[20px] group-focus-within:text-primary transition-colors" aria-hidden="true">add_circle</span>
                 </div>
                 <input
                   aria-label="Add a task"
