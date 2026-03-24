@@ -344,6 +344,10 @@ app.post('/api/gmail/send', async (req, res) => {
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Missing to, subject, or body' });
   }
+  // Basic email format check — catches obvious typos before the Gmail API does
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
+    return res.status(400).json({ error: 'Invalid recipient email address' });
+  }
 
   // Sanitize headers to prevent CRLF injection
   const sanitize = (s: string) => s.replace(/[\r\n]/g, '');

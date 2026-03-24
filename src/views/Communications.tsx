@@ -46,6 +46,9 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
 
   const unreadCount = useMemo(() => emails.filter(e => e.unread && !e.archived && !e.deleted).length, [emails]);
 
+  // Reset keyboard selection whenever the visible list changes (search or refresh)
+  useEffect(() => { setSelectedIndex(0); }, [visibleEmails]);
+
   // Keep a ref in sync so the keyboard handler never needs to re-register
   stateRef.current.visibleEmails = visibleEmails;
   stateRef.current.selectedIndex = selectedIndex;

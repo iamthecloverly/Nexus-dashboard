@@ -408,7 +408,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 )}
               </div>
             </div>
-            {tasks.filter(t => !t.completed).length === 0 && tasks.length === 0 ? (
+            {tasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center flex-1 text-center gap-3 opacity-60">
                 <span className="material-symbols-outlined text-3xl text-text-muted">task_alt</span>
                 <p className="text-sm text-text-muted">No tasks yet.<br/>Click + to add one.</p>

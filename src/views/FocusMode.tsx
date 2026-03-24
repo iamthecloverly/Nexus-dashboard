@@ -16,17 +16,17 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Tick: interval is created once when active, not every second
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((time) => time - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
-      setIsActive(false);
-    }
+    if (!isActive) return;
+    const interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [isActive, timeLeft]);
+  }, [isActive]);
+
+  // Completion: stop when time runs out
+  useEffect(() => {
+    if (timeLeft === 0) setIsActive(false);
+  }, [timeLeft]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);
