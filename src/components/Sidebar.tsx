@@ -10,6 +10,7 @@ interface SidebarProps {
 export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musicActive }: SidebarProps) {
   const [cpuLoad, setCpuLoad] = useState(0);
   const [memUsed, setMemUsed] = useState(0);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -60,10 +61,12 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
             className="nav-link w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors"
             style={currentView === item.id
               ? { color: '#06E8F9', background: 'rgba(6,232,249,0.08)', fontWeight: 600 }
-              : { color: '#71717A' }
+              : hoveredId === item.id
+                ? { color: '#fff', background: 'rgba(255,255,255,0.04)' }
+                : { color: '#71717A' }
             }
-            onMouseEnter={e => { if (currentView !== item.id) (e.currentTarget as HTMLElement).style.cssText += ';color:#fff;background:rgba(255,255,255,0.04)'; }}
-            onMouseLeave={e => { if (currentView !== item.id) { (e.currentTarget as HTMLElement).style.color = '#71717A'; (e.currentTarget as HTMLElement).style.background = ''; } }}
+            onMouseEnter={() => { if (currentView !== item.id) setHoveredId(item.id); }}
+            onMouseLeave={() => setHoveredId(null)}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{item.icon}</span>
             <span className="text-[13px]">{item.label}</span>

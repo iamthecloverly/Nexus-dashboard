@@ -78,7 +78,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   const handleAddTask = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskTitle.trim()) {
       addTask({
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         title: newTaskTitle.trim(),
         completed: false,
         group: 'now'
@@ -100,10 +100,10 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   const getEventTimes = (event: CalendarEvent) => {
     const startTime = event.start.dateTime
       ? parseISO(event.start.dateTime)
-      : parseISO(event.start.date!);
+      : parseISO(event.start.date ?? '');
     const endTime = event.end.dateTime
       ? parseISO(event.end.dateTime)
-      : parseISO(event.end.date!);
+      : parseISO(event.end.date ?? '');
     return { startTime, endTime };
   };
 

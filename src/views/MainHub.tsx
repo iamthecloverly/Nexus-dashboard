@@ -26,8 +26,6 @@ interface GithubNotification {
 const CHECKLIST_TITLE_KEY = 'dashboard_checklist_title';
 const DEFAULT_CHECKLIST_TITLE = 'My Checklist';
 
-const KEYBOARD_SHORTCUTS = [['C', 'Compose'], ['E', 'Archive'], ['Esc', 'Close'], ['↑↓', 'Navigate']] as const;
-
 function githubTypeIcon(type: string): string {
   if (type === 'PullRequest') return 'merge';
   if (type === 'Issue') return 'bug_report';
@@ -77,6 +75,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const [editingTaskTitle, setEditingTaskTitle] = useState('');
   const [showTaskMenu, setShowTaskMenu] = useState(false);
   const taskMenuRef = useRef<HTMLDivElement>(null);
+  const calendarMenuRef = useRef<HTMLDivElement>(null);
 
   // FAB quick-add
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -162,7 +161,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
   const addChecklistItem = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newItemText.trim()) {
-      setChecklist(prev => [...prev, { id: Date.now().toString(), text: newItemText.trim(), completed: false }]);
+      setChecklist(prev => [...prev, { id: crypto.randomUUID(), text: newItemText.trim(), completed: false }]);
       setNewItemText('');
     }
   };
@@ -174,7 +173,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && quickAddTitle.trim()) {
-      addTask({ id: Date.now().toString(), title: quickAddTitle.trim(), completed: false, group: quickAddGroup });
+      addTask({ id: crypto.randomUUID(), title: quickAddTitle.trim(), completed: false, group: quickAddGroup });
       showToast('Task added', 'success');
       setQuickAddTitle('');
       setShowQuickAdd(false);
@@ -193,7 +192,9 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       if (taskMenuRef.current && !taskMenuRef.current.contains(e.target as Node)) {
         setShowTaskMenu(false);
       }
-      setShowCalendarMenu(false);
+      if (calendarMenuRef.current && !calendarMenuRef.current.contains(e.target as Node)) {
+        setShowCalendarMenu(false);
+      }
     };
     if (showTaskMenu || showCalendarMenu) {
       document.addEventListener('mousedown', handler);
@@ -292,7 +293,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               </h2>
               <div className="flex items-center gap-1">
                 <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
-                <div className="relative">
+                <div className="relative" ref={calendarMenuRef}>
                   <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
                   {showCalendarMenu && (
                     <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[180px]">

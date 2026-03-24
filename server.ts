@@ -19,6 +19,11 @@ const COOKIE_OPTS = {
 app.use(cookieParser());
 app.use(express.json());
 
+// Safely parse the google_tokens cookie; returns null on bad JSON
+const parseTokensCookie = (cookie: string) => {
+  try { return JSON.parse(cookie); } catch { return null; }
+};
+
 // OAuth2 Client Setup
 const getOAuth2Client = (req: express.Request) => {
   const baseUrl = process.env.APP_URL || `https://${req.get('host')}`;
@@ -110,7 +115,8 @@ app.get('/api/calendar/events', async (req, res) => {
   }
 
   try {
-    const tokens = JSON.parse(tokensCookie);
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     // Persist refreshed tokens back to the cookie automatically
@@ -189,7 +195,8 @@ app.get('/api/gmail/messages', async (req, res) => {
   }
 
   try {
-    const tokens = JSON.parse(tokensCookie);
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
@@ -270,7 +277,8 @@ app.get('/api/gmail/message/:id', async (req, res) => {
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const tokens = JSON.parse(tokensCookie);
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
@@ -343,7 +351,8 @@ app.post('/api/gmail/send', async (req, res) => {
   const safeSubject = sanitize(subject);
 
   try {
-    const tokens = JSON.parse(tokensCookie);
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
 
