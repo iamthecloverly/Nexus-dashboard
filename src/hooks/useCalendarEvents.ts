@@ -18,8 +18,11 @@ export function useCalendarEvents(): CalendarState {
   const refetch = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
-      const res = await fetch('/api/calendar/events');
+      const res = await fetch('/api/calendar/events', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         setEvents(data.events ?? []);
@@ -35,6 +38,7 @@ export function useCalendarEvents(): CalendarState {
         setError('fetch_error');
       }
     } catch {
+      clearTimeout(timeoutId);
       setIsConnected(false);
     } finally {
       setIsLoading(false);

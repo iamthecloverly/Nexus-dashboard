@@ -22,11 +22,24 @@ const TaskContext = createContext<TaskContextValue | null>(null);
 
 const DEFAULT_TASKS: Task[] = [];
 
+function isValidTask(t: unknown): t is Task {
+  return (
+    typeof t === 'object' && t !== null &&
+    typeof (t as Task).id === 'string' && (t as Task).id.length > 0 &&
+    typeof (t as Task).title === 'string' &&
+    typeof (t as Task).completed === 'boolean' &&
+    ((t as Task).group === 'now' || (t as Task).group === 'next')
+  );
+}
+
 export function TaskProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
       const saved = localStorage.getItem('dashboard_tasks');
-      return saved ? JSON.parse(saved) : DEFAULT_TASKS;
+      if (!saved) return DEFAULT_TASKS;
+      const parsed = JSON.parse(saved);
+      // Discard any entries that don't match the Task shape — guards against corrupted storage
+      return Array.isArray(parsed) ? parsed.filter(isValidTask) : DEFAULT_TASKS;
     } catch {
       return DEFAULT_TASKS;
     }

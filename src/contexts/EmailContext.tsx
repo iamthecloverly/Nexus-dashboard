@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Email } from '../App';
+import { useToast } from '../components/Toast';
 
 interface EmailState {
   emails: Email[];
@@ -25,6 +26,7 @@ interface EmailContextValue {
 const EmailContext = createContext<EmailContextValue | null>(null);
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
+  const { showToast } = useToast();
   const [emails, setEmails] = useState<Email[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [emailsLoading, setEmailsLoading] = useState(false);
@@ -32,8 +34,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
   const refreshEmails = useCallback(async () => {
     setEmailsLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
-      const res = await fetch('/api/gmail/messages');
+      const res = await fetch('/api/gmail/messages', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         setEmails(data.emails ?? []);
@@ -46,8 +51,9 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         // 5xx or unexpected — server is up but erroring; keep connected state, flag error
         setServerError(true);
       }
-    } catch {
-      // Network error — server unreachable
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      // AbortError = our 15s timeout fired; treat same as network error
       setGmailConnected(false);
       setServerError(true);
     } finally {
@@ -83,18 +89,21 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       return { ...email, unread: !email.unread };
     }));
 
-    // Sync to Gmail — fire-and-forget; local state stays optimistic on failure
+    // Sync to Gmail — optimistic; local state persists even on failure
     if (currentlyUnread !== undefined) {
       pendingToggleRef.current.add(id);
       fetch(`/api/gmail/messages/${id}/mark-read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ read: currentlyUnread }), // read:true = was unread, now marking as read
+        body: JSON.stringify({ read: currentlyUnread }),
       })
-        .catch(() => { /* optimistic — local change persists even on error */ })
+        .then(res => {
+          if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
+        })
+        .catch(() => { /* network error — local change persists */ })
         .finally(() => { pendingToggleRef.current.delete(id); });
     }
-  }, []);
+  }, [showToast]);
 
   const archiveEmail = useCallback((id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();

@@ -8,6 +8,27 @@ import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 
+/**
+ * Isolated clock display — owns its own 1s interval so that only this small
+ * component re-renders every second instead of the entire MainHub tree.
+ */
+function ClockDisplay() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <>
+      <h1 className="text-white font-heading tracking-tight drop-shadow-lg leading-none" style={{ fontSize: 'clamp(3rem,6vw,4.5rem)' }}>
+        {format(now, 'HH:mm')}
+        <span className="text-primary/40 ml-1 text-[40%]">{format(now, 'ss')}</span>
+      </h1>
+      <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{format(now, 'EEEE, MMMM dd')}</p>
+    </>
+  );
+}
+
 interface ChecklistItem {
   id: string;
   text: string;
@@ -95,17 +116,20 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     return { unreadEmails: unread, unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
   }, [emails]);
 
-  // Clocks
+  // currentTime used only for event isCurrent/isPast — 10s is sufficient precision
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 10_000);
     return () => clearInterval(timer);
   }, []);
 
   // GitHub notifications — poll every 5 minutes
   useEffect(() => {
     const fetchGithub = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15_000);
       try {
-        const res = await fetch('/api/github/notifications');
+        const res = await fetch('/api/github/notifications', { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
           setGithubNotifs(data.notifications ?? []);
@@ -113,7 +137,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
         } else if (res.status === 401) {
           setGithubConnected(false);
         }
-      } catch { setGithubConnected(false); }
+      } catch { clearTimeout(timeoutId); setGithubConnected(false); }
     };
     fetchGithub();
     const interval = setInterval(fetchGithub, 5 * 60 * 1000);
@@ -239,11 +263,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden px-8 py-10 max-w-[1440px] mx-auto w-full">
       <header className="flex justify-between items-end mb-8 flex-shrink-0">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-white font-heading tracking-tight drop-shadow-lg leading-none" style={{ fontSize: 'clamp(3rem,6vw,4.5rem)' }}>
-            {format(currentTime, 'HH:mm')}
-            <span className="text-primary/40 ml-1 text-[40%]">{format(currentTime, 'ss')}</span>
-          </h1>
-          <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{format(currentTime, 'EEEE, MMMM dd')}</p>
+          <ClockDisplay />
         </div>
         <div className="flex gap-3 items-center">
           <div className="flex items-center gap-2 glass-panel !rounded-full px-4 py-2 text-xs text-text-muted">

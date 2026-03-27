@@ -24,6 +24,9 @@ declare global {
   }
 }
 
+/** Matches YouTube video IDs from all known URL formats */
+const YT_URL_RE = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/;
+
 function loadYTScript() {
   if (document.getElementById('yt-api-script')) return;
   const tag = document.createElement('script');
@@ -291,7 +294,7 @@ function YouTubeAudioPlayer({
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     const val = (e.target as HTMLInputElement).value;
-                    const m = val.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/);
+                    const m = val.match(YT_URL_RE);
                     if (m) { onLoad(m[1]); (e.target as HTMLInputElement).value = ''; }
                   }
                 }}
@@ -335,7 +338,7 @@ export default function App() {
 
   const handleYtLoad = (id: string) => {
     setYtVideoId(id);
-    localStorage.setItem('dashboard_yt_video', id);
+    try { localStorage.setItem('dashboard_yt_video', id); } catch { /* quota exceeded */ }
     setShowMusicInput(false);
   };
   const handleYtClose = () => {
@@ -398,7 +401,7 @@ export default function App() {
                       if (e.key === 'Escape') { setShowMusicInput(false); return; }
                       if (e.key === 'Enter') {
                         const val = (e.target as HTMLInputElement).value;
-                        const m = val.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/);
+                        const m = val.match(YT_URL_RE);
                         if (m) handleYtLoad(m[1]);
                       }
                     }}
@@ -409,7 +412,7 @@ export default function App() {
                     style={{ background: 'rgba(0,217,255,0.12)', border: '1px solid rgba(6,232,249,0.2)', color: '#00D9FF' }}
                     onClick={() => {
                       const val = musicInputRef.current?.value ?? '';
-                      const m = val.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/);
+                      const m = val.match(YT_URL_RE);
                       if (m) handleYtLoad(m[1]);
                     }}
                   >

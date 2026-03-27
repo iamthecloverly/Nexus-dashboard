@@ -17,6 +17,8 @@ interface ComposeState {
 
 const EMPTY_COMPOSE: ComposeState = { to: '', subject: '', body: '', sending: false, error: null };
 const KEYBOARD_SHORTCUTS = [['C', 'Compose'], ['E', 'Archive'], ['Esc', 'Close'], ['↑↓', 'Navigate']] as const;
+/** Mirrors the server-side check — catches typos before the round-trip */
+const isValidEmail = (addr: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.trim());
 
 interface EmailDetail {
   id: string;
@@ -129,6 +131,10 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
 
   const handleSend = async () => {
     if (!compose) return;
+    if (!isValidEmail(compose.to)) {
+      setCompose(c => c ? { ...c, error: 'Invalid recipient email address' } : null);
+      return;
+    }
     setCompose(c => c ? { ...c, sending: true, error: null } : null);
     try {
       const res = await fetch('/api/gmail/send', {
@@ -465,7 +471,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               </button>
               <button
                 onClick={handleSend}
-                disabled={compose.sending || !compose.to.trim() || !compose.subject.trim() || !compose.body.trim()}
+                disabled={compose.sending || !isValidEmail(compose.to) || !compose.subject.trim() || !compose.body.trim()}
                 className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-[#0B0C10] text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(6,232,249,0.3)]"
               >
                 {compose.sending ? (
