@@ -40,35 +40,9 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
   const searchRef = useRef<HTMLInputElement>(null);
 
   // AI task extraction
-  const [extractingIds, setExtractingIds] = useState<Set<string>>(new Set());
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([]);
   const [suggestionContext, setSuggestionContext] = useState('');
-
-  const extractTasks = async (emailId: string, emailSubject: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExtractingIds(prev => new Set([...prev, emailId]));
-    try {
-      const res = await fetch('/api/ai/extract-tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.code === 'NO_AI_KEY') showToast('OpenAI key not configured — add it in Settings.', 'error');
-        else showToast(data.error ?? 'Failed to extract tasks', 'error');
-        return;
-      }
-      if (data.suggestions.length === 0) { showToast('No actionable tasks found in this email', 'info'); return; }
-      setSuggestions(data.suggestions);
-      setSuggestionContext(emailSubject);
-    } catch {
-      showToast('Failed to reach the AI service', 'error');
-    } finally {
-      setExtractingIds(prev => { const next = new Set(prev); next.delete(emailId); return next; });
-    }
-  };
 
   const analyzeAllUnread = async () => {
     const ids = visibleEmails.filter(e => e.unread).slice(0, 10).map(e => e.id);
@@ -113,7 +87,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
      (email.preview ?? '').toLowerCase().includes(lowerQuery))
   ), [emails, lowerQuery]);
 
-  const unreadCount = useMemo(() => emails.filter(e => e.unread && !e.archived && !e.deleted).length, [emails]);
+  const unreadCount = emails.filter(e => e.unread && !e.archived && !e.deleted).length;
 
   // Reset keyboard selection whenever the visible list changes (search or refresh)
   useEffect(() => { setSelectedIndex(0); }, [visibleEmails]);
@@ -343,19 +317,6 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       {/* Hover Action Bar — hidden in split view to save space */}
                       {!detail && (
                         <div className="action-bar absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#1a1b20]/90 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-2xl z-20">
-                          <button
-                            onClick={(e) => extractTasks(email.id, email.subject, e)}
-                            disabled={extractingIds.has(email.id)}
-                            aria-label="Extract tasks with AI"
-                            title="Extract tasks from this email"
-                            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-primary/10 text-primary/60 hover:text-primary transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                          >
-                            {extractingIds.has(email.id)
-                              ? <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
-                              : <span className="material-symbols-outlined text-[18px]" aria-hidden="true">auto_awesome</span>
-                            }
-                          </button>
-                          <div className="w-px h-4 bg-white/10 mx-0.5" aria-hidden="true"></div>
                           <button onClick={(e) => handleReply(email, e)} aria-label="Reply" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">reply</span>
                           </button>
@@ -397,18 +358,6 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                   <p className="text-sm text-[#A1A1AA] mt-0.5 truncate">{detail.sender} &lt;{detail.senderEmail}&gt;</p>
                 </div>
                 <div className="flex items-center gap-1 ml-4 flex-shrink-0">
-                  <button
-                    onClick={(e) => extractTasks(detail.id, detail.subject, e)}
-                    disabled={extractingIds.has(detail.id)}
-                    aria-label="Extract tasks with AI"
-                    title="Extract tasks from this email"
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary/10 text-primary/60 hover:text-primary transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    {extractingIds.has(detail.id)
-                      ? <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
-                      : <span className="material-symbols-outlined text-[18px]" aria-hidden="true">auto_awesome</span>
-                    }
-                  </button>
                   <button
                     onClick={() => openCompose({ to: detail.senderEmail, subject: `Re: ${detail.subject}` })}
                     aria-label="Reply to this email"
