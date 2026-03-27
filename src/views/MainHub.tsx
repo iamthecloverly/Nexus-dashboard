@@ -48,9 +48,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
-  const [checklistTitle, setChecklistTitle] = useState(() =>
-    localStorage.getItem(CHECKLIST_TITLE_KEY) ?? DEFAULT_CHECKLIST_TITLE
-  );
+  const [checklistTitle, setChecklistTitle] = useState(() => {
+    try { return localStorage.getItem(CHECKLIST_TITLE_KEY) ?? DEFAULT_CHECKLIST_TITLE; }
+    catch { return DEFAULT_CHECKLIST_TITLE; }
+  });
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [newItemText, setNewItemText] = useState('');
@@ -100,7 +101,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     return () => clearInterval(timer);
   }, []);
 
-  // GitHub notifications
+  // GitHub notifications — poll every 5 minutes
   useEffect(() => {
     const fetchGithub = async () => {
       try {
@@ -115,6 +116,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       } catch { setGithubConnected(false); }
     };
     fetchGithub();
+    const interval = setInterval(fetchGithub, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Persist checklist

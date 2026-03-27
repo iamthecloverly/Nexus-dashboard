@@ -29,7 +29,7 @@ interface EmailDetail {
 }
 
 export default function Communications({ setCurrentView }: { setCurrentView: (view: string) => void }) {
-  const { state: { emails, gmailConnected, emailsLoading }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails } } = useEmailContext();
+  const { state: { emails, gmailConnected, emailsLoading, serverError }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -269,14 +269,28 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative">
               {!gmailConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
-                  <span className="material-symbols-outlined text-4xl" aria-hidden="true">mail</span>
-                  <p className="text-sm">Connect Gmail to see your inbox.</p>
-                  <button
-                    onClick={() => setCurrentView('Integrations')}
-                    className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10"
-                  >
-                    Go to Integrations
-                  </button>
+                  <span className="material-symbols-outlined text-4xl" aria-hidden="true">{serverError ? 'cloud_off' : 'mail'}</span>
+                  {serverError ? (
+                    <>
+                      <p className="text-sm">Server unreachable. Make sure the app is running.</p>
+                      <button
+                        onClick={refreshEmails}
+                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10"
+                      >
+                        Retry
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm">Connect Gmail to see your inbox.</p>
+                      <button
+                        onClick={() => setCurrentView('Integrations')}
+                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10"
+                      >
+                        Go to Integrations
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : visibleEmails.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">

@@ -33,7 +33,7 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem('dashboard_tasks', JSON.stringify(tasks));
+    try { localStorage.setItem('dashboard_tasks', JSON.stringify(tasks)); } catch { /* quota exceeded */ }
   }, [tasks]);
 
   const toggleTask = useCallback((id: string) => {

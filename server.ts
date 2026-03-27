@@ -285,6 +285,43 @@ app.get('/api/gmail/messages', async (req, res) => {
   }
 });
 
+app.post('/api/gmail/messages/:id/mark-read', async (req, res) => {
+  const tokensCookie = req.cookies.google_tokens;
+  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+
+  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+
+  const { read } = req.body as { read: boolean };
+  if (typeof read !== 'boolean') return res.status(400).json({ error: 'Missing read flag' });
+
+  try {
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(tokens);
+    oauth2Client.once('tokens', (newTokens) => {
+      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+    });
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: req.params.id,
+      requestBody: read
+        ? { removeLabelIds: ['UNREAD'] }  // marking as read
+        : { addLabelIds: ['UNREAD'] },     // marking as unread
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    const status = error?.response?.status ?? error?.code;
+    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Token expired or invalid' });
+    }
+    res.status(500).json({ error: 'Failed to update message' });
+  }
+});
+
 app.get('/api/gmail/message/:id', async (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
