@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { google } from 'googleapis';
 import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
@@ -8,9 +10,14 @@ import os from 'os';
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 
+// Fail fast in production if APP_URL is missing (prevents Host header spoofing in OAuth callback)
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.APP_URL) {
+  throw new Error('APP_URL must be set in production');
+}
+
 const app = express();
 const PORT = 3000;
-const isProduction = process.env.NODE_ENV === 'production';
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: isProduction,
@@ -18,8 +25,9 @@ const COOKIE_OPTS = {
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
+app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite injects inline scripts in dev
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 
 // Safely parse the google_tokens cookie; returns null on bad JSON
 const parseTokensCookie = (cookie: string) => {
@@ -36,6 +44,9 @@ const getOAuth2Client = (req: express.Request) => {
     redirectUri
   );
 };
+
+// Rate limiter for AI endpoints (max 20 req/min — each call loops up to 10 OpenAI requests)
+const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false });
 
 // API Routes
 app.get('/api/health', (req, res) => {
@@ -332,7 +343,7 @@ app.get('/api/gmail/message/:id', async (req, res) => {
     if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
-    res.status(500).json({ error: `Failed to fetch message: ${error?.message ?? 'unknown error'}` });
+    res.status(500).json({ error: 'Failed to fetch message' });
   }
 });
 
@@ -392,6 +403,10 @@ app.post('/api/gmail/send', async (req, res) => {
 app.post('/api/github/token', (req, res) => {
   const { token } = req.body as { token: string };
   if (!token?.trim()) return res.status(400).json({ error: 'Missing token' });
+  // Validate GitHub PAT format (classic: ghp_, fine-grained: github_pat_, OAuth: gho_)
+  if (!/^(ghp_|github_pat_|gho_)[\w]+$/.test(token.trim())) {
+    return res.status(400).json({ error: 'Invalid GitHub token format' });
+  }
   res.cookie('github_token', token.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
@@ -442,9 +457,15 @@ app.get('/api/github/notifications', async (req, res) => {
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
+// Strict allowlist: only official Discord webhook URLs (prevents SSRF)
+const DISCORD_WEBHOOK_RE = /^https:\/\/discord\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+
 app.post('/api/discord/webhook', (req, res) => {
   const { url } = req.body as { url: string };
   if (!url?.trim()) return res.status(400).json({ error: 'Missing webhook URL' });
+  if (!DISCORD_WEBHOOK_RE.test(url.trim())) {
+    return res.status(400).json({ error: 'Invalid Discord webhook URL' });
+  }
   res.cookie('discord_webhook', url.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
@@ -461,6 +482,8 @@ app.post('/api/discord/disconnect', (req, res) => {
 app.post('/api/discord/send', async (req, res) => {
   const webhook = req.cookies.discord_webhook;
   if (!webhook) return res.status(401).json({ error: 'No webhook configured' });
+  // Re-validate on use to guard against tampered cookies
+  if (!DISCORD_WEBHOOK_RE.test(webhook)) return res.status(400).json({ error: 'Invalid webhook URL' });
 
   const { content } = req.body as { content: string };
   if (!content?.trim()) return res.status(400).json({ error: 'Missing content' });
@@ -584,6 +607,10 @@ async function extractTasksFromEmail(
 app.post('/api/ai/key', (req, res) => {
   const { key } = req.body as { key: string };
   if (!key?.trim()) return res.status(400).json({ error: 'Missing key' });
+  // Validate OpenAI key format
+  if (!/^sk-[\w-]{20,}$/.test(key.trim())) {
+    return res.status(400).json({ error: 'Invalid OpenAI API key format' });
+  }
   res.cookie('openai_key', key.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
@@ -599,7 +626,9 @@ app.post('/api/ai/disconnect', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/ai/extract-tasks', async (req, res) => {
+const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
+
+app.post('/api/ai/extract-tasks', aiLimiter, async (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
 
@@ -608,6 +637,7 @@ app.post('/api/ai/extract-tasks', async (req, res) => {
 
   const { emailId } = req.body as { emailId: string };
   if (!emailId?.trim()) return res.status(400).json({ error: 'Missing emailId' });
+  if (!GMAIL_ID_RE.test(emailId.trim())) return res.status(400).json({ error: 'Invalid emailId' });
 
   try {
     const tokens = parseTokensCookie(tokensCookie);
@@ -631,7 +661,7 @@ app.post('/api/ai/extract-tasks', async (req, res) => {
   }
 });
 
-app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
+app.post('/api/ai/extract-tasks-bulk', aiLimiter, async (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
 
@@ -640,6 +670,8 @@ app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
 
   const { emailIds, mode = 'manual' } = req.body as { emailIds: string[]; mode?: 'manual' | 'auto' };
   if (!Array.isArray(emailIds) || emailIds.length === 0) return res.status(400).json({ error: 'Missing emailIds' });
+  const safeIds = emailIds.filter(id => typeof id === 'string' && GMAIL_ID_RE.test(id));
+  if (safeIds.length === 0) return res.status(400).json({ error: 'No valid emailIds provided' });
 
   try {
     const tokens = parseTokensCookie(tokensCookie);
@@ -654,7 +686,7 @@ app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
     const openai = new OpenAI({ apiKey: openAIKey });
 
     const allSuggestions: any[] = [];
-    for (const emailId of emailIds.slice(0, 10)) {
+    for (const emailId of safeIds.slice(0, 10)) {
       try {
         const suggestions = await extractTasksFromEmail(gmail, openai, emailId, mode);
         allSuggestions.push(...suggestions);
@@ -702,7 +734,9 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Bind to localhost in dev (prevents LAN exposure); 0.0.0.0 in production for container/deploy
+  const host = isProduction ? '0.0.0.0' : '127.0.0.1';
+  app.listen(PORT, host, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
