@@ -73,6 +73,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
     [
       'dashboard_tasks', 'dashboard_checklist', 'dashboard_checklist_title',
       'dashboard_profile_name', 'dashboard_onboarding_dismissed', 'dashboard_yt_video',
+      'auto_processed_email_ids', // reset auto-task extraction state so new emails are processed fresh
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
