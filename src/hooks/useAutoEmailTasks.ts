@@ -18,7 +18,7 @@ function loadProcessedIds(): Set<string> {
 function saveProcessedIds(ids: Set<string>) {
   // Keep only the most recent IDs to prevent unbounded growth
   const arr = [...ids].slice(-MAX_STORED_IDS);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota exceeded */ }
 }
 
 export function useAutoEmailTasks() {

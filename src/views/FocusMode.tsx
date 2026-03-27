@@ -14,17 +14,18 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Tick: interval is created once when active, not every second
+  // Tick + completion in one effect — stops the timer inside the updater
+  // rather than reacting to timeLeft in a second effect (avoids an extra render cycle)
   useEffect(() => {
     if (!isActive) return;
-    const interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    const interval = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) { setIsActive(false); return 0; }
+        return t - 1;
+      });
+    }, 1000);
     return () => clearInterval(interval);
   }, [isActive]);
-
-  // Completion: stop when time runs out
-  useEffect(() => {
-    if (timeLeft === 0) setIsActive(false);
-  }, [timeLeft]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);

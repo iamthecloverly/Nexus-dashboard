@@ -82,20 +82,17 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const [quickAddGroup, setQuickAddGroup] = useState<'now' | 'next'>('now');
   const quickAddRef = useRef<HTMLInputElement>(null);
 
-  const { remainingTasks, activeTasks, completedTasks, unreadEmails, unreadCount, lastUnreadEmail } = useMemo(() => {
+  const { remainingTasks, activeTasks, completedTasks } = useMemo(() => {
     const active: Task[] = [];
     const completed: Task[] = [];
     for (const t of tasks) { (t.completed ? completed : active).push(t); }
+    return { remainingTasks: active.length, activeTasks: active, completedTasks: completed };
+  }, [tasks]);
+
+  const { unreadEmails, unreadCount, lastUnreadEmail } = useMemo(() => {
     const unread = emails.filter(e => e.unread && !e.archived && !e.deleted);
-    return {
-      remainingTasks: active.length,
-      activeTasks: active,
-      completedTasks: completed,
-      unreadEmails: unread,
-      unreadCount: unread.length,
-      lastUnreadEmail: unread[0] ?? null,
-    };
-  }, [tasks, emails]);
+    return { unreadEmails: unread, unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
+  }, [emails]);
 
   // Clocks
   useEffect(() => {
@@ -122,11 +119,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
   // Persist checklist
   useEffect(() => {
-    localStorage.setItem('dashboard_checklist', JSON.stringify(checklist));
+    try { localStorage.setItem('dashboard_checklist', JSON.stringify(checklist)); } catch { /* quota exceeded */ }
   }, [checklist]);
 
   useEffect(() => {
-    localStorage.setItem(CHECKLIST_TITLE_KEY, checklistTitle);
+    try { localStorage.setItem(CHECKLIST_TITLE_KEY, checklistTitle); } catch { /* quota exceeded */ }
   }, [checklistTitle]);
 
   const toggleChecklistItem = (id: string, e: React.MouseEvent) => {
@@ -166,21 +163,25 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     setEditingTaskId(null);
   };
 
-  // Close menus on outside click
+  // Close task menu on outside click
   useEffect(() => {
+    if (!showTaskMenu) return;
     const handler = (e: MouseEvent) => {
-      if (taskMenuRef.current && !taskMenuRef.current.contains(e.target as Node)) {
-        setShowTaskMenu(false);
-      }
-      if (calendarMenuRef.current && !calendarMenuRef.current.contains(e.target as Node)) {
-        setShowCalendarMenu(false);
-      }
+      if (taskMenuRef.current && !taskMenuRef.current.contains(e.target as Node)) setShowTaskMenu(false);
     };
-    if (showTaskMenu || showCalendarMenu) {
-      document.addEventListener('mousedown', handler);
-      return () => document.removeEventListener('mousedown', handler);
-    }
-  }, [showTaskMenu, showCalendarMenu]);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTaskMenu]);
+
+  // Close calendar menu on outside click
+  useEffect(() => {
+    if (!showCalendarMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (calendarMenuRef.current && !calendarMenuRef.current.contains(e.target as Node)) setShowCalendarMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showCalendarMenu]);
 
   // Close full-screen schedule on Escape
   useEffect(() => {
