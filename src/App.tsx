@@ -9,6 +9,13 @@ import FocusMode from './views/FocusMode';
 import Communications from './views/Communications';
 import Integrations from './views/Integrations';
 import Settings from './views/Settings';
+import { useAutoEmailTasks } from './hooks/useAutoEmailTasks';
+
+/** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
+function AutoEmailTaskProcessor() {
+  useAutoEmailTasks();
+  return null;
+}
 
 declare global {
   interface Window {
@@ -344,6 +351,7 @@ export default function App() {
     <ToastProvider>
       <TaskProvider>
         <EmailProvider>
+          <AutoEmailTaskProcessor />
           <div id="main-content" className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">

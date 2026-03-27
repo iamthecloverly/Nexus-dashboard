@@ -508,8 +508,9 @@ function extractGmailBody(payload: any): string {
   return '';
 }
 
-const AI_SYSTEM_PROMPT = `You are a productivity assistant. Read the email and extract every actionable task the recipient needs to do.
-Return ONLY valid JSON in this exact format: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
+/** Manual mode: thorough extraction shown in review modal before adding */
+const AI_PROMPT_MANUAL = `You are a productivity assistant. Read the email and extract every actionable task the recipient needs to do.
+Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
 Rules:
 - title: concise, starts with a verb (e.g. "Review proposal", "Reply to John", "Schedule meeting")
 - priority: "Critical" = hard deadline or blocker; "Priority" = important but flexible; "Normal" = nice to have
@@ -518,11 +519,33 @@ Rules:
 - max 5 tasks per email
 - if no actionable tasks exist, return {"tasks": []}`;
 
+/** Auto mode: very conservative — only clear, high-value actions. Tasks added silently. */
+const AI_PROMPT_AUTO = `You are a strict task extraction assistant. Only extract tasks when a direct action is clearly required from the recipient.
+
+INCLUDE only when the email:
+- Explicitly requests a reply or response from the recipient
+- Has a deadline or time-sensitive ask directed at the recipient
+- Requests the recipient's approval, decision, or specific input
+- Contains a clear follow-up action the recipient must take
+
+EXCLUDE entirely:
+- Newsletters, promotional, or marketing emails
+- Automated notifications (receipts, shipping updates, OTP codes, alerts)
+- FYI / informational emails with no action needed
+- Meeting invites (handled by calendar)
+- Social media or app notifications
+- Anything where taking action is optional
+
+Be very conservative. When in doubt, return no tasks.
+Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
+Max 3 tasks. Return {"tasks": []} if nothing is clearly actionable.`;
+
 /** Shared logic: fetch one email's metadata + body, call GPT-4o-mini, return suggestions */
 async function extractTasksFromEmail(
   gmail: ReturnType<typeof google.gmail>,
   openai: OpenAI,
   emailId: string,
+  mode: 'manual' | 'auto' = 'manual',
 ): Promise<any[]> {
   const [meta, full] = await Promise.all([
     gmail.users.messages.get({ userId: 'me', id: emailId, format: 'metadata', metadataHeaders: ['From', 'Subject'] }),
@@ -539,7 +562,7 @@ async function extractTasksFromEmail(
     response_format: { type: 'json_object' },
     temperature: 0.2,
     messages: [
-      { role: 'system', content: AI_SYSTEM_PROMPT },
+      { role: 'system', content: mode === 'auto' ? AI_PROMPT_AUTO : AI_PROMPT_MANUAL },
       { role: 'user', content: `From: ${from}\nSubject: ${subject}\n\n${body}` },
     ],
   });
@@ -615,7 +638,7 @@ app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
   const openAIKey = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
-  const { emailIds } = req.body as { emailIds: string[] };
+  const { emailIds, mode = 'manual' } = req.body as { emailIds: string[]; mode?: 'manual' | 'auto' };
   if (!Array.isArray(emailIds) || emailIds.length === 0) return res.status(400).json({ error: 'Missing emailIds' });
 
   try {
@@ -633,7 +656,7 @@ app.post('/api/ai/extract-tasks-bulk', async (req, res) => {
     const allSuggestions: any[] = [];
     for (const emailId of emailIds.slice(0, 10)) {
       try {
-        const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
+        const suggestions = await extractTasksFromEmail(gmail, openai, emailId, mode);
         allSuggestions.push(...suggestions);
       } catch {
         // Skip failed emails, continue processing the rest
