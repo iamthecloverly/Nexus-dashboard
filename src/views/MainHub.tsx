@@ -36,7 +36,7 @@ function githubTypeIcon(type: string): string {
 
 export default function MainHub({ setCurrentView }: { setCurrentView: (view: string) => void }) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
-  const { state: { emails, gmailConnected } } = useEmailContext();
+  const { state: { emails, gmailConnected, serverError: gmailServerError } } = useEmailContext();
   const { showToast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
@@ -515,6 +515,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                     <p className="text-xs text-text-muted">Inbox zero!</p>
                   )}
                 </>
+              ) : gmailServerError ? (
+                <p className="text-xs text-text-muted group-hover/box:text-white transition-colors">Server unreachable.</p>
               ) : (
                 <p className="text-xs text-text-muted group-hover/box:text-white transition-colors">Connect Gmail to see your inbox.</p>
               )}

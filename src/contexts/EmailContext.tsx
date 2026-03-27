@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Email } from '../App';
 
 interface EmailState {
@@ -10,9 +10,10 @@ interface EmailState {
 }
 
 interface EmailActions {
-  toggleRead: (id: string, e: React.MouseEvent) => void;
-  archiveEmail: (id: string, e: React.MouseEvent) => void;
-  deleteEmail: (id: string, e: React.MouseEvent) => void;
+  /** e is optional so all actions can be called programmatically without a fake MouseEvent */
+  toggleRead: (id: string, e?: React.MouseEvent) => void;
+  archiveEmail: (id: string, e?: React.MouseEvent) => void;
+  deleteEmail: (id: string, e?: React.MouseEvent) => void;
   refreshEmails: () => void;
 }
 
@@ -56,8 +57,14 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refreshEmails(); }, [refreshEmails]);
 
-  const toggleRead = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Tracks message IDs with an in-flight mark-read request — prevents racing toggles
+  const pendingToggleRef = useRef<Set<string>>(new Set());
+
+  const toggleRead = useCallback((id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // Drop rapid double-clicks while a request is already in flight for this ID
+    if (pendingToggleRef.current.has(id)) return;
+
     // Optimistic update — flip local state immediately for instant feedback
     let currentlyUnread: boolean | undefined;
     setEmails(prev => prev.map(email => {
@@ -65,23 +72,27 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       currentlyUnread = email.unread;
       return { ...email, unread: !email.unread };
     }));
+
     // Sync to Gmail — fire-and-forget; local state stays optimistic on failure
     if (currentlyUnread !== undefined) {
+      pendingToggleRef.current.add(id);
       fetch(`/api/gmail/messages/${id}/mark-read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ read: currentlyUnread }), // read:true = was unread, now marking as read
-      }).catch(() => { /* optimistic — local change persists even on error */ });
+      })
+        .catch(() => { /* optimistic — local change persists even on error */ })
+        .finally(() => { pendingToggleRef.current.delete(id); });
     }
   }, []);
 
-  const archiveEmail = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const archiveEmail = useCallback((id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setEmails(prev => prev.map(email => email.id === id ? { ...email, archived: true } : email));
   }, []);
 
-  const deleteEmail = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deleteEmail = useCallback((id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setEmails(prev => prev.map(email => email.id === id ? { ...email, deleted: true } : email));
   }, []);
 

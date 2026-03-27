@@ -104,8 +104,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
   const openDetail = async (email: Email) => {
     setDetail({ id: email.id, subject: email.subject, sender: email.sender, senderEmail: email.senderEmail ?? '', time: email.time, body: '', loading: true });
     if (email.unread) {
-      const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
-      toggleRead(email.id, fakeEvent);
+      toggleRead(email.id); // no event needed — programmatic call
     }
     try {
       const res = await fetch(`/api/gmail/message/${email.id}`);
@@ -183,8 +182,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
         e.preventDefault();
         const email = emails[idx];
         if (email) {
-          const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
-          archiveEmail(email.id, fakeEvent);
+          archiveEmail(email.id); // no event needed — keyboard handler
           showToast('Email archived', 'info');
           setSelectedIndex(i => Math.max(i - 1, 0));
         }
