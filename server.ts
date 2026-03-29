@@ -61,7 +61,9 @@ app.get('/api/auth/google/url', (req, res) => {
   const oauth2Client = getOAuth2Client(req);
   const scopes = [
     'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/gmail.readonly',
+    // gmail.modify is a superset of gmail.readonly and also allows label changes
+    // (mark read/unread, archive). gmail.send is required for sending.
+    'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/gmail.send',
   ];
 
