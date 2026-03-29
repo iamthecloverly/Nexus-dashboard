@@ -82,27 +82,42 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     if (pendingToggleRef.current.has(id)) return;
 
     // Optimistic update — flip local state immediately for instant feedback
-    let currentlyUnread: boolean | undefined;
+    let wasUnread: boolean | undefined;
     setEmails(prev => prev.map(email => {
       if (email.id !== id) return email;
-      currentlyUnread = email.unread;
+      wasUnread = email.unread;
       return { ...email, unread: !email.unread };
     }));
 
-    // Sync to Gmail — optimistic; local state persists even on failure
-    if (currentlyUnread !== undefined) {
-      pendingToggleRef.current.add(id);
-      fetch(`/api/gmail/messages/${id}/mark-read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ read: currentlyUnread }),
+    if (wasUnread === undefined) return;
+    // Capture in a const so the async callbacks below always have the right value
+    const originalUnread = wasUnread;
+    pendingToggleRef.current.add(id);
+
+    const revert = () =>
+      setEmails(prev => prev.map(email =>
+        email.id === id ? { ...email, unread: originalUnread } : email,
+      ));
+
+    fetch(`/api/gmail/messages/${id}/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ read: originalUnread }),
+    })
+      .then(res => {
+        if (res.ok) return; // success — optimistic state is correct
+        revert();
+        if (res.status === 401) {
+          showToast('Gmail session expired — reconnect in Integrations', 'error');
+        } else {
+          showToast('Failed to update email — try again', 'error');
+        }
       })
-        .then(res => {
-          if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
-        })
-        .catch(() => { /* network error — local change persists */ })
-        .finally(() => { pendingToggleRef.current.delete(id); });
-    }
+      .catch(() => {
+        revert();
+        showToast('Failed to update email — check your connection', 'error');
+      })
+      .finally(() => { pendingToggleRef.current.delete(id); });
   }, [showToast]);
 
   const archiveEmail = useCallback((id: string, e?: React.MouseEvent) => {
