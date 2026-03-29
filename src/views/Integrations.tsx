@@ -189,7 +189,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* Google Calendar + Gmail */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all group relative overflow-hidden">
+            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-colors"></div>
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-lg">
@@ -212,7 +212,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
             </div>
 
             {/* GitHub */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all group relative overflow-hidden">
+            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-gray-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-gray-500/20 transition-colors"></div>
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-[#24292F] flex items-center justify-center shadow-lg">
@@ -242,7 +242,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                     onKeyDown={e => e.key === 'Enter' && handleSaveGithub()}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                   />
-                  {githubError && <p className="text-xs text-red-400">{githubError}</p>}
+                  {githubError && <p className="text-xs text-red-400" aria-live="polite">{githubError}</p>}
                   <button
                     onClick={handleSaveGithub}
                     disabled={githubSaving || !githubPat.trim()}
@@ -278,6 +278,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                   <input
                     autoFocus
                     type="password"
+                    aria-label="New Personal Access Token"
                     placeholder="New Personal Access Token…"
                     value={githubPat}
                     onChange={e => setGithubPat(e.target.value)}
@@ -296,7 +297,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
             </div>
 
             {/* Discord */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all group relative overflow-hidden">
+            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-purple-500/20 transition-colors"></div>
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-[#5865F2] flex items-center justify-center shadow-lg">
@@ -326,7 +327,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                     onKeyDown={e => e.key === 'Enter' && handleSaveDiscord()}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                   />
-                  {discordError && <p className="text-xs text-red-400">{discordError}</p>}
+                  {discordError && <p className="text-xs text-red-400" aria-live="polite">{discordError}</p>}
                   <button
                     onClick={handleSaveDiscord}
                     disabled={discordSaving || !discordUrl.trim()}

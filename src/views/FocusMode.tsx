@@ -90,7 +90,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
         <div key={event.id} className="relative pl-12 mb-12">
           <div className="absolute left-[20px] top-1.5 w-2 h-2 rounded-full bg-primary z-10 animate-ring"></div>
           <div className="text-xs text-primary mb-2 font-bold tracking-wide uppercase">In Progress</div>
-          <div className="p-8 rounded-xl bg-primary/10 border-2 glow-border relative overflow-hidden group transition-all duration-500 hover:bg-primary/[0.15]">
+          <div className="p-8 rounded-xl bg-primary/10 border-2 glow-border relative overflow-hidden group transition-colors duration-500 hover:bg-primary/[0.15]">
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[100px] -mr-32 -mt-32 pointer-events-none group-hover:scale-150 transition-transform duration-700"></div>
             <div className="relative z-10">
               <h3 className="font-heading text-3xl font-bold text-white leading-tight tracking-tight neon-text-glow">{event.summary || 'Busy'}</h3>
@@ -149,7 +149,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
           <span className="material-symbols-outlined text-4xl text-accent">warning</span>
           <p className="text-sm text-white font-medium">Google Calendar API not enabled</p>
           <p className="text-xs text-[#A1A1AA] max-w-[280px]">Enable it in your Google Cloud project, then reconnect.</p>
-          <a href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview" target="_blank" rel="noreferrer" className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-all border border-primary/20">
+          <a href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview" target="_blank" rel="noreferrer" className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20">
             Enable Calendar API →
           </a>
         </div>
@@ -198,15 +198,15 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="flex-none px-8 py-6 flex justify-between items-center z-50">
-        <button onClick={() => setCurrentView('MainHub')} className="flex items-center gap-2 text-slate-400 hover:text-primary transition-all group scale-100 hover:scale-105 active:scale-95">
-          <span className="material-symbols-outlined text-xl transition-transform group-hover:-translate-x-1">arrow_back</span>
+        <button onClick={() => setCurrentView('MainHub')} className="flex items-center gap-2 text-slate-400 hover:text-primary transition-[color,transform] group scale-100 hover:scale-105 active:scale-95">
+          <span className="material-symbols-outlined text-xl transition-transform group-hover:-translate-x-1" aria-hidden="true">arrow_back</span>
           <span className="font-medium text-sm tracking-wide">Exit Focus</span>
         </button>
         <div className="font-heading font-semibold text-xl tracking-wider text-slate-100 opacity-80">
           FOCUS MODE
         </div>
         <div className="flex items-center gap-4">
-          <div className={`glass-panel rounded-full px-5 py-2 flex items-center gap-4 border-white/20 transition-all hover:border-primary/40 group ${isActive ? 'shadow-[0_0_15px_rgba(6,232,249,0.2)]' : ''}`}>
+          <div className={`glass-panel rounded-full px-5 py-2 flex items-center gap-4 border-white/20 transition-colors hover:border-primary/40 group ${isActive ? 'shadow-[0_0_15px_rgba(6,232,249,0.2)]' : ''}`}>
             <div className="flex flex-col items-center">
               <span className={`text-[10px] ${isActive ? 'text-primary' : 'text-slate-400'} font-bold uppercase tracking-tighter leading-none mb-0.5 ${isActive ? 'group-hover:animate-pulse' : ''}`}>
                 {isActive ? 'Focusing' : 'Paused'}
@@ -245,7 +245,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
 
         {/* Right Column: Tasks */}
         <section className="w-2/5 h-full flex flex-col gap-6 flex-none">
-          <div className="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden relative transition-all duration-300 hover:border-white/20">
+          <div className="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden relative transition-colors duration-300 hover:border-white/20">
             <div className="p-6 pb-4 z-30 bg-[#0B0C10]/40 backdrop-blur-md border-b border-white/5">
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -280,7 +280,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                 </div>
                 <div className="flex flex-col gap-2">
                   {nowTasks.map(task => (
-                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/10 transition-all group hover:bg-white/10 hover:translate-x-1 ${task.completed ? 'opacity-50' : ''}`}>
+                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/10 transition-[background-color,transform] group hover:bg-white/10 hover:translate-x-1 ${task.completed ? 'opacity-50' : ''}`}>
                       <input
                         className="glass-checkbox mt-0.5 cursor-pointer"
                         type="checkbox"
@@ -332,7 +332,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                 </div>
                 <div className="flex flex-col gap-2">
                   {nextTasks.map(task => (
-                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg border border-transparent cursor-pointer hover:bg-white/5 transition-all group hover:translate-x-1 hover:border-white/10 ${task.completed ? 'opacity-50' : ''}`}>
+                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg border border-transparent cursor-pointer hover:bg-white/5 transition-[background-color,border-color,transform] group hover:translate-x-1 hover:border-white/10 ${task.completed ? 'opacity-50' : ''}`}>
                       <input
                         className="glass-checkbox mt-0.5 cursor-pointer"
                         type="checkbox"

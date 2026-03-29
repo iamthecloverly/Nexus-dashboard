@@ -82,7 +82,7 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
           ) : items.map(item => (
             <div
               key={item.id}
-              className={`rounded-xl border p-3 transition-all ${item.accepted ? 'border-white/10 bg-white/[0.03]' : 'border-white/5 opacity-40'}`}
+              className={`rounded-xl border p-3 transition-[background-color,border-color,opacity] ${item.accepted ? 'border-white/10 bg-white/[0.03]' : 'border-white/5 opacity-40'}`}
             >
               <div className="flex items-start gap-3">
                 {/* Accept toggle */}

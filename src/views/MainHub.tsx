@@ -347,7 +347,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <div className="w-px h-4 bg-white/10 mx-1"></div>
                 <button
                   onClick={() => setCurrentView('FocusMode')}
-                  className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary-subtle px-4 py-1.5 rounded-full hover:bg-primary/20 transition-all border border-primary/20 btn-interact"
+                  className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary-subtle px-4 py-1.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 btn-interact"
                 >
                   Focus Mode
                 </button>
@@ -363,7 +363,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <div className="flex flex-col items-center justify-center h-full text-center gap-4">
                   <span className="material-symbols-outlined text-4xl text-text-muted">calendar_today</span>
                   <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
-                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10">
+                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10">
                     Go to Integrations
                   </button>
                 </div>
@@ -376,7 +376,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                     href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
                     target="_blank"
                     rel="noreferrer"
-                    className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-all border border-primary/20"
+                    className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20"
                   >
                     Enable Calendar API →
                   </a>
@@ -385,7 +385,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <div className="flex flex-col items-center justify-center h-full text-center gap-3">
                   <span className="material-symbols-outlined text-3xl text-text-muted">sync_problem</span>
                   <p className="text-sm text-text-muted">Failed to load events.</p>
-                  <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-all">Retry</button>
+                  <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-colors">Retry</button>
                 </div>
               ) : events.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
@@ -441,7 +441,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
               {activeTasks.map(task => (
-                <div key={task.id} className="group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all border border-transparent hover:border-border-glass">
+                <div key={task.id} className="group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border border-transparent hover:border-border-glass">
                   <button
                     onClick={() => toggleTask(task.id)}
                     role="checkbox"
@@ -455,17 +455,19 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                     {editingTaskId === task.id ? (
                       <input
                         autoFocus
-                        className="bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus:outline-none w-full"
+                        aria-label={`Edit task: ${task.title}`}
+                        className="bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 w-full"
                         value={editingTaskTitle}
                         onChange={e => setEditingTaskTitle(e.target.value)}
                         onBlur={() => commitTaskEdit(task.id)}
                         onKeyDown={e => { if (e.key === 'Enter') commitTaskEdit(task.id); if (e.key === 'Escape') setEditingTaskId(null); }}
                       />
                     ) : (
-                      <span
+                      <button
+                        type="button"
                         onClick={() => { setEditingTaskId(task.id); setEditingTaskTitle(task.title); }}
-                        className={`text-sm font-medium text-white cursor-text transition-colors ${task.priority === 'Critical' ? 'group-hover/task:text-accent' : 'group-hover/task:text-primary'}`}
-                      >{task.title}</span>
+                        className={`text-left text-sm font-medium text-white cursor-text transition-colors ${task.priority === 'Critical' ? 'group-hover/task:text-accent' : 'group-hover/task:text-primary'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded`}
+                      >{task.title}</button>
                     )}
                     {task.priority && (
                       <span className={`text-[10px] mt-1 uppercase ${task.priority === 'Critical' ? 'text-accent font-bold' : task.priority === 'Priority' ? 'text-primary font-bold tracking-tighter' : 'text-text-muted'}`}>{task.priority}</span>
@@ -519,7 +521,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               </div>
             )}
             <h2 className="font-heading text-lg text-white mb-auto flex items-center gap-3">
-              <span className="material-symbols-outlined text-text-muted text-[22px]">mark_email_unread</span>
+              <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">mark_email_unread</span>
               Triage
             </h2>
             <div className="mt-4">
@@ -541,7 +543,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                 <p className="text-xs text-text-muted group-hover/box:text-white transition-colors">Connect Gmail to see your inbox.</p>
               )}
             </div>
-            <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-all duration-700" aria-hidden="true"></div>
+            <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-colors duration-700" aria-hidden="true"></div>
           </button>
 
           {/* Dynamic Checklist */}
@@ -551,7 +553,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               {isEditingTitle ? (
                 <input
                   ref={titleInputRef}
-                  className="bg-transparent border-b border-primary/50 text-white font-heading text-lg focus:outline-none w-full mr-2"
+                  aria-label="Checklist title"
+                  className="bg-transparent border-b border-primary/50 text-white font-heading text-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 w-full mr-2"
                   value={titleDraft}
                   onChange={e => setTitleDraft(e.target.value)}
                   onBlur={commitTitle}
@@ -563,7 +566,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               <button
                 onClick={() => { setTitleDraft(checklistTitle); setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
                 aria-label="Edit checklist title"
-                className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-white hover:scale-110 transition-all flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-white hover:scale-110 transition-[color,transform] flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
               >
                 <span className="material-symbols-outlined !text-sm" aria-hidden="true">edit</span>
               </button>
@@ -598,6 +601,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               <input
                 ref={newItemRef}
                 aria-label="Add checklist item"
+                name="checklist-item"
+                autoComplete="off"
                 className="mt-1 bg-transparent border-b border-white/10 text-xs text-white placeholder-white/20 focus-visible:outline-none focus-visible:border-primary/40 py-1 transition-colors"
                 placeholder="+ Add item…"
                 value={newItemText}
@@ -632,7 +637,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                       href={n.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all border border-transparent hover:border-border-glass group/notif"
+                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border border-transparent hover:border-border-glass group/notif"
                     >
                       <span className="material-symbols-outlined text-text-muted !text-[18px] flex-shrink-0 mt-0.5 group-hover/notif:text-primary transition-colors">{githubTypeIcon(n.type)}</span>
                       <div className="flex-1 min-w-0">
@@ -676,11 +681,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setQuickAddGroup('now')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${quickAddGroup === 'now' ? 'bg-primary text-[#0B0C10]' : 'bg-white/5 text-text-muted hover:text-white'}`}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${quickAddGroup === 'now' ? 'bg-primary text-[#0B0C10]' : 'bg-white/5 text-text-muted hover:text-white'}`}
               >Now</button>
               <button
                 onClick={() => setQuickAddGroup('next')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${quickAddGroup === 'next' ? 'bg-primary text-[#0B0C10]' : 'bg-white/5 text-text-muted hover:text-white'}`}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${quickAddGroup === 'next' ? 'bg-primary text-[#0B0C10]' : 'bg-white/5 text-text-muted hover:text-white'}`}
               >Next</button>
             </div>
             <p className="text-[10px] text-text-muted mt-2">Press Esc to cancel</p>
@@ -723,7 +728,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
               <div className="w-px h-4 bg-white/10 mx-1" aria-hidden="true" />
               <button
                 onClick={() => { setShowSchedule(false); setCurrentView('FocusMode'); }}
-                className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full hover:bg-primary/20 transition-all border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 Focus Mode
               </button>
@@ -752,7 +757,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                     <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
                     <button
                       onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       Go to Integrations
                     </button>
@@ -766,7 +771,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                       href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
                       target="_blank"
                       rel="noreferrer"
-                      className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-all border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       Enable Calendar API →
                     </a>
@@ -775,7 +780,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
                     <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">sync_problem</span>
                     <p className="text-sm text-text-muted">Failed to load events.</p>
-                    <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry</button>
+                    <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry</button>
                   </div>
                 ) : events.length === 0 ? (
                   <div className="flex items-center justify-center py-16">

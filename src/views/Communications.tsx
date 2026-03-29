@@ -218,7 +218,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 disabled={isAnalyzingAll || !gmailConnected}
                 aria-label="Analyze all unread emails with AI"
                 title="Extract tasks from all unread emails"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 style={{ color: '#00D9FF', background: 'rgba(0,217,255,0.08)', border: '1px solid rgba(0,217,255,0.2)' }}
               >
                 {isAnalyzingAll
@@ -269,7 +269,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
         {/* Email List + Detail Split */}
         <div className="flex-1 flex overflow-hidden relative">
           {/* Left: Email List */}
-          <div className={`flex flex-col overflow-hidden transition-all duration-300 ${detail ? 'w-80 flex-none border-r border-white/10' : 'flex-1'}`}>
+          <div className={`flex flex-col overflow-hidden transition-[width,flex] duration-300 ${detail ? 'w-80 flex-none border-r border-white/10' : 'flex-1'}`}>
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative">
               {!gmailConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
@@ -279,7 +279,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       <p className="text-sm">Server unreachable. Make sure the app is running.</p>
                       <button
                         onClick={refreshEmails}
-                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10"
+                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10"
                       >
                         Retry
                       </button>
@@ -289,7 +289,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       <p className="text-sm">Connect Gmail to see your inbox.</p>
                       <button
                         onClick={() => setCurrentView('Integrations')}
-                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-all border border-white/10"
+                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10"
                       >
                         Go to Integrations
                       </button>
@@ -311,7 +311,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       role="button"
                       tabIndex={0}
                       aria-label={`${email.unread ? 'Unread: ' : ''}${email.sender} — ${email.subject}`}
-                      className={`email-row group relative flex items-start gap-4 p-4 rounded-lg cursor-pointer mb-1 border transition-all
+                      className={`email-row group relative flex items-start gap-4 p-4 rounded-lg cursor-pointer mb-1 border transition-[background-color,border-color,opacity]
                         ${detail?.id === email.id ? 'border-primary/40 bg-primary/8' : index === selectedIndex ? 'border-primary/20 bg-primary/5' : 'border-transparent'}
                         ${email.urgent ? 'hover:border-white/10 bg-[#FF0055]/5' : 'hover:border-white/5'}
                         ${!email.unread ? 'opacity-70 hover:opacity-100' : ''}
@@ -435,7 +435,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                   autoFocus
                   type="email"
                   autoComplete="email"
-                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
                   placeholder="recipient@example.com"
                   value={compose.to}
                   onChange={e => setCompose(c => c ? { ...c, to: e.target.value } : null)}
@@ -447,7 +447,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                   id="compose-subject"
                   name="subject"
                   autoComplete="off"
-                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
                   placeholder="Subject…"
                   value={compose.subject}
                   onChange={e => setCompose(c => c ? { ...c, subject: e.target.value } : null)}
@@ -456,13 +456,13 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               <textarea
                 id="compose-body"
                 aria-label="Message body"
-                className="w-full bg-transparent text-sm text-white placeholder-[#A1A1AA] focus:outline-none resize-none h-40 custom-scrollbar"
+                className="w-full bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded resize-none h-40 custom-scrollbar"
                 placeholder="Write your message…"
                 value={compose.body}
                 onChange={e => setCompose(c => c ? { ...c, body: e.target.value } : null)}
               />
               {compose.error && (
-                <p className="text-xs text-red-400">{compose.error}</p>
+                <p className="text-xs text-red-400" aria-live="polite">{compose.error}</p>
               )}
             </div>
             <div className="px-6 py-4 border-t border-white/10 bg-[#0B0C10]/40 flex items-center justify-between">
@@ -472,14 +472,14 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               <button
                 onClick={handleSend}
                 disabled={compose.sending || !isValidEmail(compose.to) || !compose.subject.trim() || !compose.body.trim()}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-[#0B0C10] text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(6,232,249,0.3)]"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-[#0B0C10] text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(6,232,249,0.3)]"
               >
                 {compose.sending ? (
                   <span className="w-4 h-4 rounded-full border-2 border-[#0B0C10] border-t-transparent animate-spin"></span>
                 ) : (
-                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>
                 )}
-                {compose.sending ? 'Sending...' : 'Send'}
+                {compose.sending ? 'Sending…' : 'Send'}
               </button>
             </div>
           </div>

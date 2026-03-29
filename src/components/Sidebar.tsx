@@ -97,14 +97,14 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
                 <span className="font-mono" style={{ color: '#71717A' }}>{cpuLoad}%</span>
               </div>
               <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${cpuLoad}%`, background: 'rgba(0,217,255,0.5)' }} />
+                <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${cpuLoad}%`, background: 'rgba(0,217,255,0.5)' }} />
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span style={{ color: '#52525B' }}>Memory</span>
                 <span className="font-mono" style={{ color: '#71717A' }}>{memUsed}%</span>
               </div>
               <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${memUsed}%`, background: 'rgba(0,217,255,0.35)' }} />
+                <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${memUsed}%`, background: 'rgba(0,217,255,0.35)' }} />
               </div>
             </div>
           </div>
