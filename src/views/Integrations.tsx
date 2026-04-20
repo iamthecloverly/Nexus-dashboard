@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../components/Toast';
+import { csrfHeaders } from '../lib/csrf';
 
 interface IntegrationStatus {
   google: boolean;
@@ -60,15 +61,15 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
       }
       const { url } = await response.json();
       const popup = window.open(url, 'oauth_popup', 'width=600,height=700');
-      if (!popup) alert('Please allow popups for this site to connect your account.');
+      if (!popup) showToast('Please allow popups to connect your account.', 'error');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to initiate connection: ${message}`);
+      showToast(`Failed to connect Google: ${message}`, 'error');
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    await fetch('/api/auth/disconnect', { method: 'POST' });
+    await fetch('/api/auth/disconnect', { method: 'POST', headers: csrfHeaders() });
     setStatus(s => ({ ...s, google: false }));
     showToast('Google disconnected', 'info');
   };
@@ -81,7 +82,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     try {
       const res = await fetch('/api/github/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ token: githubPat }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
@@ -97,7 +98,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
   };
 
   const handleDisconnectGithub = async () => {
-    await fetch('/api/github/disconnect', { method: 'POST' });
+    await fetch('/api/github/disconnect', { method: 'POST', headers: csrfHeaders() });
     setStatus(s => ({ ...s, github: false }));
     setShowGithubInput(false);
     showToast('GitHub disconnected', 'info');
@@ -111,7 +112,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     try {
       const res = await fetch('/api/discord/webhook', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ url: discordUrl }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
@@ -127,7 +128,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
   };
 
   const handleDisconnectDiscord = async () => {
-    await fetch('/api/discord/disconnect', { method: 'POST' });
+    await fetch('/api/discord/disconnect', { method: 'POST', headers: csrfHeaders() });
     setStatus(s => ({ ...s, discord: false }));
     setShowDiscordInput(false);
     showToast('Discord disconnected', 'info');
@@ -138,7 +139,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     try {
       const res = await fetch('/api/discord/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ content: '✅ Personal Dashboard is connected!' }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed');
@@ -232,7 +233,6 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
               {showGithubInput && !status.github && (
                 <div className="relative z-10 flex flex-col gap-2 mb-4">
                   <input
-                    autoFocus
                     type="password"
                     aria-label="GitHub Personal Access Token"
                     autoComplete="off"
@@ -276,7 +276,6 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
               {showGithubInput && status.github && (
                 <div className="relative z-10 flex flex-col gap-2 mt-4">
                   <input
-                    autoFocus
                     type="password"
                     aria-label="New Personal Access Token"
                     placeholder="New Personal Access Token…"
@@ -317,7 +316,6 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
               {showDiscordInput && !status.discord && (
                 <div className="relative z-10 flex flex-col gap-2 mb-4">
                   <input
-                    autoFocus
                     type="url"
                     aria-label="Discord webhook URL"
                     autoComplete="off"

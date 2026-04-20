@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 import { useEmailContext } from '../contexts/EmailContext';
 import { useTaskContext } from '../contexts/TaskContext';
 import { useToast } from '../components/Toast';
+import { csrfHeaders } from '../lib/csrf';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
-const STORAGE_KEY = 'auto_processed_email_ids';
 const MAX_STORED_IDS = 400; // cap to avoid localStorage bloat
 
 function loadProcessedIds(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEYS.autoProcessedEmailIds);
     return new Set(raw ? JSON.parse(raw) : []);
   } catch {
     return new Set();
@@ -18,7 +19,7 @@ function loadProcessedIds(): Set<string> {
 function saveProcessedIds(ids: Set<string>) {
   // Keep only the most recent IDs to prevent unbounded growth
   const arr = [...ids].slice(-MAX_STORED_IDS);
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota exceeded */ }
+  try { localStorage.setItem(STORAGE_KEYS.autoProcessedEmailIds, JSON.stringify(arr)); } catch { /* quota exceeded */ }
 }
 
 export function useAutoEmailTasks() {
@@ -63,7 +64,7 @@ export function useAutoEmailTasks() {
       try {
         const res = await fetch('/api/ai/extract-tasks-bulk', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
           body: JSON.stringify({ emailIds: newIds, mode: 'auto' }),
         });
 

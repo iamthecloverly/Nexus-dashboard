@@ -9,11 +9,15 @@ import path from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
+import type { CookieOptions } from 'express';
 
 // Fail fast in production if APP_URL is missing (prevents Host header spoofing in OAuth callback)
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction && !process.env.APP_URL) {
   throw new Error('APP_URL must be set in production');
+}
+if (!process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET must be set');
 }
 
 const app = express();
@@ -21,13 +25,58 @@ const PORT = 3000;
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+  sameSite: 'lax' as const,
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite injects inline scripts in dev
-app.use(cookieParser());
+app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(express.json({ limit: '50kb' }));
+
+// CSRF: double-submit token (cookie + header). Cookie is readable by JS; header must match.
+const CSRF_COOKIE = 'csrf_token';
+const CSRF_HEADER = 'x-csrf-token';
+const CSRF_COOKIE_OPTS = {
+  httpOnly: false,
+  secure: isProduction,
+  sameSite: 'lax' as const,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+};
+
+// Ensure a CSRF token exists for the SPA before any POSTs happen.
+app.use((req, res, next) => {
+  const existing = req.cookies?.[CSRF_COOKIE];
+  if (!existing) {
+    res.cookie(CSRF_COOKIE, randomUUID(), CSRF_COOKIE_OPTS);
+  }
+  next();
+});
+
+// Enforce CSRF on state-changing API requests that rely on cookies
+app.use('/api', (req, res, next) => {
+  const method = req.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next();
+  const cookieToken = req.cookies?.[CSRF_COOKIE];
+  const headerToken = req.get(CSRF_HEADER);
+  if (!cookieToken || !headerToken || headerToken !== cookieToken) {
+    return res.status(403).json({ error: 'CSRF validation failed' });
+  }
+  next();
+});
+
+function getCookie(req: express.Request, name: string): string | undefined {
+  return (req.signedCookies?.[name] as string | undefined) ?? (req.cookies?.[name] as string | undefined);
+}
+
+function setSignedCookie(res: express.Response, name: string, value: string, opts?: CookieOptions) {
+  res.cookie(name, value, { ...(opts ?? {}), signed: true });
+}
+
+function clearAppCookie(res: express.Response, name: string, httpOnly: boolean) {
+  const { maxAge: _maxAge, ...base } = COOKIE_OPTS;
+  // Signed cookies share the same name; clearing with the same options clears either variant.
+  res.clearCookie(name, { ...(base as CookieOptions), httpOnly });
+}
 
 // Safely parse the google_tokens cookie; returns null on bad JSON
 const parseTokensCookie = (cookie: string) => {
@@ -86,8 +135,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     const { tokens } = await oauth2Client.getToken(code);
     
-    // Store tokens in an HTTP-only cookie
-    res.cookie('google_tokens', JSON.stringify(tokens), COOKIE_OPTS);
+    // Store tokens in an HTTP-only cookie (signed)
+    setSignedCookie(res, 'google_tokens', JSON.stringify(tokens), COOKIE_OPTS);
 
     const appOrigin = (process.env.APP_URL || `https://${req.get('host')}`).replace(/\/$/, '');
     const safeOrigin = JSON.stringify(appOrigin);
@@ -113,18 +162,17 @@ app.get('/api/auth/google/callback', async (req, res) => {
 });
 
 app.get('/api/auth/status', (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   res.json({ connected: !!tokensCookie });
 });
 
 app.post('/api/auth/disconnect', (req, res) => {
-  const { maxAge: _, ...clearOpts } = COOKIE_OPTS;
-  res.clearCookie('google_tokens', clearOpts);
+  clearAppCookie(res, 'google_tokens', true);
   res.json({ success: true });
 });
 
 app.get('/api/calendar/events', async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
@@ -137,7 +185,7 @@ app.get('/api/calendar/events', async (req, res) => {
     // Persist refreshed tokens back to the cookie automatically
     oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
-      res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -204,7 +252,7 @@ app.get('/api/calendar/events', async (req, res) => {
 });
 
 app.get('/api/gmail/messages', async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
@@ -216,7 +264,7 @@ app.get('/api/gmail/messages', async (req, res) => {
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
-      res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -288,7 +336,7 @@ app.get('/api/gmail/messages', async (req, res) => {
 });
 
 app.post('/api/gmail/messages/:id/mark-read', async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
 
   if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
@@ -302,7 +350,7 @@ app.post('/api/gmail/messages/:id/mark-read', async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
-      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -324,8 +372,67 @@ app.post('/api/gmail/messages/:id/mark-read', async (req, res) => {
   }
 });
 
+app.post('/api/gmail/messages/:id/archive', async (req, res) => {
+  const tokensCookie = getCookie(req, 'google_tokens');
+  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+
+  try {
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(tokens);
+    oauth2Client.once('tokens', (newTokens) => {
+      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+    });
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: req.params.id,
+      requestBody: { removeLabelIds: ['INBOX'] },
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    const status = error?.response?.status ?? error?.code;
+    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Token expired or invalid' });
+    }
+    res.status(500).json({ error: 'Failed to archive message' });
+  }
+});
+
+app.post('/api/gmail/messages/:id/trash', async (req, res) => {
+  const tokensCookie = getCookie(req, 'google_tokens');
+  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+
+  try {
+    const tokens = parseTokensCookie(tokensCookie);
+    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(tokens);
+    oauth2Client.once('tokens', (newTokens) => {
+      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+    });
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    await gmail.users.messages.trash({
+      userId: 'me',
+      id: req.params.id,
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    const status = error?.response?.status ?? error?.code;
+    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Token expired or invalid' });
+    }
+    res.status(500).json({ error: 'Failed to trash message' });
+  }
+});
+
 app.get('/api/gmail/message/:id', async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
@@ -335,7 +442,7 @@ app.get('/api/gmail/message/:id', async (req, res) => {
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens };
-      res.cookie('google_tokens', JSON.stringify(merged), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify(merged), COOKIE_OPTS);
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -387,7 +494,7 @@ app.get('/api/gmail/message/:id', async (req, res) => {
 });
 
 app.post('/api/gmail/send', async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
@@ -446,21 +553,21 @@ app.post('/api/github/token', (req, res) => {
   if (!/^(ghp_|github_pat_|gho_)[\w]+$/.test(token.trim())) {
     return res.status(400).json({ error: 'Invalid GitHub token format' });
   }
-  res.cookie('github_token', token.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  setSignedCookie(res, 'github_token', token.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
 
 app.get('/api/github/status', (req, res) => {
-  res.json({ connected: !!req.cookies.github_token });
+  res.json({ connected: !!getCookie(req, 'github_token') });
 });
 
 app.post('/api/github/disconnect', (req, res) => {
-  res.clearCookie('github_token', COOKIE_OPTS);
+  clearAppCookie(res, 'github_token', true);
   res.json({ success: true });
 });
 
 app.get('/api/github/notifications', async (req, res) => {
-  const token = req.cookies.github_token;
+  const token = getCookie(req, 'github_token');
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
@@ -505,21 +612,21 @@ app.post('/api/discord/webhook', (req, res) => {
   if (!DISCORD_WEBHOOK_RE.test(url.trim())) {
     return res.status(400).json({ error: 'Invalid Discord webhook URL' });
   }
-  res.cookie('discord_webhook', url.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  setSignedCookie(res, 'discord_webhook', url.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
 
 app.get('/api/discord/status', (req, res) => {
-  res.json({ connected: !!req.cookies.discord_webhook });
+  res.json({ connected: !!getCookie(req, 'discord_webhook') });
 });
 
 app.post('/api/discord/disconnect', (req, res) => {
-  res.clearCookie('discord_webhook', COOKIE_OPTS);
+  clearAppCookie(res, 'discord_webhook', true);
   res.json({ success: true });
 });
 
 app.post('/api/discord/send', async (req, res) => {
-  const webhook = req.cookies.discord_webhook;
+  const webhook = getCookie(req, 'discord_webhook');
   if (!webhook) return res.status(401).json({ error: 'No webhook configured' });
   // Re-validate on use to guard against tampered cookies
   if (!DISCORD_WEBHOOK_RE.test(webhook)) return res.status(400).json({ error: 'Invalid webhook URL' });
@@ -650,28 +757,27 @@ app.post('/api/ai/key', (req, res) => {
   if (!/^sk-[\w-]{20,}$/.test(key.trim())) {
     return res.status(400).json({ error: 'Invalid OpenAI API key format' });
   }
-  res.cookie('openai_key', key.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  setSignedCookie(res, 'openai_key', key.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
   res.json({ success: true });
 });
 
 app.get('/api/ai/status', (req, res) => {
-  const key = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  const key = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
   res.json({ configured: !!key });
 });
 
 app.post('/api/ai/disconnect', (req, res) => {
-  const { maxAge: _, ...clearOpts } = COOKIE_OPTS;
-  res.clearCookie('openai_key', clearOpts);
+  clearAppCookie(res, 'openai_key', true);
   res.json({ success: true });
 });
 
 const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
 
 app.post('/api/ai/extract-tasks', aiLimiter, async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
 
-  const openAIKey = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
   const { emailId } = req.body as { emailId: string };
@@ -684,7 +790,7 @@ app.post('/api/ai/extract-tasks', aiLimiter, async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
-      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
     });
 
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -701,10 +807,10 @@ app.post('/api/ai/extract-tasks', aiLimiter, async (req, res) => {
 });
 
 app.post('/api/ai/extract-tasks-bulk', aiLimiter, async (req, res) => {
-  const tokensCookie = req.cookies.google_tokens;
+  const tokensCookie = getCookie(req, 'google_tokens');
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
 
-  const openAIKey = req.cookies.openai_key ?? process.env.OPENAI_API_KEY;
+  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
   const { emailIds, mode = 'manual' } = req.body as { emailIds: string[]; mode?: 'manual' | 'auto' };
@@ -718,7 +824,7 @@ app.post('/api/ai/extract-tasks-bulk', aiLimiter, async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(tokens);
     oauth2Client.once('tokens', (newTokens) => {
-      res.cookie('google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
+      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
     });
 
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });

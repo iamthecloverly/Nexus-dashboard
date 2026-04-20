@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Task } from '../App';
+import { Task } from '../types/task';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 interface TaskState {
   tasks: Task[];
@@ -35,7 +36,7 @@ function isValidTask(t: unknown): t is Task {
 export function TaskProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
-      const saved = localStorage.getItem('dashboard_tasks');
+      const saved = localStorage.getItem(STORAGE_KEYS.tasks);
       if (!saved) return DEFAULT_TASKS;
       const parsed = JSON.parse(saved);
       // Discard any entries that don't match the Task shape — guards against corrupted storage
@@ -46,7 +47,7 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    try { localStorage.setItem('dashboard_tasks', JSON.stringify(tasks)); } catch { /* quota exceeded */ }
+    try { localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks)); } catch { /* quota exceeded */ }
   }, [tasks]);
 
   const toggleTask = useCallback((id: string) => {

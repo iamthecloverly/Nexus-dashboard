@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
-import { Email } from '../App';
+import { Email } from '../types/email';
 import { useEmailContext } from '../contexts/EmailContext';
 import { useTaskContext } from '../contexts/TaskContext';
 import { useToast } from '../components/Toast';
 import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TaskSuggestion } from '../types/taskSuggestion';
+import { csrfHeaders } from '../lib/csrf';
 
 interface ComposeState {
   to: string;
@@ -53,7 +54,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
     try {
       const res = await fetch('/api/ai/extract-tasks-bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ emailIds: ids }),
       });
       const data = await res.json();
@@ -139,7 +140,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
     try {
       const res = await fetch('/api/gmail/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ to: compose.to, subject: compose.subject, body: compose.body }),
       });
       if (!res.ok) {
@@ -252,6 +253,8 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               <input
                 ref={searchRef}
                 aria-label="Search emails"
+                name="email-search"
+                autoComplete="off"
                 className="bg-transparent border-none focus:ring-0 text-[14px] text-[#F4F4F5] placeholder-[#A1A1AA] w-full p-0"
                 placeholder="Search emails, people, or keywords…"
                 type="search"
@@ -307,17 +310,15 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                     {index > 0 && visibleEmails[index - 1].unread && !email.unread && (
                       <div className="w-full h-px bg-white/5 my-2"></div>
                     )}
-                    <div
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       aria-label={`${email.unread ? 'Unread: ' : ''}${email.sender} — ${email.subject}`}
-                      className={`email-row group relative flex items-start gap-4 p-4 rounded-lg cursor-pointer mb-1 border transition-[background-color,border-color,opacity]
+                      className={`email-row group relative flex items-start gap-4 p-4 rounded-lg cursor-pointer mb-1 border w-full text-left transition-[background-color,border-color,opacity]
                         ${detail?.id === email.id ? 'border-primary/40 bg-primary/8' : index === selectedIndex ? 'border-primary/20 bg-primary/5' : 'border-transparent'}
                         ${email.urgent ? 'hover:border-white/10 bg-[#FF0055]/5' : 'hover:border-white/5'}
                         ${!email.unread ? 'opacity-70 hover:opacity-100' : ''}
                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary`}
                       onClick={() => { setSelectedIndex(index); openDetail(email); }}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedIndex(index); openDetail(email); } }}
                     >
                       <div aria-hidden="true" className={`w-2 h-2 rounded-full mt-3 shrink-0 ${email.urgent ? 'bg-[#FF0055] shadow-[0_0_12px_rgba(255,0,85,0.6)]' : email.unread ? 'bg-primary neon-pulse-unread' : 'bg-transparent'}`}></div>
                       <div className={`w-8 h-8 rounded-full glass-avatar flex items-center justify-center text-sm font-semibold shrink-0 mt-0.5 hover:scale-110 transition-transform ${email.urgent ? 'border-[#FF0055]/30 text-[#FF0055]' : email.unread ? 'text-white' : 'text-[#A1A1AA]'}`}>
@@ -350,7 +351,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                           </button>
                         </div>
                       )}
-                    </div>
+                    </button>
                   </div>
                 ))
               )}
@@ -432,7 +433,6 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 <label htmlFor="compose-to" className="text-xs text-[#A1A1AA] w-12 shrink-0">To</label>
                 <input
                   id="compose-to"
-                  autoFocus
                   type="email"
                   autoComplete="email"
                   className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"

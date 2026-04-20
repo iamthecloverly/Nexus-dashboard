@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { format, parseISO, isBefore, isAfter } from 'date-fns';
+import { parseISO, isBefore, isAfter } from 'date-fns';
 
-import { Task } from '../App';
+import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/TaskContext';
 import { useEmailContext } from '../contexts/EmailContext';
 import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -18,13 +19,27 @@ function ClockDisplay() {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+  const time = useMemo(() => new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(now), [now]);
+  const seconds = useMemo(() => new Intl.DateTimeFormat(undefined, {
+    second: '2-digit',
+    hour12: false,
+  }).format(now), [now]);
+  const date = useMemo(() => new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: '2-digit',
+  }).format(now), [now]);
   return (
     <>
       <h1 className="text-white font-heading tracking-tight drop-shadow-lg leading-none" style={{ fontSize: 'clamp(3rem,6vw,4.5rem)' }}>
-        {format(now, 'HH:mm')}
-        <span className="text-primary/40 ml-1 text-[40%]">{format(now, 'ss')}</span>
+        {time}
+        <span className="text-primary/40 ml-1 text-[40%]">{seconds}</span>
       </h1>
-      <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{format(now, 'EEEE, MMMM dd')}</p>
+      <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{date}</p>
     </>
   );
 }
@@ -33,6 +48,15 @@ interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+}
+
+function isValidChecklistItem(v: unknown): v is ChecklistItem {
+  return (
+    typeof v === 'object' && v !== null &&
+    typeof (v as ChecklistItem).id === 'string' &&
+    typeof (v as ChecklistItem).text === 'string' &&
+    typeof (v as ChecklistItem).completed === 'boolean'
+  );
 }
 
 interface GithubNotification {
@@ -45,7 +69,6 @@ interface GithubNotification {
   url?: string;
 }
 
-const CHECKLIST_TITLE_KEY = 'dashboard_checklist_title';
 const DEFAULT_CHECKLIST_TITLE = 'My Checklist';
 
 function githubTypeIcon(type: string): string {
@@ -56,6 +79,11 @@ function githubTypeIcon(type: string): string {
 }
 
 export default function MainHub({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+  const fmtTime = useMemo(() => new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }), []);
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
   const { state: { emails, gmailConnected, serverError: gmailServerError } } = useEmailContext();
   const { showToast } = useToast();
@@ -65,12 +93,14 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   // Checklist
   const [checklist, setChecklist] = useState<ChecklistItem[]>(() => {
     try {
-      const saved = localStorage.getItem('dashboard_checklist');
-      return saved ? JSON.parse(saved) : [];
+      const saved = localStorage.getItem(STORAGE_KEYS.checklist);
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed.filter(isValidChecklistItem) : [];
     } catch { return []; }
   });
   const [checklistTitle, setChecklistTitle] = useState(() => {
-    try { return localStorage.getItem(CHECKLIST_TITLE_KEY) ?? DEFAULT_CHECKLIST_TITLE; }
+    try { return localStorage.getItem(STORAGE_KEYS.checklistTitle) ?? DEFAULT_CHECKLIST_TITLE; }
     catch { return DEFAULT_CHECKLIST_TITLE; }
   });
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -85,7 +115,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const [githubConnected, setGithubConnected] = useState(false);
 
   // Onboarding banner
-  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('dashboard_onboarding_dismissed'));
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(STORAGE_KEYS.onboardingDismissed));
+  
 
   // Calendar context menu & full-screen schedule
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
@@ -146,11 +177,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
 
   // Persist checklist
   useEffect(() => {
-    try { localStorage.setItem('dashboard_checklist', JSON.stringify(checklist)); } catch { /* quota exceeded */ }
+    try { localStorage.setItem(STORAGE_KEYS.checklist, JSON.stringify(checklist)); } catch { /* quota exceeded */ }
   }, [checklist]);
 
   useEffect(() => {
-    try { localStorage.setItem(CHECKLIST_TITLE_KEY, checklistTitle); } catch { /* quota exceeded */ }
+    try { localStorage.setItem(STORAGE_KEYS.checklistTitle, checklistTitle); } catch { /* quota exceeded */ }
   }, [checklistTitle]);
 
   const toggleChecklistItem = (id: string, e: React.MouseEvent) => {
@@ -249,7 +280,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
         <p className={`text-[11px] font-mono mb-0.5 ${isCurrent ? 'text-primary font-semibold' : 'text-text-muted'}`}>
           {isAllDay
             ? 'All Day'
-            : `${format(startTime, 'HH:mm')} – ${format(endTime, 'HH:mm')}${isCurrent ? ' • Now' : ''}`}
+            : `${fmtTime.format(startTime)} – ${fmtTime.format(endTime)}${isCurrent ? ' • Now' : ''}`}
         </p>
         {/* Event title */}
         <p className={`text-sm font-semibold leading-snug ${isPast ? 'text-white/50' : 'text-white'}`}>
@@ -287,7 +318,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             </button>
           </div>
           <button
-            onClick={() => { localStorage.setItem('dashboard_onboarding_dismissed', '1'); setShowOnboarding(false); }}
+            onClick={() => { localStorage.setItem(STORAGE_KEYS.onboardingDismissed, '1'); setShowOnboarding(false); }}
             aria-label="Dismiss welcome banner"
             className="text-text-muted hover:text-white transition-colors flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
           >
@@ -454,7 +485,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   <div className="flex flex-col flex-1 min-w-0">
                     {editingTaskId === task.id ? (
                       <input
-                        autoFocus
                         aria-label={`Edit task: ${task.title}`}
                         className="bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 w-full"
                         value={editingTaskTitle}

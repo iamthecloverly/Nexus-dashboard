@@ -54,11 +54,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={`pointer-events-auto flex items-center gap-2.5 pl-3.5 pr-2.5 py-2.5 rounded-xl text-sm font-medium border backdrop-blur-md ${STYLES[toast.type]}`}
           >
             <span className="material-symbols-outlined !text-[16px] flex-shrink-0" aria-hidden="true">{ICONS[toast.type]}</span>
-            <span>{toast.message}</span>
+            <span className="max-w-[340px] break-words">{toast.message}</span>
             <button
               onClick={() => dismiss(toast.id)}
               aria-label="Dismiss notification"
-              className="ml-1 opacity-60 hover:opacity-100 transition-opacity flex-shrink-0"
+              className="ml-1 opacity-60 hover:opacity-100 transition-opacity flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
             >
               <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">close</span>
             </button>

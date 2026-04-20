@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Email } from '../App';
+import { Email } from '../types/email';
 import { useToast } from '../components/Toast';
+import { csrfHeaders } from '../lib/csrf';
 
 interface EmailState {
   emails: Email[];
@@ -101,7 +102,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
     fetch(`/api/gmail/messages/${id}/mark-read`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ read: originalUnread }),
     })
       .then(res => {
@@ -122,13 +123,63 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
   const archiveEmail = useCallback((id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setEmails(prev => prev.map(email => email.id === id ? { ...email, archived: true } : email));
-  }, []);
+    // Optimistic update
+    let existed = false;
+    setEmails(prev => prev.map(email => {
+      if (email.id !== id) return email;
+      existed = true;
+      return { ...email, archived: true };
+    }));
+    if (!existed) return;
+
+    const revert = () =>
+      setEmails(prev => prev.map(email => email.id === id ? { ...email, archived: false } : email));
+
+    fetch(`/api/gmail/messages/${id}/archive`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+    })
+      .then(res => {
+        if (res.ok) return;
+        revert();
+        if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
+        else showToast('Failed to archive email — try again', 'error');
+      })
+      .catch(() => {
+        revert();
+        showToast('Failed to archive email — check your connection', 'error');
+      });
+  }, [showToast]);
 
   const deleteEmail = useCallback((id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setEmails(prev => prev.map(email => email.id === id ? { ...email, deleted: true } : email));
-  }, []);
+    // Optimistic update
+    let existed = false;
+    setEmails(prev => prev.map(email => {
+      if (email.id !== id) return email;
+      existed = true;
+      return { ...email, deleted: true };
+    }));
+    if (!existed) return;
+
+    const revert = () =>
+      setEmails(prev => prev.map(email => email.id === id ? { ...email, deleted: false } : email));
+
+    fetch(`/api/gmail/messages/${id}/trash`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+    })
+      .then(res => {
+        if (res.ok) return;
+        revert();
+        if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
+        else showToast('Failed to delete email — try again', 'error');
+      })
+      .catch(() => {
+        revert();
+        showToast('Failed to delete email — check your connection', 'error');
+      });
+  }, [showToast]);
 
   return (
     <EmailContext value={{

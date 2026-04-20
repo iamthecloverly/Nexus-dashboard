@@ -10,6 +10,7 @@ import Communications from './views/Communications';
 import Integrations from './views/Integrations';
 import Settings from './views/Settings';
 import { useAutoEmailTasks } from './hooks/useAutoEmailTasks';
+import { STORAGE_KEYS } from './constants/storageKeys';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -149,8 +150,12 @@ function YouTubeAudioPlayer({
 
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!playerRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const t = ((e.clientX - rect.left) / rect.width) * duration;
+    // Avoid layout reads; rely on offsetX within the slider track
+    const native = e.nativeEvent as MouseEvent;
+    const x = (native as any).offsetX as number | undefined;
+    const w = e.currentTarget.clientWidth;
+    if (typeof x !== 'number' || !w) return;
+    const t = (x / w) * duration;
     playerRef.current.seekTo(t, true);
     setProgress(t);
   };
@@ -236,11 +241,11 @@ function YouTubeAudioPlayer({
                 onKeyDown={seekKeyDown}
               >
                 <div
-                  className="h-full rounded-full transition-[width] duration-100"
+                  className="h-full rounded-full transition-[width] duration-100 pointer-events-none"
                   style={{ width: `${pct}%`, background: '#00D9FF' }}
                 />
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md"
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md pointer-events-none"
                   style={{ left: `calc(${pct}% - 6px)` }}
                 />
               </div>
@@ -307,43 +312,20 @@ function YouTubeAudioPlayer({
   );
 }
 
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  priority?: string;
-  completed: boolean;
-  group: 'now' | 'next';
-}
-
-export interface Email {
-  id: string;
-  sender: string;
-  senderEmail?: string;
-  initials: string;
-  time: string;
-  subject: string;
-  preview: string;
-  unread: boolean;
-  urgent: boolean;
-  archived: boolean;
-  deleted: boolean;
-}
-
 export default function App() {
   const [currentView, setCurrentView] = useState('MainHub');
-  const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem('dashboard_yt_video') ?? null);
+  const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
   const musicInputRef = useRef<HTMLInputElement>(null);
 
   const handleYtLoad = (id: string) => {
     setYtVideoId(id);
-    try { localStorage.setItem('dashboard_yt_video', id); } catch { /* quota exceeded */ }
+    try { localStorage.setItem(STORAGE_KEYS.ytVideoId, id); } catch { /* quota exceeded */ }
     setShowMusicInput(false);
   };
   const handleYtClose = () => {
     setYtVideoId(null);
-    localStorage.removeItem('dashboard_yt_video');
+    localStorage.removeItem(STORAGE_KEYS.ytVideoId);
   };
 
   useEffect(() => {
@@ -355,6 +337,12 @@ export default function App() {
       <TaskProvider>
         <EmailProvider>
           <AutoEmailTaskProcessor />
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            Skip to content
+          </a>
           <div id="main-content" className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">

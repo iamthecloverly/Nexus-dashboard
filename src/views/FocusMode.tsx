@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 
-import { Task } from '../App';
+import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/TaskContext';
 import { CalendarEvent } from '../types/calendar';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
@@ -198,7 +198,10 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="flex-none px-8 py-6 flex justify-between items-center z-50">
-        <button onClick={() => setCurrentView('MainHub')} className="flex items-center gap-2 text-slate-400 hover:text-primary transition-[color,transform] group scale-100 hover:scale-105 active:scale-95">
+        <button
+          onClick={() => setCurrentView('MainHub')}
+          className="flex items-center gap-2 text-slate-400 hover:text-primary transition-[color,transform] group scale-100 hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+        >
           <span className="material-symbols-outlined text-xl transition-transform group-hover:-translate-x-1" aria-hidden="true">arrow_back</span>
           <span className="font-medium text-sm tracking-wide">Exit Focus</span>
         </button>

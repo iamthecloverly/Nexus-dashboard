@@ -104,7 +104,6 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                   {/* Title */}
                   {editingId === item.id ? (
                     <input
-                      autoFocus
                       className="w-full bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus:outline-none mb-1"
                       value={editDraft}
                       onChange={e => setEditDraft(e.target.value)}

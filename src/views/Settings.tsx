@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../components/Toast';
+import { csrfHeaders } from '../lib/csrf';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 interface ConnectionStatus {
   google: boolean;
@@ -9,8 +11,8 @@ interface ConnectionStatus {
 
 export default function Settings({ setCurrentView }: { setCurrentView: (view: string) => void }) {
   const { showToast } = useToast();
-  const [profileName, setProfileName] = useState(() => localStorage.getItem('dashboard_profile_name') ?? '');
-  const [nameDraft, setNameDraft] = useState(() => localStorage.getItem('dashboard_profile_name') ?? '');
+  const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
+  const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [isEditingName, setIsEditingName] = useState(false);
   const [connections, setConnections] = useState<ConnectionStatus>({ google: false, github: false, discord: false });
   const [cleared, setCleared] = useState(false);
@@ -45,7 +47,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
     try {
       const res = await fetch('/api/ai/key', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ key: aiKeyDraft.trim() }),
       });
       if (res.ok) { setAiConfigured(true); setAiKeyDraft(''); showToast('OpenAI key saved', 'success'); }
@@ -55,7 +57,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   };
 
   const disconnectAi = async () => {
-    await fetch('/api/ai/disconnect', { method: 'POST' });
+    await fetch('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders() });
     setAiConfigured(false);
     showToast('OpenAI key removed', 'info');
   };
@@ -64,16 +66,20 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
     const name = nameDraft.trim();
     if (!name) { showToast('Name cannot be empty', 'error'); return; }
     setProfileName(name);
-    localStorage.setItem('dashboard_profile_name', name);
+    localStorage.setItem(STORAGE_KEYS.profileName, name);
     setIsEditingName(false);
     showToast('Name saved', 'success');
   };
 
   const clearAllData = () => {
     [
-      'dashboard_tasks', 'dashboard_checklist', 'dashboard_checklist_title',
-      'dashboard_profile_name', 'dashboard_onboarding_dismissed', 'dashboard_yt_video',
-      'auto_processed_email_ids', // reset auto-task extraction state so new emails are processed fresh
+      STORAGE_KEYS.tasks,
+      STORAGE_KEYS.checklist,
+      STORAGE_KEYS.checklistTitle,
+      STORAGE_KEYS.profileName,
+      STORAGE_KEYS.onboardingDismissed,
+      STORAGE_KEYS.ytVideoId,
+      STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
@@ -111,7 +117,6 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
               {isEditingName ? (
                 <div className="flex-1 flex gap-2">
                   <input
-                    autoFocus
                     aria-label="Profile name"
                     name="profile-name"
                     autoComplete="name"
@@ -180,6 +185,7 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
                   <input
                     type="password"
                     aria-label="OpenAI API key"
+                    name="openai-api-key"
                     className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 font-mono"
                     placeholder="sk-..."
                     value={aiKeyDraft}
