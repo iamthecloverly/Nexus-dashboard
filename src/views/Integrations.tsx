@@ -12,6 +12,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
   const { showToast } = useToast();
   const [status, setStatus] = useState<IntegrationStatus>({ google: false, github: false, discord: false });
   const [isLoading, setIsLoading] = useState(true);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
 
   // GitHub PAT input
   const [githubPat, setGithubPat] = useState('');
@@ -43,11 +44,27 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
       fetch('/api/github/status').then(r => r.json()),
       fetch('/api/discord/status').then(r => r.json()),
     ]);
+    const googleConnected = googleRes.status === 'fulfilled' ? googleRes.value.connected : false;
     setStatus({
-      google: googleRes.status === 'fulfilled' ? googleRes.value.connected : false,
+      google: googleConnected,
       github: githubRes.status === 'fulfilled' ? githubRes.value.connected : false,
       discord: discordRes.status === 'fulfilled' ? discordRes.value.connected : false,
     });
+    if (googleConnected) {
+      try {
+        const profileRes = await fetch('/api/auth/profile');
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          setGoogleEmail(profile.email ?? null);
+        } else {
+          setGoogleEmail(null);
+        }
+      } catch {
+        setGoogleEmail(null);
+      }
+    } else {
+      setGoogleEmail(null);
+    }
     setIsLoading(false);
   };
 
@@ -71,6 +88,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
   const handleDisconnectGoogle = async () => {
     await fetch('/api/auth/disconnect', { method: 'POST', headers: csrfHeaders() });
     setStatus(s => ({ ...s, google: false }));
+    setGoogleEmail(null);
     showToast('Google disconnected', 'info');
   };
 
@@ -201,7 +219,12 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 ) : status.google ? <ConnectedBadge /> : <ConnectButton onClick={handleConnectGoogle} service="Google" />}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google</h3>
-              <p className="text-sm text-[#A1A1AA] mb-6 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
+              <p className="text-sm text-[#A1A1AA] mb-2 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
+              {status.google && googleEmail && (
+                <p className="text-xs text-[#A1A1AA] font-mono mb-4 relative z-10">
+                  Connected as <span className="text-white/90">{googleEmail}</span>
+                </p>
+              )}
               {status.google && (
                 <button
                   onClick={handleDisconnectGoogle}

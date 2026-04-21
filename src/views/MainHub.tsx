@@ -8,6 +8,7 @@ import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -156,11 +157,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   // GitHub notifications — poll every 5 minutes
   useEffect(() => {
     const fetchGithub = async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15_000);
       try {
-        const res = await fetch('/api/github/notifications', { signal: controller.signal });
-        clearTimeout(timeoutId);
+        const res = await fetchWithTimeout('/api/github/notifications', { timeoutMs: 15_000 });
         if (res.ok) {
           const data = await res.json();
           setGithubNotifs(data.notifications ?? []);
@@ -168,7 +166,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
         } else if (res.status === 401) {
           setGithubConnected(false);
         }
-      } catch { clearTimeout(timeoutId); setGithubConnected(false); }
+      } catch { setGithubConnected(false); }
     };
     fetchGithub();
     const interval = setInterval(fetchGithub, 5 * 60 * 1000);
@@ -419,8 +417,14 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                   <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-colors">Retry</button>
                 </div>
               ) : events.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
                   <p className="text-sm text-text-muted">No events today.</p>
+                  <button
+                    onClick={() => setCurrentView('Integrations')}
+                    className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                  >
+                    If you expect events, reconnect Google →
+                  </button>
                 </div>
               ) : events.map(renderEvent)}
             </div>
