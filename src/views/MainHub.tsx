@@ -9,6 +9,7 @@ import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -220,24 +221,18 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   };
 
   // Close task menu on outside click
-  useEffect(() => {
-    if (!showTaskMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (taskMenuRef.current && !taskMenuRef.current.contains(e.target as Node)) setShowTaskMenu(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showTaskMenu]);
+  useDismissibleLayer({
+    open: showTaskMenu,
+    onDismiss: () => setShowTaskMenu(false),
+    refs: [taskMenuRef],
+  });
 
   // Close calendar menu on outside click
-  useEffect(() => {
-    if (!showCalendarMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (calendarMenuRef.current && !calendarMenuRef.current.contains(e.target as Node)) setShowCalendarMenu(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showCalendarMenu]);
+  useDismissibleLayer({
+    open: showCalendarMenu,
+    onDismiss: () => setShowCalendarMenu(false),
+    refs: [calendarMenuRef],
+  });
 
   // Close full-screen schedule on Escape
   useEffect(() => {
@@ -817,8 +812,14 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
                     <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white border border-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry</button>
                   </div>
                 ) : events.length === 0 ? (
-                  <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
                     <p className="text-sm text-text-muted">No events today.</p>
+                    <button
+                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
+                      className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                    >
+                      If you expected events, reconnect Google →
+                    </button>
                   </div>
                 ) : events.map(renderEvent)}
               </div>

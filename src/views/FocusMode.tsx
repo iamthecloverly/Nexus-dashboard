@@ -180,8 +180,14 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
         )}
 
         {upcomingEvents.length === 0 && pastEvents.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <p className="text-sm text-[#A1A1AA]">No events scheduled for today.</p>
+          <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+            <p className="text-sm text-[#A1A1AA]">No events today.</p>
+            <button
+              onClick={() => setCurrentView('Integrations')}
+              className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            >
+              If you expected events, reconnect Google →
+            </button>
           </div>
         )}
 
