@@ -1,7 +1,7 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { COOKIE_OPTS, getBaseUrl, isProduction } from '../config';
+import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config';
 import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies';
 import { getOAuth2Client } from '../lib/googleOAuth';
 
@@ -97,6 +97,6 @@ authRouter.post('/disconnect', (req, res) => {
 
 // For completeness: in dev, let clients check expected protocol quickly.
 authRouter.get('/_debug/base-url', (req, res) => {
-  if (isProduction) return res.status(404).json({ error: 'Not found' });
+  if (isProduction || !ENABLE_DEBUG_ENDPOINTS) return res.status(404).json({ error: 'Not found' });
   res.json({ baseUrl: getBaseUrl(req) });
 });
