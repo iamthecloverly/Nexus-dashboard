@@ -118,7 +118,7 @@ export function MusicPanel({
           <input
             ref={inputRef}
             aria-label="YouTube link or video ID"
-            className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 transition-colors"
+            className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] text-foreground placeholder-text-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 transition-colors"
             style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
             placeholder="Paste YouTube URL or ID…"
             value={value}
@@ -130,8 +130,7 @@ export function MusicPanel({
           <button
             aria-label="Play"
             disabled={!canSubmit}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] flex-shrink-0 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: 'rgba(0,217,255,0.12)', border: '1px solid rgba(6,232,249,0.2)', color: '#00D9FF' }}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] flex-shrink-0 border bg-primary/12 border-primary/25 text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={commit}
           >
             <span className="material-symbols-outlined !text-sm" aria-hidden="true">play_arrow</span>

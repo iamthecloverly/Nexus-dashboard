@@ -27,11 +27,11 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
           <span className="material-symbols-outlined text-5xl text-accent">error</span>
-          <p className="font-heading text-xl text-white">{this.props.label ?? 'View'} crashed</p>
-          <p className="text-sm text-[#A1A1AA] max-w-sm">{this.state.message}</p>
+          <p className="font-heading text-xl text-foreground">{this.props.label ?? 'View'} crashed</p>
+          <p className="text-sm text-text-muted max-w-sm">{this.state.message}</p>
           <button
             onClick={() => this.setState({ hasError: false, message: '' })}
-            className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white border border-white/10 transition-colors"
+            className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-foreground border border-white/10 transition-colors"
           >
             Try again
           </button>

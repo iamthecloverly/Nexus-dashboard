@@ -204,10 +204,10 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
     <div className="flex-1 flex flex-col min-w-0 p-8">
       <div className="glass-panel w-full max-w-[1200px] h-full mx-auto flex flex-col rounded-xl relative overflow-hidden">
         {/* Header */}
-        <div className="flex flex-col border-b border-white/10 shrink-0 bg-[#0B0C10]/40">
+        <div className="flex flex-col border-b border-white/10 shrink-0 bg-background-elevated/55">
           <div className="flex items-center justify-between px-6 pt-5 pb-4">
             <div className="flex items-center gap-4 group">
-              <h1 className="font-heading font-semibold text-2xl text-[#F4F4F5] group-hover:text-primary transition-colors cursor-default">Inbox Triage</h1>
+              <h1 className="font-heading font-semibold text-2xl text-foreground group-hover:text-primary transition-colors cursor-default">Inbox Triage</h1>
               <div className="flex h-6 items-center justify-center gap-x-2 rounded-full bg-primary/10 px-3 border border-primary/20 shadow-[0_0_10px_rgba(6,232,249,0.2)]">
                 {unreadCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>}
                 <p className="text-primary text-xs font-medium uppercase tracking-wider">{unreadCount} Unread</p>
@@ -219,8 +219,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 disabled={isAnalyzingAll || !gmailConnected}
                 aria-label="Analyze all unread emails with AI"
                 title="Extract tasks from all unread emails"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                style={{ color: '#00D9FF', background: 'rgba(0,217,255,0.08)', border: '1px solid rgba(0,217,255,0.2)' }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/25 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 {isAnalyzingAll
                   ? <span className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
@@ -232,14 +231,14 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 onClick={refreshEmails}
                 disabled={emailsLoading}
                 aria-label="Refresh inbox"
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-[#A1A1AA] hover:text-[#F4F4F5] disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-text-muted hover:text-foreground disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 <span className={`material-symbols-outlined text-[20px] ${emailsLoading ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
               </button>
               <button
                 onClick={() => setCurrentView('MainHub')}
                 aria-label="Close communications"
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors hover:rotate-90 text-[#A1A1AA] hover:text-[#F4F4F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors hover:rotate-90 text-text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
               </button>
@@ -249,21 +248,21 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
           {/* Search Bar */}
           <div className="px-6 pb-5">
             <div className="glass-search flex items-center gap-3 px-4 py-2.5 rounded-xl">
-              <span className="material-symbols-outlined text-[#A1A1AA] text-[20px]" aria-hidden="true">search</span>
+              <span className="material-symbols-outlined text-text-muted text-[20px]" aria-hidden="true">search</span>
               <input
                 ref={searchRef}
                 aria-label="Search emails"
                 name="email-search"
                 autoComplete="off"
-                className="bg-transparent border-none focus:ring-0 text-[14px] text-[#F4F4F5] placeholder-[#A1A1AA] w-full p-0"
+                className="bg-transparent border-none focus:ring-0 text-[14px] text-foreground placeholder-text-muted w-full p-0"
                 placeholder="Search emails, people, or keywords…"
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <div className="flex items-center gap-1.5" aria-hidden="true">
-                <span className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[#A1A1AA] text-[10px] font-mono">⌘</span>
-                <span className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[#A1A1AA] text-[10px] font-mono">K</span>
+                <span className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-text-muted text-[10px] font-mono">⌘</span>
+                <span className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-text-muted text-[10px] font-mono">K</span>
               </div>
             </div>
           </div>
@@ -278,7 +277,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '900px 700px' as any }}
             >
               {!gmailConnected ? (
-                <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
+                <div className="flex flex-col items-center justify-center h-full text-text-muted gap-4">
                   <span className="material-symbols-outlined text-4xl" aria-hidden="true">{serverError ? 'cloud_off' : 'mail'}</span>
                   {serverError ? (
                     <>
@@ -303,7 +302,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                   )}
                 </div>
               ) : visibleEmails.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
+                <div className="flex flex-col items-center justify-center h-full text-text-muted gap-4">
                   <span className="material-symbols-outlined text-4xl" aria-hidden="true">inbox</span>
                   <p>{searchQuery ? 'No emails match your search.' : 'Inbox zero!'}</p>
                 </div>
@@ -318,38 +317,38 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                       aria-label={`${email.unread ? 'Unread: ' : ''}${email.sender} — ${email.subject}`}
                       className={`email-row group relative flex items-start gap-4 p-4 rounded-lg cursor-pointer mb-1 border w-full text-left transition-[background-color,border-color,opacity]
                         ${detail?.id === email.id ? 'border-primary/40 bg-primary/8' : index === selectedIndex ? 'border-primary/20 bg-primary/5' : 'border-transparent'}
-                        ${email.urgent ? 'hover:border-white/10 bg-[#FF0055]/5' : 'hover:border-white/5'}
+                        ${email.urgent ? 'hover:border-white/10 bg-rose-500/10' : 'hover:border-white/5'}
                         ${!email.unread ? 'opacity-70 hover:opacity-100' : ''}
                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary`}
                       onClick={() => { setSelectedIndex(index); openDetail(email); }}
                     >
-                      <div aria-hidden="true" className={`w-2 h-2 rounded-full mt-3 shrink-0 ${email.urgent ? 'bg-[#FF0055] shadow-[0_0_12px_rgba(255,0,85,0.6)]' : email.unread ? 'bg-primary neon-pulse-unread' : 'bg-transparent'}`}></div>
-                      <div className={`w-8 h-8 rounded-full glass-avatar flex items-center justify-center text-sm font-semibold shrink-0 mt-0.5 hover:scale-110 transition-transform ${email.urgent ? 'border-[#FF0055]/30 text-[#FF0055]' : email.unread ? 'text-white' : 'text-[#A1A1AA]'}`}>
+                      <div aria-hidden="true" className={`w-2 h-2 rounded-full mt-3 shrink-0 ${email.urgent ? 'bg-rose-500 shadow-[0_0_14px_rgba(244,63,94,0.45)]' : email.unread ? 'bg-primary neon-pulse-unread' : 'bg-transparent'}`}></div>
+                      <div className={`w-8 h-8 rounded-full glass-avatar flex items-center justify-center text-sm font-semibold shrink-0 mt-0.5 hover:scale-110 transition-transform ${email.urgent ? 'border-rose-400/35 text-rose-300' : email.unread ? 'text-foreground' : 'text-text-muted'}`}>
                         {email.initials}
                       </div>
                       <div className={`flex-1 min-w-0 ${detail ? '' : 'pr-32'}`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className={`font-semibold text-[15px] truncate ${email.unread ? 'text-[#F4F4F5]' : 'text-[#A1A1AA] font-medium'}`}>{email.sender}</span>
-                          <span className={`text-[13px] font-medium flex-shrink-0 ml-2 ${email.urgent ? 'text-[#FF0055]' : email.unread ? 'text-primary' : 'text-[#A1A1AA]'}`}>{email.time}</span>
+                          <span className={`font-semibold text-[15px] truncate ${email.unread ? 'text-foreground' : 'text-text-muted font-medium'}`}>{email.sender}</span>
+                          <span className={`text-[13px] font-medium flex-shrink-0 ml-2 ${email.urgent ? 'text-rose-300' : email.unread ? 'text-primary' : 'text-text-muted'}`}>{email.time}</span>
                         </div>
-                        <h3 className={`font-medium text-[14px] mb-0.5 truncate ${email.unread ? 'text-[#F4F4F5]' : 'text-[#A1A1AA]'}`}>{email.subject}</h3>
-                        {!detail && <p className={`text-[13px] truncate leading-relaxed ${email.unread ? 'text-[#A1A1AA]' : 'text-[#A1A1AA]/70'}`}>{email.preview}</p>}
+                        <h3 className={`font-medium text-[14px] mb-0.5 truncate ${email.unread ? 'text-foreground' : 'text-text-muted'}`}>{email.subject}</h3>
+                        {!detail && <p className={`text-[13px] truncate leading-relaxed ${email.unread ? 'text-text-muted' : 'text-text-muted/70'}`}>{email.preview}</p>}
                       </div>
 
                       {/* Hover Action Bar — hidden in split view to save space */}
                       {!detail && (
-                        <div className="action-bar absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#1a1b20]/90 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-2xl z-20">
-                          <button onClick={(e) => handleReply(email, e)} aria-label="Reply" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                        <div className="action-bar absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-surface/92 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-2xl z-20">
+                          <button onClick={(e) => handleReply(email, e)} aria-label="Reply" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">reply</span>
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); archiveEmail(email.id, e); showToast('Email archived', 'info'); }} aria-label="Archive" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                          <button onClick={(e) => { e.stopPropagation(); archiveEmail(email.id, e); showToast('Email archived', 'info'); }} aria-label="Archive" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">archive</span>
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); toggleRead(email.id, e); }} aria-label={email.unread ? 'Mark as read' : 'Mark as unread'} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                          <button onClick={(e) => { e.stopPropagation(); toggleRead(email.id, e); }} aria-label={email.unread ? 'Mark as read' : 'Mark as unread'} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{email.unread ? 'mark_email_read' : 'mark_as_unread'}</span>
                           </button>
                           <div className="w-px h-4 bg-white/10 mx-1" aria-hidden="true"></div>
-                          <button onClick={(e) => { e.stopPropagation(); deleteEmail(email.id, e); }} aria-label="Move to trash" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#FF0055]/20 text-[#A1A1AA] hover:text-[#FF0055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                          <button onClick={(e) => { e.stopPropagation(); deleteEmail(email.id, e); }} aria-label="Move to trash" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-rose-500/20 text-text-muted hover:text-rose-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
                           </button>
                         </div>
@@ -364,7 +363,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
             <button
               onClick={() => openCompose()}
               aria-label="Compose new email"
-              className="fab-compose absolute bottom-8 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-primary text-[#0B0C10] flex items-center justify-center shadow-lg hover:scale-110 hover:shadow-[0_0_20px_rgba(6,232,249,0.5)] active:scale-95 transition-transform z-30 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              className="fab-compose absolute bottom-8 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-primary text-background-dark flex items-center justify-center shadow-lg hover:scale-110 hover:shadow-[0_0_22px_rgba(56,189,248,0.45)] active:scale-95 transition-transform z-30 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground"
             >
               <span className="material-symbols-outlined text-[28px] font-bold" aria-hidden="true">edit</span>
             </button>
@@ -372,25 +371,25 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
 
           {/* Right: Email Detail */}
           {detail && (
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#0B0C10]/20">
+            <div className="flex-1 flex flex-col overflow-hidden bg-background-elevated/35">
               {/* Detail Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-heading font-semibold text-lg text-white truncate">{detail.subject}</h3>
-                  <p className="text-sm text-[#A1A1AA] mt-0.5 truncate">{detail.sender} &lt;{detail.senderEmail}&gt;</p>
+                  <p className="text-sm text-text-muted mt-0.5 truncate">{detail.sender} &lt;{detail.senderEmail}&gt;</p>
                 </div>
                 <div className="flex items-center gap-1 ml-4 flex-shrink-0">
                   <button
                     onClick={() => openCompose({ to: detail.senderEmail, subject: `Re: ${detail.subject}` })}
                     aria-label="Reply to this email"
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     <span className="material-symbols-outlined text-[18px]" aria-hidden="true">reply</span>
                   </button>
                   <button
                     onClick={() => setDetail(null)}
                     aria-label="Close email"
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
                   </button>
@@ -403,7 +402,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                     <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                   </div>
                 ) : (
-                  <pre className="text-sm text-[#D4D4D8] whitespace-pre-wrap break-words font-sans leading-relaxed">{detail.body || '(empty)'}</pre>
+                  <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{detail.body || '(empty)'}</pre>
                 )}
               </div>
             </div>
@@ -411,11 +410,11 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 shrink-0 bg-[#0B0C10]/60 backdrop-blur-md flex items-center justify-center gap-6 font-mono text-[11px] text-[#A1A1AA]">
+        <div className="px-6 py-4 border-t border-white/10 shrink-0 bg-background-elevated/70 backdrop-blur-md flex items-center justify-center gap-6 font-mono text-[11px] text-text-muted">
           {KEYBOARD_SHORTCUTS.map(([key, label]) => (
             <div key={key} className="flex items-center gap-2 group cursor-default">
               <span className="px-1.5 py-0.5 rounded border border-white/20 bg-white/5 text-white group-hover:border-primary group-hover:text-primary transition-colors">{key}</span>
-              <span className="group-hover:text-[#F4F4F5] transition-colors">{label}</span>
+              <span className="group-hover:text-foreground transition-colors">{label}</span>
             </div>
           ))}
         </div>
@@ -425,32 +424,32 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
       {compose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="glass-panel w-full max-w-[600px] rounded-xl overflow-hidden flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0B0C10]/60">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-background-elevated/70">
               <h2 className="font-heading font-semibold text-lg text-white" id="compose-title">New Message</h2>
-              <button onClick={() => setCompose(null)} aria-label="Discard and close" className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#A1A1AA] hover:text-white transition-colors hover:rotate-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+              <button onClick={() => setCompose(null)} aria-label="Discard and close" className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors hover:rotate-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                 <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
               </button>
             </div>
             <div className="p-6 flex flex-col gap-4">
               <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-                <label htmlFor="compose-to" className="text-xs text-[#A1A1AA] w-12 shrink-0">To</label>
+                <label htmlFor="compose-to" className="text-xs text-text-muted w-12 shrink-0">To</label>
                 <input
                   id="compose-to"
                   type="email"
                   autoComplete="email"
-                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
+                  className="flex-1 bg-transparent text-sm text-white placeholder-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
                   placeholder="recipient@example.com"
                   value={compose.to}
                   onChange={e => setCompose(c => c ? { ...c, to: e.target.value } : null)}
                 />
               </div>
               <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-                <label htmlFor="compose-subject" className="text-xs text-[#A1A1AA] w-12 shrink-0">Subject</label>
+                <label htmlFor="compose-subject" className="text-xs text-text-muted w-12 shrink-0">Subject</label>
                 <input
                   id="compose-subject"
                   name="subject"
                   autoComplete="off"
-                  className="flex-1 bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
+                  className="flex-1 bg-transparent text-sm text-white placeholder-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
                   placeholder="Subject…"
                   value={compose.subject}
                   onChange={e => setCompose(c => c ? { ...c, subject: e.target.value } : null)}
@@ -459,7 +458,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
               <textarea
                 id="compose-body"
                 aria-label="Message body"
-                className="w-full bg-transparent text-sm text-white placeholder-[#A1A1AA] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded resize-none h-40 custom-scrollbar"
+                className="w-full bg-transparent text-sm text-white placeholder-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded resize-none h-40 custom-scrollbar"
                 placeholder="Write your message…"
                 value={compose.body}
                 onChange={e => setCompose(c => c ? { ...c, body: e.target.value } : null)}
@@ -468,17 +467,17 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
                 <p className="text-xs text-red-400" aria-live="polite">{compose.error}</p>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-white/10 bg-[#0B0C10]/40 flex items-center justify-between">
-              <button onClick={() => setCompose(null)} className="text-sm text-[#A1A1AA] hover:text-white transition-colors">
+            <div className="px-6 py-4 border-t border-white/10 bg-background-elevated/55 flex items-center justify-between">
+              <button onClick={() => setCompose(null)} className="text-sm text-text-muted hover:text-white transition-colors">
                 Discard
               </button>
               <button
                 onClick={handleSend}
                 disabled={compose.sending || !isValidEmail(compose.to) || !compose.subject.trim() || !compose.body.trim()}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-[#0B0C10] text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(6,232,249,0.3)]"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-background-dark text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_14px_rgba(56,189,248,0.28)]"
               >
                 {compose.sending ? (
-                  <span className="w-4 h-4 rounded-full border-2 border-[#0B0C10] border-t-transparent animate-spin"></span>
+                  <span className="w-4 h-4 rounded-full border-2 border-background-dark border-t-transparent animate-spin"></span>
                 ) : (
                   <span className="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>
                 )}

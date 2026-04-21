@@ -394,7 +394,7 @@ export function YouTubeAudioPlayer({
         >
           <div className="relative h-[4.25rem] overflow-hidden flex-shrink-0">
             {thumb && <img src={thumb} width={320} height={68} className="absolute inset-0 w-full h-full object-cover scale-110 blur-lg opacity-70" alt="" />}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/95 via-[#050816]/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-background-dark/95 via-background-dark/70 to-transparent" />
             <div className="relative flex items-center gap-3 px-3.5 h-full">
               {thumb && (
                 <img
@@ -494,7 +494,7 @@ export function YouTubeAudioPlayer({
                   className="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform hover:scale-[1.03] active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary shadow-[0_12px_40px_rgba(0,217,255,0.18)]"
                   style={{ background: 'linear-gradient(135deg, rgba(0,217,255,0.22) 0%, rgba(99,102,241,0.18) 100%)', border: '1px solid rgba(6,232,249,0.35)' }}
                 >
-                  <span className="material-symbols-outlined !text-[26px]" aria-hidden="true" style={{ color: '#00D9FF' }}>
+                  <span className="material-symbols-outlined !text-[26px] text-primary" aria-hidden="true">
                     {playing ? 'pause' : 'play_arrow'}
                   </span>
                 </button>

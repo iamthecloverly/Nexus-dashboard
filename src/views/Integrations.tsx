@@ -179,7 +179,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     <button
       onClick={onClick}
       aria-label={`Connect ${service}`}
-      className="px-4 py-1.5 rounded-full bg-primary text-[#0B0C10] text-xs font-bold hover:bg-primary/90 transition-colors shadow-[0_0_10px_rgba(6,232,249,0.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      className="px-4 py-1.5 rounded-full bg-primary text-background-dark text-xs font-bold hover:bg-primary/90 transition-colors shadow-[0_0_14px_rgba(56,189,248,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
       Connect
     </button>
@@ -189,15 +189,15 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
     <div className="flex-1 flex flex-col min-w-0 p-8">
       <div className="glass-panel w-full max-w-[1000px] h-full mx-auto flex flex-col rounded-xl relative overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-white/10 bg-[#0B0C10]/40 shrink-0">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-white/10 bg-background-elevated/55 shrink-0">
           <div>
-            <h1 className="font-heading font-semibold text-2xl text-[#F4F4F5]">Integrations</h1>
-            <p className="text-sm text-[#A1A1AA] mt-1">Connect your external tools and services.</p>
+            <h1 className="font-heading font-semibold text-2xl text-foreground">Integrations</h1>
+            <p className="text-sm text-text-muted mt-1">Connect your external tools and services.</p>
           </div>
           <button
             onClick={() => setCurrentView('MainHub')}
             aria-label="Close integrations"
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-[#A1A1AA] hover:text-[#F4F4F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
           </button>
@@ -219,9 +219,9 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 ) : status.google ? <ConnectedBadge /> : <ConnectButton onClick={handleConnectGoogle} service="Google" />}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google</h3>
-              <p className="text-sm text-[#A1A1AA] mb-2 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
+              <p className="text-sm text-text-muted mb-2 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
               {status.google && googleEmail && (
-                <p className="text-xs text-[#A1A1AA] font-mono mb-4 relative z-10">
+                <p className="text-xs text-text-muted font-mono mb-4 relative z-10">
                   Connected as <span className="text-white/90">{googleEmail}</span>
                 </p>
               )}
@@ -251,7 +251,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 )}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">GitHub</h3>
-              <p className="text-sm text-[#A1A1AA] mb-4 relative z-10">Monitor notifications, pull requests, and issues.</p>
+              <p className="text-sm text-text-muted mb-4 relative z-10">Monitor notifications, pull requests, and issues.</p>
 
               {showGithubInput && !status.github && (
                 <div className="relative z-10 flex flex-col gap-2 mb-4">
@@ -273,7 +273,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                   >
                     {githubSaving ? 'Saving…' : 'Save Token'}
                   </button>
-                  <p className="text-[10px] text-[#A1A1AA]">
+                  <p className="text-[10px] text-text-muted">
                     Create a token at github.com/settings/tokens with <code className="bg-white/10 px-1 rounded">notifications</code> scope.
                   </p>
                 </div>
@@ -334,7 +334,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                 )}
               </div>
               <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Discord</h3>
-              <p className="text-sm text-[#A1A1AA] mb-4 relative z-10">Send alerts and notifications to a Discord channel via webhook.</p>
+              <p className="text-sm text-text-muted mb-4 relative z-10">Send alerts and notifications to a Discord channel via webhook.</p>
 
               {showDiscordInput && !status.discord && (
                 <div className="relative z-10 flex flex-col gap-2 mb-4">
@@ -356,7 +356,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: (view
                   >
                     {discordSaving ? 'Saving…' : 'Save Webhook'}
                   </button>
-                  <p className="text-[10px] text-[#A1A1AA]">
+                  <p className="text-[10px] text-text-muted">
                     Create a webhook in Discord: Server Settings → Integrations → Webhooks.
                   </p>
                 </div>

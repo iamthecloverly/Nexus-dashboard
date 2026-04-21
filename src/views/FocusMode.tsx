@@ -113,7 +113,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
     return (
       <div key={event.id} className={`relative pl-12 mb-12 ${isPast ? 'opacity-40' : ''}`}>
         <div className="absolute left-[20px] top-1.5 w-2 h-2 rounded-full bg-white/20 border border-white/30 z-10"></div>
-        <div className="text-xs text-[#A1A1AA] mb-1 font-medium">{timeLabel}</div>
+        <div className="text-xs text-text-muted mb-1 font-medium">{timeLabel}</div>
         <div className={`p-4 rounded-lg bg-white/5 border border-white/10 ${!isPast ? 'glass-panel-hover cursor-pointer group' : ''}`}>
           <h3 className={`font-medium text-slate-100 ${!isPast ? 'group-hover:text-white transition-colors' : ''}`}>
             {event.summary || 'Busy'}
@@ -135,8 +135,8 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
     if (!isCalendarConnected) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-4">
-          <span className="material-symbols-outlined text-4xl text-[#A1A1AA]">calendar_today</span>
-          <p className="text-sm text-[#A1A1AA]">Connect your Google Calendar to see your schedule.</p>
+          <span className="material-symbols-outlined text-4xl text-text-muted">calendar_today</span>
+          <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
           <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             Go to Integrations
           </button>
@@ -148,7 +148,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
           <span className="material-symbols-outlined text-4xl text-accent">warning</span>
           <p className="text-sm text-white font-medium">Google Calendar API not enabled</p>
-          <p className="text-xs text-[#A1A1AA] max-w-[280px]">Enable it in your Google Cloud project, then reconnect.</p>
+          <p className="text-xs text-text-muted max-w-[280px]">Enable it in your Google Cloud project, then reconnect.</p>
           <a href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview" target="_blank" rel="noreferrer" className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20">
             Enable Calendar API →
           </a>
@@ -181,7 +181,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
 
         {upcomingEvents.length === 0 && pastEvents.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2">
-            <p className="text-sm text-[#A1A1AA]">No events today.</p>
+            <p className="text-sm text-text-muted">No events today.</p>
             <button
               onClick={() => setCurrentView('Integrations')}
               className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
@@ -195,7 +195,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
 
         <div className="relative pl-12 mt-4 mb-8 opacity-40">
           <div className="absolute left-[16px] top-1 w-4 h-4 rounded-full border-2 border-dashed border-white/40 bg-transparent z-10"></div>
-          <div className="text-xs text-[#A1A1AA] italic font-medium">End of scheduled day</div>
+          <div className="text-xs text-text-muted italic font-medium">End of scheduled day</div>
         </div>
       </>
     );
@@ -240,26 +240,26 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
       <main className="flex-1 flex gap-6 px-8 pb-8 overflow-hidden max-w-[1800px] mx-auto w-full">
         {/* Left Column: Timeline */}
         <section className="w-3/5 h-full flex flex-col relative glass-panel rounded-xl overflow-hidden flex-none">
-          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#0B0C10]/80 to-transparent z-20 pointer-events-none rounded-t-xl"></div>
-          <div className="p-6 pb-2 z-30 bg-[#0B0C10]/40 backdrop-blur-md border-b border-white/5">
+          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-background-dark/85 to-transparent z-20 pointer-events-none rounded-t-xl"></div>
+          <div className="p-6 pb-2 z-30 bg-background-elevated/50 backdrop-blur-md border-b border-white/5">
             <h2 className="font-heading text-2xl font-semibold text-slate-100">Timeline</h2>
-            <p className="text-xs text-[#A1A1AA] uppercase tracking-widest mt-1 font-semibold">Today</p>
+            <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">Today</p>
           </div>
           <div className="flex-1 overflow-y-auto relative px-6 py-12">
             <div className="timeline-line"></div>
             {renderTimeline()}
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#0B0C10]/80 to-transparent z-20 pointer-events-none rounded-b-xl"></div>
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background-dark/85 to-transparent z-20 pointer-events-none rounded-b-xl"></div>
         </section>
 
         {/* Right Column: Tasks */}
         <section className="w-2/5 h-full flex flex-col gap-6 flex-none">
           <div className="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden relative transition-colors duration-300 hover:border-white/20">
-            <div className="p-6 pb-4 z-30 bg-[#0B0C10]/40 backdrop-blur-md border-b border-white/5">
+            <div className="p-6 pb-4 z-30 bg-background-elevated/50 backdrop-blur-md border-b border-white/5">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="font-heading text-2xl font-semibold text-slate-100">Action Items</h2>
-                  <p className="text-xs text-[#A1A1AA] mt-1 font-medium transition-opacity" id="task-status">{remainingTasks} tasks remaining</p>
+                  <p className="text-xs text-text-muted mt-1 font-medium transition-opacity" id="task-status">{remainingTasks} tasks remaining</p>
                 </div>
               </div>
 
@@ -302,7 +302,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: (view: s
                           {task.title}
                         </p>
                         {task.description && (
-                          <p className="text-xs text-[#A1A1AA] mt-1 line-clamp-1">{task.description}</p>
+                          <p className="text-xs text-text-muted mt-1 line-clamp-1">{task.description}</p>
                         )}
                       </div>
                       {task.priority && !task.completed && (

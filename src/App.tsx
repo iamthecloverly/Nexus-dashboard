@@ -104,15 +104,15 @@ function AppContent() {
           >
             Skip to content
           </a>
-          <div id="main-content" className="h-screen w-full bg-background-dark text-slate-200 overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
+          <div id="main-content" className="h-screen w-full bg-background-dark text-foreground overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">
-              {/* Cyan halo — top-left */}
-              <div className="absolute top-[-15%] left-[-8%] w-[55%] h-[55%] rounded-full blur-[130px]" style={{ background: 'radial-gradient(circle, rgba(0,217,255,0.18) 0%, transparent 70%)' }} />
+              {/* Sky halo — top-left */}
+              <div className="absolute top-[-15%] left-[-8%] w-[55%] h-[55%] rounded-full blur-[130px]" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.16) 0%, transparent 70%)' }} />
               {/* Violet halo — bottom-right */}
-              <div className="absolute bottom-[-20%] right-[-8%] w-[55%] h-[65%] rounded-full blur-[150px]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.16) 0%, transparent 70%)' }} />
-              {/* Indigo halo — center */}
-              <div className="absolute top-[30%] left-[35%] w-[40%] h-[40%] rounded-full blur-[120px]" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)' }} />
+              <div className="absolute bottom-[-20%] right-[-8%] w-[55%] h-[65%] rounded-full blur-[150px]" style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.14) 0%, transparent 72%)' }} />
+              {/* Cool lift — center */}
+              <div className="absolute top-[30%] left-[35%] w-[40%] h-[40%] rounded-full blur-[120px]" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)' }} />
               {/* Subtle noise grain overlay */}
               <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\' opacity=\'1\'/%3E%3C/svg%3E")', backgroundSize: '256px 256px' }} />
             </div>
