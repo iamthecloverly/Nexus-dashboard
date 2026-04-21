@@ -9,7 +9,17 @@ interface ConnectionStatus {
   discord: boolean;
 }
 
-export default function Settings({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+export default function Settings({
+  setCurrentView,
+  resumeEnabled,
+  onResumeEnabledChange,
+  onClearMusicSession,
+}: {
+  setCurrentView: (view: string) => void;
+  resumeEnabled: boolean;
+  onResumeEnabledChange: (next: boolean) => void;
+  onClearMusicSession: () => void;
+}) {
   const { showToast } = useToast();
   const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
@@ -24,8 +34,6 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   const [aiKeySaving, setAiKeySaving] = useState(false);
 
   // Music
-  const [resumeEnabled, setResumeEnabled] = useState(() => (localStorage.getItem(STORAGE_KEYS.ytResumeEnabled) ?? '1') === '1');
-
   useEffect(() => {
     const fetchStatuses = async () => {
       const [googleRes, githubRes, discordRes, aiRes] = await Promise.allSettled([
@@ -93,16 +101,15 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   };
 
   const toggleResume = () => {
-    setResumeEnabled(v => {
-      const next = !v;
-      try { localStorage.setItem(STORAGE_KEYS.ytResumeEnabled, next ? '1' : '0'); } catch { /* quota */ }
-      showToast(next ? 'Music resume enabled' : 'Music resume disabled', 'info');
-      return next;
-    });
+    const next = !resumeEnabled;
+    try { localStorage.setItem(STORAGE_KEYS.ytResumeEnabled, next ? '1' : '0'); } catch { /* quota */ }
+    onResumeEnabledChange(next);
+    showToast(next ? 'Music resume enabled' : 'Music resume disabled', 'info');
   };
 
   const clearMusicData = () => {
     [STORAGE_KEYS.ytVideoId, STORAGE_KEYS.ytVolume, STORAGE_KEYS.ytRecent, STORAGE_KEYS.ytPositions].forEach(k => localStorage.removeItem(k));
+    onClearMusicSession();
     showToast('Music data cleared', 'info');
   };
 

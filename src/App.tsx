@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
@@ -15,6 +15,7 @@ import { YouTubeAudioPlayer } from './components/youtube/YouTubeAudioPlayer';
 import { extractYouTubeVideoId } from './components/youtube/youtube';
 import { MusicPanel } from './components/youtube/MusicPanel';
 import { preloadYouTubeIFrameApi } from './components/youtube/useYouTubeIFrameApi';
+import { useToast } from './components/Toast';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -22,7 +23,8 @@ function AutoEmailTaskProcessor() {
   return null;
 }
 
-export default function App() {
+function AppContent() {
+  const { showToast } = useToast();
   const [currentView, setCurrentView] = useState('MainHub');
   const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
@@ -60,17 +62,17 @@ export default function App() {
 
   const handleYtRequestLoad = useCallback((input: string) => {
     const id = extractYouTubeVideoId(input);
-    if (id) handleYtLoad(id);
-  }, [handleYtLoad]);
+    if (!id) {
+      showToast('Paste a valid YouTube link or 11‑character video ID', 'error');
+      return;
+    }
+    handleYtLoad(id);
+  }, [handleYtLoad, showToast]);
 
   const handleYtClose = () => {
     setYtVideoId(null);
     localStorage.removeItem(STORAGE_KEYS.ytVideoId);
   };
-
-  useEffect(() => {
-    // focus is managed inside MusicPanel
-  }, [showMusicInput]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.ytVolume, String(ytVolume)); } catch { /* quota exceeded */ }
@@ -86,14 +88,13 @@ export default function App() {
 
   const savePosition = useCallback((videoId: string, seconds: number) => {
     setYtPositions(prev => {
-      // Avoid churn
       if (Math.abs((prev[videoId] ?? 0) - seconds) < 1) return prev;
       return { ...prev, [videoId]: seconds };
     });
   }, []);
 
   return (
-    <ToastProvider>
+    <>
       <TaskProvider>
         <EmailProvider>
           <AutoEmailTaskProcessor />
@@ -134,7 +135,6 @@ export default function App() {
               resumeEnabled={resumeEnabled}
               savedPositions={ytPositions}
               onSavePosition={savePosition}
-              // Avoid overlapping MainHub's bottom-right FAB
               bottomOffsetPx={currentView === 'MainHub' ? 96 : 24}
               onClose={handleYtClose}
               onToggleVisible={() => setMusicPlayerVisible(v => !v)}
@@ -152,10 +152,30 @@ export default function App() {
             {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
             {currentView === 'Communications' && <ErrorBoundary label="Communications"><Communications setCurrentView={setCurrentView} /></ErrorBoundary>}
             {currentView === 'Integrations' && <ErrorBoundary label="Integrations"><Integrations setCurrentView={setCurrentView} /></ErrorBoundary>}
-            {currentView === 'Settings' && <ErrorBoundary label="Settings"><Settings setCurrentView={setCurrentView} /></ErrorBoundary>}
+            {currentView === 'Settings' && (
+              <ErrorBoundary label="Settings">
+                <Settings
+                  setCurrentView={setCurrentView}
+                  resumeEnabled={resumeEnabled}
+                  onResumeEnabledChange={setResumeEnabled}
+                  onClearMusicSession={() => {
+                    setYtVideoId(null);
+                    localStorage.removeItem(STORAGE_KEYS.ytVideoId);
+                  }}
+                />
+              </ErrorBoundary>
+            )}
           </div>
         </EmailProvider>
       </TaskProvider>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
     </ToastProvider>
   );
 }

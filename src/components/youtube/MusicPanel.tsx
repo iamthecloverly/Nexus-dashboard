@@ -90,8 +90,8 @@ export function MusicPanel({
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-20 left-4 z-[300] rounded-xl overflow-hidden shadow-2xl border"
-      style={{ background: '#0C0F1E', borderColor: 'rgba(255,255,255,0.1)', width: 280 }}
+      className="fixed bottom-[5.25rem] left-[17rem] z-[300] rounded-xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.55)] border backdrop-blur-md max-[900px]:left-4 max-[900px]:right-4 max-[900px]:bottom-24 max-[900px]:w-auto"
+      style={{ background: 'rgba(12,15,30,0.94)', borderColor: 'rgba(255,255,255,0.12)', width: 300 }}
       role="dialog"
       aria-modal="true"
       aria-label="YouTube Music"
@@ -100,7 +100,7 @@ export function MusicPanel({
         trapTab(e);
       }}
     >
-      <div className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="px-3 py-2 border-b flex items-center gap-2 bg-white/[0.03]" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <span className="material-symbols-outlined !text-[16px] text-primary" aria-hidden="true">music_note</span>
         <span className="text-[12px] text-white/60 font-medium">YouTube Music</span>
         <button
