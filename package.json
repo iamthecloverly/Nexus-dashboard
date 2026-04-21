@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "nexus-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Nexus Dashboard — a personal productivity dashboard (calendar, tasks, email, GitHub, and more).",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
