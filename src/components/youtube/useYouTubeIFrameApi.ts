@@ -40,6 +40,15 @@ function loadYouTubeIFrameApi(): Promise<void> {
   return _loaderPromise;
 }
 
+/** Best-effort preload to reduce first-open latency (safe to call repeatedly). */
+export function preloadYouTubeIFrameApi(): void {
+  try {
+    void loadYouTubeIFrameApi().catch(() => { /* ignore */ });
+  } catch {
+    // ignore
+  }
+}
+
 export function useYouTubeIFrameApi() {
   const [status, setStatus] = useState<ApiStatus>(() => (typeof window !== 'undefined' && window.YT?.Player ? 'ready' : 'idle'));
   const [error, setError] = useState<string | null>(null);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { parseISO, isBefore, isAfter } from 'date-fns';
 
 import { Task } from '../types/task';
@@ -10,6 +10,7 @@ import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
+import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -156,23 +157,24 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   }, []);
 
   // GitHub notifications — poll every 5 minutes
-  useEffect(() => {
-    const fetchGithub = async () => {
-      try {
-        const res = await fetchWithTimeout('/api/github/notifications', { timeoutMs: 15_000 });
-        if (res.ok) {
-          const data = await res.json();
-          setGithubNotifs(data.notifications ?? []);
-          setGithubConnected(true);
-        } else if (res.status === 401) {
-          setGithubConnected(false);
-        }
-      } catch { setGithubConnected(false); }
-    };
-    fetchGithub();
-    const interval = setInterval(fetchGithub, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+  const fetchGithub = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout('/api/github/notifications', { timeoutMs: 15_000 });
+      if (res.ok) {
+        const data = await res.json();
+        setGithubNotifs(data.notifications ?? []);
+        setGithubConnected(true);
+      } else if (res.status === 401) {
+        setGithubConnected(false);
+      }
+    } catch { setGithubConnected(false); }
   }, []);
+
+  usePollingWhenVisible({
+    enabled: true,
+    poll: fetchGithub,
+    intervalMs: 5 * 60 * 1000,
+  });
 
   // Persist checklist
   useEffect(() => {
@@ -320,7 +322,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto pr-4 pb-12 custom-scrollbar">
+      <main
+        className="flex-1 overflow-y-auto pr-4 pb-12 custom-scrollbar"
+        style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '1100px 900px' as any }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[minmax(200px,_auto)]">
 
           {/* Calendar Widget */}

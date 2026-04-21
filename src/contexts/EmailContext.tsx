@@ -3,6 +3,7 @@ import { Email } from '../types/email';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 
 interface EmailState {
   emails: Email[];
@@ -59,17 +60,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    refreshEmails();
-    // Auto-refresh every 2 minutes; skip when tab is hidden (mirrors Sidebar system-metrics pattern)
-    const poll = () => { if (!document.hidden) refreshEmails(); };
-    const interval = setInterval(poll, 2 * 60 * 1000);
-    document.addEventListener('visibilitychange', poll);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', poll);
-    };
-  }, [refreshEmails]);
+  usePollingWhenVisible({
+    enabled: true,
+    poll: refreshEmails,
+    intervalMs: 2 * 60 * 1000,
+  });
 
   // Tracks message IDs with an in-flight mark-read request — prevents racing toggles
   const pendingToggleRef = useRef<Set<string>>(new Set());

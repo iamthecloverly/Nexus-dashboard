@@ -12,6 +12,7 @@ export function YouTubeAudioPlayer({
   resumeEnabled,
   savedPositions,
   onSavePosition,
+  bottomOffsetPx = 24,
   onClose,
   onToggleVisible,
   onVolumeChange,
@@ -23,6 +24,7 @@ export function YouTubeAudioPlayer({
   resumeEnabled: boolean;
   savedPositions: Record<string, number>;
   onSavePosition: (videoId: string, seconds: number) => void;
+  bottomOffsetPx?: number;
   onClose: () => void;
   onToggleVisible: () => void;
   onVolumeChange: (v: number) => void;
@@ -271,7 +273,10 @@ export function YouTubeAudioPlayer({
       />
 
       {videoId && visible && (
-        <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl overflow-hidden shadow-2xl border border-white/[0.08]" style={{ background: '#0C0F1E' }}>
+        <div
+          className="fixed right-6 z-[200] w-72 rounded-2xl overflow-hidden shadow-2xl border border-white/[0.08]"
+          style={{ background: '#0C0F1E', bottom: bottomOffsetPx }}
+        >
           <div className="relative h-14 overflow-hidden flex-shrink-0">
             {thumb && <img src={thumb} width={320} height={56} className="absolute inset-0 w-full h-full object-cover scale-110 blur-md" alt="" />}
             <div className="absolute inset-0" style={{ background: 'rgba(5,8,18,0.8)' }} />
@@ -407,7 +412,8 @@ export function YouTubeAudioPlayer({
       {videoId && !visible && (
         <button
           onClick={onToggleVisible}
-          className="fixed bottom-6 right-6 z-[200] px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs text-white/80 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className="fixed right-6 z-[200] px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs text-white/80 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          style={{ bottom: bottomOffsetPx }}
           aria-label="Show player"
         >
           Show player

@@ -14,6 +14,7 @@ import { STORAGE_KEYS } from './constants/storageKeys';
 import { YouTubeAudioPlayer } from './components/youtube/YouTubeAudioPlayer';
 import { extractYouTubeVideoId } from './components/youtube/youtube';
 import { MusicPanel } from './components/youtube/MusicPanel';
+import { preloadYouTubeIFrameApi } from './components/youtube/useYouTubeIFrameApi';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -122,6 +123,7 @@ export default function App() {
                 if (ytVideoId) setMusicPlayerVisible(v => !v);
                 else setShowMusicInput(v => !v);
               }}
+              onPreloadMusic={() => preloadYouTubeIFrameApi()}
               musicActive={!!ytVideoId}
             />
 
@@ -132,6 +134,8 @@ export default function App() {
               resumeEnabled={resumeEnabled}
               savedPositions={ytPositions}
               onSavePosition={savePosition}
+              // Avoid overlapping MainHub's bottom-right FAB
+              bottomOffsetPx={currentView === 'MainHub' ? 96 : 24}
               onClose={handleYtClose}
               onToggleVisible={() => setMusicPlayerVisible(v => !v)}
               onVolumeChange={setYtVolume}

@@ -273,7 +273,10 @@ export default function Communications({ setCurrentView }: { setCurrentView: (vi
         <div className="flex-1 flex overflow-hidden relative">
           {/* Left: Email List */}
           <div className={`flex flex-col overflow-hidden transition-[width,flex] duration-300 ${detail ? 'w-80 flex-none border-r border-white/10' : 'flex-1'}`}>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative">
+            <div
+              className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative"
+              style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '900px 700px' as any }}
+            >
               {!gmailConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-4">
                   <span className="material-symbols-outlined text-4xl" aria-hidden="true">{serverError ? 'cloud_off' : 'mail'}</span>

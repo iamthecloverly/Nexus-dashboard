@@ -1,39 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 
 interface SidebarProps {
   currentView: string;
   setCurrentView: (view: string) => void;
   onOpenMusic: () => void;
+  onPreloadMusic?: () => void;
   musicActive: boolean;
 }
 
-export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musicActive }: SidebarProps) {
+export default function Sidebar({ currentView, setCurrentView, onOpenMusic, onPreloadMusic, musicActive }: SidebarProps) {
   const [cpuLoad, setCpuLoad] = useState(0);
   const [memUsed, setMemUsed] = useState(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      if (document.hidden) return; // skip when tab is not visible
-      try {
-        const res = await fetchWithTimeout('/api/system', { timeoutMs: 5_000 });
-        if (res.ok) {
-          const data = await res.json();
-          setCpuLoad(data.cpuLoad);
-          setMemUsed(data.memUsed);
-        }
-      } catch { /* ignore */ }
-    };
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, 5000);
-    // Refresh immediately when the user returns to the tab
-    document.addEventListener('visibilitychange', fetchMetrics);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', fetchMetrics);
-    };
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout('/api/system', { timeoutMs: 5_000 });
+      if (res.ok) {
+        const data = await res.json();
+        setCpuLoad(data.cpuLoad);
+        setMemUsed(data.memUsed);
+      }
+    } catch { /* ignore */ }
   }, []);
+
+  usePollingWhenVisible({
+    enabled: true,
+    poll: fetchMetrics,
+    intervalMs: 5000,
+  });
 
   const navItems = [
     { id: 'MainHub', icon: 'dashboard', label: 'Main Hub' },
@@ -114,6 +111,8 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
         {/* Music button */}
         <button
           onClick={onOpenMusic}
+          onMouseEnter={() => onPreloadMusic?.()}
+          onFocus={() => onPreloadMusic?.()}
           aria-label={musicActive ? 'Now playing — YouTube Music' : 'Open YouTube Music'}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={musicActive

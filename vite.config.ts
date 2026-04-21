@@ -8,7 +8,15 @@ export default defineConfig(({mode}) => {
   return {
     // Avoid permission issues when `node_modules/.vite` was created by a different user (e.g. via sudo).
     cacheDir: '.vite-cache',
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react({
+        babel: {
+          // Prevent noisy "[BABEL] deoptimised styling" logs for large prebundled deps in dev.
+          generatorOpts: { compact: true },
+        },
+      }),
+      tailwindcss(),
+    ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
