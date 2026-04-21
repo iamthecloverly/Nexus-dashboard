@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 interface SidebarProps {
   currentView: string;
@@ -15,17 +16,14 @@ export default function Sidebar({ currentView, setCurrentView, onOpenMusic, musi
   useEffect(() => {
     const fetchMetrics = async () => {
       if (document.hidden) return; // skip when tab is not visible
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5_000); // shorter: this is a fast local call
       try {
-        const res = await fetch('/api/system', { signal: controller.signal });
-        clearTimeout(timeoutId);
+        const res = await fetchWithTimeout('/api/system', { timeoutMs: 5_000 });
         if (res.ok) {
           const data = await res.json();
           setCpuLoad(data.cpuLoad);
           setMemUsed(data.memUsed);
         }
-      } catch { clearTimeout(timeoutId); }
+      } catch { /* ignore */ }
     };
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 5000);

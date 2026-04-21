@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Email } from '../types/email';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 interface EmailState {
   emails: Email[];
@@ -35,11 +36,8 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
   const refreshEmails = useCallback(async () => {
     setEmailsLoading(true);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
-      const res = await fetch('/api/gmail/messages', { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const res = await fetchWithTimeout('/api/gmail/messages', { timeoutMs: 15_000 });
       if (res.ok) {
         const data = await res.json();
         setEmails(data.emails ?? []);
@@ -53,7 +51,6 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         setServerError(true);
       }
     } catch (err: any) {
-      clearTimeout(timeoutId);
       // AbortError = our 15s timeout fired; treat same as network error
       setGmailConnected(false);
       setServerError(true);
