@@ -1,32 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Email } from '../types/email';
+import React, { useCallback, useRef, useState } from 'react';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
-
-interface EmailState {
-  emails: Email[];
-  gmailConnected: boolean;
-  emailsLoading: boolean;
-  /** true when a network/server error prevented the last fetch (distinct from "not authenticated") */
-  serverError: boolean;
-}
-
-interface EmailActions {
-  /** e is optional so all actions can be called programmatically without a fake MouseEvent */
-  toggleRead: (id: string, e?: React.MouseEvent) => void;
-  archiveEmail: (id: string, e?: React.MouseEvent) => void;
-  deleteEmail: (id: string, e?: React.MouseEvent) => void;
-  refreshEmails: () => void;
-}
-
-interface EmailContextValue {
-  state: EmailState;
-  actions: EmailActions;
-}
-
-const EmailContext = createContext<EmailContextValue | null>(null);
+import type { Email } from '../types/email';
+import { EmailContext } from './emailContext';
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast();
@@ -51,7 +29,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         // 5xx or unexpected — server is up but erroring; keep connected state, flag error
         setServerError(true);
       }
-    } catch (err: any) {
+    } catch {
       // AbortError = our 15s timeout fired; treat same as network error
       setGmailConnected(false);
       setServerError(true);
@@ -174,17 +152,12 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
   }, [showToast]);
 
   return (
-    <EmailContext value={{
+    <EmailContext.Provider value={{
       state: { emails, gmailConnected, emailsLoading, serverError },
       actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails },
     }}>
       {children}
-    </EmailContext>
+    </EmailContext.Provider>
   );
 }
 
-export function useEmailContext() {
-  const ctx = useContext(EmailContext);
-  if (!ctx) throw new Error('useEmailContext must be used within EmailProvider');
-  return ctx;
-}

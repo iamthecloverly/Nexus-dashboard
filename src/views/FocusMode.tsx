@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 
 import { Task } from '../types/task';
-import { useTaskContext } from '../contexts/TaskContext';
+import { useTaskContext } from '../contexts/taskContext';
 import { CalendarEvent } from '../types/calendar';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 

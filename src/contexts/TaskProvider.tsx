@@ -1,25 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Task } from '../types/task';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { Task } from '../types/task';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-
-interface TaskState {
-  tasks: Task[];
-}
-
-interface TaskActions {
-  toggleTask: (id: string) => void;
-  addTask: (task: Task) => void;
-  deleteTask: (id: string) => void;
-  updateTask: (id: string, changes: Partial<Task>) => void;
-  clearCompletedTasks: () => void;
-}
-
-interface TaskContextValue {
-  state: TaskState;
-  actions: TaskActions;
-}
-
-const TaskContext = createContext<TaskContextValue | null>(null);
+import { TaskContext } from './taskContext';
 
 const DEFAULT_TASKS: Task[] = [];
 
@@ -71,17 +53,12 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <TaskContext value={{
+    <TaskContext.Provider value={{
       state: { tasks },
       actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks },
     }}>
       {children}
-    </TaskContext>
+    </TaskContext.Provider>
   );
 }
 
-export function useTaskContext() {
-  const ctx = useContext(TaskContext);
-  if (!ctx) throw new Error('useTaskContext must be used within TaskProvider');
-  return ctx;
-}

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { parseISO, isBefore, isAfter } from 'date-fns';
 
 import { Task } from '../types/task';
-import { useTaskContext } from '../contexts/TaskContext';
-import { useEmailContext } from '../contexts/EmailContext';
+import { useTaskContext } from '../contexts/taskContext';
+import { useEmailContext } from '../contexts/emailContext';
 import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';

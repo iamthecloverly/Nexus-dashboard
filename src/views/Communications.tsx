@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
 import { Email } from '../types/email';
-import { useEmailContext } from '../contexts/EmailContext';
-import { useTaskContext } from '../contexts/TaskContext';
+import { useEmailContext } from '../contexts/emailContext';
+import { useTaskContext } from '../contexts/taskContext';
 import { useToast } from '../components/Toast';
 import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TaskSuggestion } from '../types/taskSuggestion';

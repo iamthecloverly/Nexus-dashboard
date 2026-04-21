@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useEmailContext } from '../contexts/EmailContext';
-import { useTaskContext } from '../contexts/TaskContext';
+import { useEmailContext } from '../contexts/emailContext';
+import { useTaskContext } from '../contexts/taskContext';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
