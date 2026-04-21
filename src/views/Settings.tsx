@@ -23,6 +23,9 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
   const [aiKeyDraft, setAiKeyDraft] = useState('');
   const [aiKeySaving, setAiKeySaving] = useState(false);
 
+  // Music
+  const [resumeEnabled, setResumeEnabled] = useState(() => (localStorage.getItem(STORAGE_KEYS.ytResumeEnabled) ?? '1') === '1');
+
   useEffect(() => {
     const fetchStatuses = async () => {
       const [googleRes, githubRes, discordRes, aiRes] = await Promise.allSettled([
@@ -79,10 +82,28 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
       STORAGE_KEYS.profileName,
       STORAGE_KEYS.onboardingDismissed,
       STORAGE_KEYS.ytVideoId,
+      STORAGE_KEYS.ytVolume,
+      STORAGE_KEYS.ytRecent,
+      STORAGE_KEYS.ytPositions,
+      STORAGE_KEYS.ytResumeEnabled,
       STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
+  };
+
+  const toggleResume = () => {
+    setResumeEnabled(v => {
+      const next = !v;
+      try { localStorage.setItem(STORAGE_KEYS.ytResumeEnabled, next ? '1' : '0'); } catch { /* quota */ }
+      showToast(next ? 'Music resume enabled' : 'Music resume disabled', 'info');
+      return next;
+    });
+  };
+
+  const clearMusicData = () => {
+    [STORAGE_KEYS.ytVideoId, STORAGE_KEYS.ytVolume, STORAGE_KEYS.ytRecent, STORAGE_KEYS.ytPositions].forEach(k => localStorage.removeItem(k));
+    showToast('Music data cleared', 'info');
   };
 
   const connectedServices = [
@@ -204,6 +225,38 @@ export default function Settings({ setCurrentView }: { setCurrentView: (view: st
               <p className="text-[10px] text-[#A1A1AA]">
                 Used to extract tasks from emails. Key is stored in an HTTP-only cookie, never sent to any third party. Get yours at <span className="text-primary">platform.openai.com</span>
               </p>
+            </div>
+          </section>
+
+          {/* Music */}
+          <section>
+            <h2 className="text-xs font-bold text-[#A1A1AA] uppercase tracking-widest mb-4">Music</h2>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">music_note</span>
+                <div className="flex-1">
+                  <p className="text-sm text-white font-medium">Resume playback position</p>
+                  <p className="text-[10px] text-[#A1A1AA] mt-0.5">When enabled, tracks resume from your last position.</p>
+                </div>
+                <button
+                  onClick={toggleResume}
+                  aria-label="Toggle resume playback position"
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                    resumeEnabled
+                      ? 'bg-primary/20 text-primary border-primary/30 hover:bg-primary/30'
+                      : 'bg-white/5 text-[#A1A1AA] border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  {resumeEnabled ? 'On' : 'Off'}
+                </button>
+              </div>
+
+              <button
+                onClick={clearMusicData}
+                className="w-full py-2 rounded-lg border border-white/10 text-sm font-medium text-[#A1A1AA] hover:bg-white/5 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Clear music history &amp; positions
+              </button>
             </div>
           </section>
 
