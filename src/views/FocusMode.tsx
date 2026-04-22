@@ -5,8 +5,9 @@ import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
 import { CalendarEvent } from '../types/calendar';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import type { SetViewFn } from '../config/navigation';
 
-export default function FocusMode({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask } } = useTaskContext();
   const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes
   const [isActive, setIsActive] = useState(false);

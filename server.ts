@@ -15,6 +15,7 @@ import { githubRouter } from './server/routes/github';
 import { discordRouter } from './server/routes/discord';
 import { aiRouter } from './server/routes/ai';
 import { systemRouter } from './server/routes/system';
+import { weatherRouter } from './server/routes/weather';
 
 const app = express();
 const PORT = 3000;
@@ -35,6 +36,7 @@ app.use('/api/gmail', gmailRouter);
 app.use('/api/github', githubRouter);
 app.use('/api/discord', discordRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api', weatherRouter);
 app.use('/api', systemRouter);
 
 async function startServer() {

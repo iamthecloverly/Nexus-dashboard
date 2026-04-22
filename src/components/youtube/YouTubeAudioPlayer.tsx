@@ -6,6 +6,11 @@ import { useYouTubeVideoMeta } from './useYouTubeVideoMeta';
 
 type PlayerStatus = 'idle' | 'loading_video' | 'ready' | 'autoplay_blocked' | 'playback_unavailable' | 'error';
 
+type RetryState = {
+  videoId: string;
+  attempts: number;
+};
+
 export function YouTubeAudioPlayer({
   videoId,
   visible,
@@ -38,6 +43,7 @@ export function YouTubeAudioPlayer({
   const playerRef = useRef<any>(null);
   const playerDivRef = useRef<HTMLDivElement>(null);
   const autoplayProbeRef = useRef<number | null>(null);
+  const retryRef = useRef<RetryState | null>(null);
 
   const [playerStatus, setPlayerStatus] = useState<PlayerStatus>('idle');
   const [playing, setPlaying] = useState(false);
@@ -62,6 +68,52 @@ export function YouTubeAudioPlayer({
     }
   }, []);
 
+  const resetRetry = useCallback((nextVideoId: string | null) => {
+    if (!nextVideoId) {
+      retryRef.current = null;
+      return;
+    }
+    retryRef.current = { videoId: nextVideoId, attempts: 0 };
+  }, []);
+
+  const maybeRetryPlayback = useCallback((reasonCode: number | undefined) => {
+    if (!videoId) return false;
+    const r = retryRef.current;
+    if (!r || r.videoId !== videoId) {
+      retryRef.current = { videoId, attempts: 0 };
+    }
+    const curr = retryRef.current!;
+    if (curr.attempts >= 1) return false;
+
+    // Code 5 ("HTML5 playback error") is often transient; retry once.
+    if (reasonCode === 5 || reasonCode === undefined) {
+      curr.attempts += 1;
+      setPlayerStatus('loading_video');
+      window.setTimeout(() => {
+        try {
+          const p = playerRef.current;
+          if (!p) return;
+          // Try a soft reload first.
+          p.stopVideo?.();
+          p.loadVideoById?.(videoId);
+          p.playVideo?.();
+          autoplayProbeRef.current = window.setTimeout(() => {
+            try {
+              const ps = playerRef.current?.getPlayerState?.();
+              if (ps !== 1 && ps !== 3) setPlayerStatus('autoplay_blocked');
+            } catch {
+              setPlayerStatus('autoplay_blocked');
+            }
+          }, 900);
+        } catch {
+          // If we fail to retry, we’ll fall through to the normal error path.
+        }
+      }, 350);
+      return true;
+    }
+    return false;
+  }, [videoId]);
+
   // Create / switch video when videoId changes (once API is ready)
   useEffect(() => {
     if (!videoId) {
@@ -73,6 +125,7 @@ export function YouTubeAudioPlayer({
       setPlayerStatus('idle');
       if (autoplayProbeRef.current) window.clearTimeout(autoplayProbeRef.current);
       autoplayProbeRef.current = null;
+      retryRef.current = null;
       return;
     }
     if (apiStatus === 'error') {
@@ -83,6 +136,7 @@ export function YouTubeAudioPlayer({
 
     let active = true;
     setPlayerStatus('loading_video');
+    resetRetry(videoId);
     if (autoplayProbeRef.current) window.clearTimeout(autoplayProbeRef.current);
     autoplayProbeRef.current = null;
 
@@ -173,6 +227,10 @@ export function YouTubeAudioPlayer({
                 showToast('This video cannot be embedded — try another link', 'error');
                 return;
               }
+
+              // Retry once for flaky HTML5/unknown errors before surfacing a red toast.
+              if (maybeRetryPlayback(code)) return;
+
               setPlayerStatus('error');
               showToast(ytErrorReason(code), 'error');
             },

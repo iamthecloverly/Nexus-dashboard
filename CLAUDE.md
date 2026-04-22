@@ -29,17 +29,22 @@ Browser → Express (port 3000 in code, proxied to 5173 by Vite)
 | File | Role |
 |------|------|
 | `server.ts` | All Express routes — OAuth, Calendar, Gmail, GitHub, Discord, AI extraction |
-| `src/App.tsx` | Root component: provider tree, YouTube audio player, view routing via `activeView` state |
+| `src/App.tsx` | Root component: `ToastProvider` → `SystemMetricsProvider` → viewport gate → YouTube audio player, view routing via `currentView` (`ViewId`), `AppShell` |
 | `src/views/MainHub.tsx` | Primary view: clock, calendar, tasks, triage inbox, GitHub notifications, checklist |
 | `src/views/Communications.tsx` | Gmail inbox list + compose + message detail |
 | `src/views/FocusMode.tsx` | Distraction-free current-event view |
 | `src/views/Integrations.tsx` | OAuth connect/disconnect UI for Google, GitHub, Discord |
-| `src/views/Settings.tsx` | Profile, clear data (wipes all localStorage keys + reloads) |
+| `src/views/Settings.tsx` | Profile, CPU/memory snapshot, clear data (wipes all localStorage keys + reloads) |
 | `src/contexts/EmailContext.tsx` | Email state + Gmail API sync (auto-polls every 2 min) |
 | `src/contexts/TaskContext.tsx` | Task CRUD persisted to localStorage with `isValidTask` guard |
 | `src/hooks/useCalendarEvents.ts` | Calendar fetch with 15s AbortController timeout |
 | `src/hooks/useAutoEmailTasks.ts` | Background hook: extracts tasks from new unread emails via AI |
-| `src/components/Sidebar.tsx` | Nav sidebar + system metrics (polls local `/api/system`) |
+| `src/components/layout/AppShell.tsx` | App shell: `--app-nav-width` / `--app-bottom-nav-height` from `desktopNav` prop (`useMediaQuery` lg in parent); scrollable main, bottom nav |
+| `src/components/layout/NavigationRail.tsx` | lg+ icon rail: workspace routes, music, settings (no system metrics — see Main Hub tile) |
+| `src/components/dashboard/SystemMetricsTile.tsx` | Main Hub tile: CPU/memory from `useSystemMetrics()` |
+| `src/components/layout/MobileBottomNav.tsx` | Bottom tab bar + More overflow on small screens |
+| `src/config/navigation.ts` | Shared nav items (`WORKSPACE_NAV`, mobile tabs), `ViewId`, rail/bottom-nav pixel constants |
+| `src/contexts/SystemMetricsProvider.tsx` | Single `/api/system` poll; exports `useSystemMetrics()` → `{ cpuLoad, memUsed, refresh }` |
 | `src/types/calendar.ts` | `CalendarEvent` interface |
 
 ### Auth model
@@ -48,9 +53,10 @@ Google tokens are stored server-side in an **HTTP-only cookie** (`google_tokens`
 
 ### State management
 
-No external state library. Two React Contexts:
+No external state library. Core React Contexts:
 - `EmailContext` — emails, connected status, serverError flag, toggleRead/archive/delete actions. All three action callbacks accept an optional `e?: React.MouseEvent` so they can be called without a synthetic event.
 - `TaskContext` — task list persisted to `localStorage`. Hydrated through an `isValidTask` type guard to reject corrupted entries.
+- `SystemMetricsProvider` — single shared `/api/system` poll (~5s when tab visible); `useSystemMetrics()` supplies Main Hub system tile and Settings.
 
 `ToastProvider` (in `src/components/Toast.tsx`) is a separate context for toast notifications; it wraps the entire app in `App.tsx`.
 

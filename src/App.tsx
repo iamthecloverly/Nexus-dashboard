@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
+import { AppShell } from './components/layout/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import { TaskProvider } from './contexts/TaskProvider';
 import { EmailProvider } from './contexts/EmailProvider';
 import MainHub from './views/MainHub';
@@ -15,7 +15,12 @@ import { YouTubeAudioPlayer } from './components/youtube/YouTubeAudioPlayer';
 import { extractYouTubeVideoId } from './components/youtube/youtube';
 import { MusicPanel } from './components/youtube/MusicPanel';
 import { preloadYouTubeIFrameApi } from './components/youtube/useYouTubeIFrameApi';
-import { useToast } from './components/Toast';
+import { MOBILE_BOTTOM_NAV_HEIGHT_PX, type ViewId } from './config/navigation';
+import { DesktopOnlyNotice } from './components/DesktopOnlyNotice';
+import { SystemMetricsProvider } from './contexts/SystemMetricsProvider';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import { useViewportDesktopGate } from './hooks/useViewportDesktopGate';
+import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -25,7 +30,9 @@ function AutoEmailTaskProcessor() {
 
 function AppContent() {
   const { showToast } = useToast();
-  const [currentView, setCurrentView] = useState('MainHub');
+  const isLg = useMediaQuery('(min-width: 1024px)');
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<ViewId>('MainHub');
   const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
@@ -93,6 +100,18 @@ function AppContent() {
     });
   }, []);
 
+  const ytBottomOffsetPx =
+    currentView === 'MainHub'
+      ? (isLg ? 96 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 96)
+      : (isLg ? 24 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 24);
+
+  const toggleMusicChrome = useCallback(() => {
+    if (ytVideoId) setMusicPlayerVisible(v => !v);
+    else setShowMusicInput(v => !v);
+  }, [ytVideoId]);
+
+  useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
+
   return (
     <>
       <TaskProvider>
@@ -104,7 +123,7 @@ function AppContent() {
           >
             Skip to content
           </a>
-          <div id="main-content" className="h-screen w-full bg-background-dark text-foreground overflow-hidden flex selection:bg-primary/30 selection:text-white font-sans relative">
+          <div id="main-content" className="h-screen w-full bg-background-dark text-foreground overflow-hidden flex flex-col selection:bg-primary/30 selection:text-white font-sans relative">
             {/* Ambient background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">
               {/* Sky halo — top-left */}
@@ -117,54 +136,79 @@ function AppContent() {
               <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\' opacity=\'1\'/%3E%3C/svg%3E")', backgroundSize: '256px 256px' }} />
             </div>
 
-            <Sidebar
+            <AppShell
+              desktopNav={isLg}
               currentView={currentView}
               setCurrentView={setCurrentView}
-              onOpenMusic={() => {
-                if (ytVideoId) setMusicPlayerVisible(v => !v);
-                else setShowMusicInput(v => !v);
-              }}
+              onOpenMusic={toggleMusicChrome}
               onPreloadMusic={() => preloadYouTubeIFrameApi()}
               musicActive={!!ytVideoId}
-            />
+            >
+              <YouTubeAudioPlayer
+                videoId={ytVideoId}
+                visible={musicPlayerVisible}
+                volume={ytVolume}
+                resumeEnabled={resumeEnabled}
+                savedPositions={ytPositions}
+                onSavePosition={savePosition}
+                bottomOffsetPx={ytBottomOffsetPx}
+                onClose={handleYtClose}
+                onToggleVisible={() => setMusicPlayerVisible(v => !v)}
+                onVolumeChange={setYtVolume}
+                onRequestLoad={handleYtRequestLoad}
+              />
 
-            <YouTubeAudioPlayer
-              videoId={ytVideoId}
-              visible={musicPlayerVisible}
-              volume={ytVolume}
-              resumeEnabled={resumeEnabled}
-              savedPositions={ytPositions}
-              onSavePosition={savePosition}
-              bottomOffsetPx={currentView === 'MainHub' ? 96 : 24}
-              onClose={handleYtClose}
-              onToggleVisible={() => setMusicPlayerVisible(v => !v)}
-              onVolumeChange={setYtVolume}
-              onRequestLoad={handleYtRequestLoad}
-            />
+              <MusicPanel
+                open={showMusicInput && !ytVideoId}
+                onClose={() => setShowMusicInput(false)}
+                onLoadVideoId={handleYtLoad}
+              />
 
-            <MusicPanel
-              open={showMusicInput && !ytVideoId}
-              onClose={() => setShowMusicInput(false)}
-              onLoadVideoId={handleYtLoad}
-            />
+              {currentView === 'MainHub' && <ErrorBoundary label="Main Hub"><MainHub setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'Communications' && <ErrorBoundary label="Communications"><Communications setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'Integrations' && <ErrorBoundary label="Integrations"><Integrations setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'Settings' && (
+                <ErrorBoundary label="Settings">
+                  <Settings
+                    setCurrentView={setCurrentView}
+                    resumeEnabled={resumeEnabled}
+                    onResumeEnabledChange={setResumeEnabled}
+                    onClearMusicSession={() => {
+                      setYtVideoId(null);
+                      localStorage.removeItem(STORAGE_KEYS.ytVideoId);
+                    }}
+                  />
+                </ErrorBoundary>
+              )}
+            </AppShell>
 
-            {currentView === 'MainHub' && <ErrorBoundary label="Main Hub"><MainHub setCurrentView={setCurrentView} /></ErrorBoundary>}
-            {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
-            {currentView === 'Communications' && <ErrorBoundary label="Communications"><Communications setCurrentView={setCurrentView} /></ErrorBoundary>}
-            {currentView === 'Integrations' && <ErrorBoundary label="Integrations"><Integrations setCurrentView={setCurrentView} /></ErrorBoundary>}
-            {currentView === 'Settings' && (
-              <ErrorBoundary label="Settings">
-                <Settings
-                  setCurrentView={setCurrentView}
-                  resumeEnabled={resumeEnabled}
-                  onResumeEnabledChange={setResumeEnabled}
-                  onClearMusicSession={() => {
-                    setYtVideoId(null);
-                    localStorage.removeItem(STORAGE_KEYS.ytVideoId);
-                  }}
-                />
-              </ErrorBoundary>
-            )}
+            <footer
+              className="fixed left-0 right-0 z-[120] flex items-center justify-center pointer-events-none"
+              style={{
+                bottom: 'calc(var(--app-bottom-nav-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem)',
+              }}
+              aria-label="Footer"
+            >
+              <div className="pointer-events-auto text-[11px] text-white/35">
+                Made with love ❤️ by{' '}
+                <a
+                  href="https://linkedin.com/in/thecloverly"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-white/55 hover:text-white/80 underline underline-offset-2 decoration-white/20 hover:decoration-white/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                >
+                  Sribalaji
+                </a>
+              </div>
+            </footer>
+
+            <CommandPalette
+              open={commandPaletteOpen}
+              onClose={() => setCommandPaletteOpen(false)}
+              setCurrentView={setCurrentView}
+              onToggleMusic={toggleMusicChrome}
+            />
           </div>
         </EmailProvider>
       </TaskProvider>
@@ -172,10 +216,20 @@ function AppContent() {
   );
 }
 
+function ViewportGate({ children }: { children: React.ReactNode }) {
+  const needsDesktop = useViewportDesktopGate();
+  if (needsDesktop) return <DesktopOnlyNotice />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <SystemMetricsProvider>
+        <ViewportGate>
+          <AppContent />
+        </ViewportGate>
+      </SystemMetricsProvider>
     </ToastProvider>
   );
 }

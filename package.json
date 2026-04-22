@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "clean:vite": "rm -rf .vite-cache",
     "lint": "tsc --noEmit",
     "start": "node server.ts"
   },
@@ -24,7 +25,6 @@
     "express-rate-limit": "^8.3.1",
     "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
-    "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "openai": "^6.32.0",
     "react": "^19.0.0",

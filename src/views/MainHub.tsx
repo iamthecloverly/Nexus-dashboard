@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { parseISO, isBefore, isAfter } from 'date-fns';
+import { parseISO, isBefore, isAfter, differenceInMinutes } from 'date-fns';
 
 import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
@@ -11,6 +11,9 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
+import { SystemMetricsTile } from '../components/dashboard/SystemMetricsTile';
+import { DashboardDigestCard } from '../components/dashboard/DashboardDigestCard';
+import type { SetViewFn } from '../config/navigation';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -81,7 +84,7 @@ function githubTypeIcon(type: string): string {
   return 'notifications';
 }
 
-export default function MainHub({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const fmtTime = useMemo(() => new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
     minute: '2-digit',
@@ -117,9 +120,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   const [githubNotifs, setGithubNotifs] = useState<GithubNotification[]>([]);
   const [githubConnected, setGithubConnected] = useState(false);
 
+  const [discordWebhookConfigured, setDiscordWebhookConfigured] = useState(false);
+
   // Onboarding banner
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(STORAGE_KEYS.onboardingDismissed));
-  
 
   // Calendar context menu & full-screen schedule
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
@@ -150,6 +154,32 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
     return { unreadEmails: unread, unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
   }, [emails]);
 
+  /** Next calendar line for digest (upcoming / now / all-day). */
+  const digestNextEventSnippet = useMemo(() => {
+    if (!isCalendarConnected || calendarError || events.length === 0) return null;
+    const now = currentTime;
+    const sorted = [...events].sort((a, b) => {
+      const as = a.start.dateTime ? parseISO(a.start.dateTime) : parseISO(a.start.date ?? '');
+      const bs = b.start.dateTime ? parseISO(b.start.dateTime) : parseISO(b.start.date ?? '');
+      return as.getTime() - bs.getTime();
+    });
+    for (const ev of sorted) {
+      const allDay = !ev.start.dateTime;
+      const start = ev.start.dateTime ? parseISO(ev.start.dateTime) : parseISO(ev.start.date ?? '');
+      const end = ev.end.dateTime ? parseISO(ev.end.dateTime) : parseISO(ev.end.date ?? '');
+      if (!isAfter(end, now)) continue;
+      const title = ((ev.summary || '').trim()) || 'Busy';
+      if (allDay) return `${title} · All day`;
+      if (isBefore(start, now) && isAfter(end, now)) return `${title} · Now`;
+      if (!isBefore(start, now)) {
+        const mins = differenceInMinutes(start, now);
+        if (mins >= 0 && mins < 90) return `${title} · in ${mins} min`;
+        return `${title} · ${fmtTime.format(start)}`;
+      }
+    }
+    return null;
+  }, [events, currentTime, isCalendarConnected, calendarError, fmtTime]);
+
   // currentTime used only for event isCurrent/isPast — 10s is sufficient precision
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10_000);
@@ -173,6 +203,22 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
   usePollingWhenVisible({
     enabled: true,
     poll: fetchGithub,
+    intervalMs: 5 * 60 * 1000,
+  });
+
+  const fetchDiscordStatus = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout('/api/discord/status', { timeoutMs: 15_000 });
+      if (res.ok) {
+        const data = await res.json() as { connected?: boolean };
+        setDiscordWebhookConfigured(!!data.connected);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  usePollingWhenVisible({
+    enabled: true,
+    poll: fetchDiscordStatus,
     intervalMs: 5 * 60 * 1000,
   });
 
@@ -328,6 +374,19 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       >
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[minmax(200px,_auto)]">
 
+          <DashboardDigestCard
+            setCurrentView={setCurrentView}
+            gmailConnected={gmailConnected}
+            gmailServerError={gmailServerError}
+            unreadCount={unreadCount}
+            githubConnected={githubConnected}
+            githubUnreadCount={githubNotifs.length}
+            discordWebhookConfigured={discordWebhookConfigured}
+            calendarConnected={isCalendarConnected && !calendarError}
+            nextEventSnippet={digestNextEventSnippet}
+            remainingTasks={remainingTasks}
+          />
+
           {/* Calendar Widget */}
           <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-8 flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/30 to-transparent pointer-events-none"></div>
@@ -430,8 +489,11 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
             </div>
           </div>
 
+          {/* System — this machine (shared /api/system poll) */}
+          <SystemMetricsTile />
+
           {/* Tasks */}
-          <div className="glass-panel col-span-1 row-span-2 p-7 flex flex-col relative overflow-hidden">
+          <div id="main-tasks-panel" className="glass-panel col-span-1 row-span-2 p-7 flex flex-col relative overflow-hidden scroll-mt-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/70 via-green-400/20 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-8">
               <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
@@ -693,7 +755,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: (view: str
       <button
         onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
         aria-label="Add task"
-        className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-background-dark rounded-2xl flex items-center justify-center shadow-[0_12px_36px_rgba(56,189,248,0.38)] hover:shadow-[0_18px_46px_rgba(56,189,248,0.5)] transition-shadow z-50 overflow-hidden group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground"
+        className="fixed right-10 w-16 h-16 bg-primary text-background-dark rounded-2xl flex items-center justify-center shadow-[0_12px_36px_rgba(56,189,248,0.38)] hover:shadow-[0_18px_46px_rgba(56,189,248,0.5)] transition-shadow z-50 overflow-hidden group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground bottom-10 max-lg:bottom-[calc(var(--app-bottom-nav-height,0px)+env(safe-area-inset-bottom,0px)+2.5rem)]"
       >
         <span className="material-symbols-outlined !text-[32px] !font-bold relative z-10" aria-hidden="true">add</span>
         <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" aria-hidden="true"></div>

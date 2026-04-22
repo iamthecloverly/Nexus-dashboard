@@ -11,6 +11,5 @@ systemRouter.get('/system', (_req, res) => {
   res.json({
     cpuLoad: parseFloat(Math.min((loadAvg[0] / cpuCount) * 100, 100).toFixed(1)),
     memUsed: parseFloat(((1 - freeMem / totalMem) * 100).toFixed(1)),
-    uptime: Math.floor(os.uptime()),
   });
 });

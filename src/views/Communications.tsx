@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TaskSuggestion } from '../types/taskSuggestion';
 import { csrfHeaders } from '../lib/csrf';
+import type { SetViewFn } from '../config/navigation';
 
 interface ComposeState {
   to: string;
@@ -31,7 +32,7 @@ interface EmailDetail {
   loading: boolean;
 }
 
-export default function Communications({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+export default function Communications({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const { state: { emails, gmailConnected, emailsLoading, serverError }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();

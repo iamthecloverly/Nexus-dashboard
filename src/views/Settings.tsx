@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { SystemMetricsDisplay } from '../components/layout/SystemMetricsDisplay';
 import { useToast } from '../components/Toast';
+import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import type { SetViewFn } from '../config/navigation';
 
 interface ConnectionStatus {
   google: boolean;
@@ -15,12 +18,13 @@ export default function Settings({
   onResumeEnabledChange,
   onClearMusicSession,
 }: {
-  setCurrentView: (view: string) => void;
+  setCurrentView: SetViewFn;
   resumeEnabled: boolean;
   onResumeEnabledChange: (next: boolean) => void;
   onClearMusicSession: () => void;
 }) {
   const { showToast } = useToast();
+  const { cpuLoad, memUsed } = useSystemMetrics();
   const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -95,6 +99,7 @@ export default function Settings({
       STORAGE_KEYS.ytPositions,
       STORAGE_KEYS.ytResumeEnabled,
       STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
+      STORAGE_KEYS.weatherCoords,
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
@@ -169,6 +174,15 @@ export default function Settings({
                 </div>
               )}
             </div>
+          </section>
+
+          {/* Local system snapshot (same `/api/system` poll as Main Hub tile) */}
+          <section>
+            <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">System</h2>
+            <div className="p-4 rounded-lg bg-white/5 border border-white/5">
+              <SystemMetricsDisplay cpuLoad={cpuLoad} memUsed={memUsed} />
+            </div>
+            <p className="text-[10px] text-text-muted mt-2">Live stats from this machine via the app server (one shared poll).</p>
           </section>
 
           {/* Connected accounts */}

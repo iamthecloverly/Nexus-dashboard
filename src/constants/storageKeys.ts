@@ -10,5 +10,12 @@ export const STORAGE_KEYS = {
   ytPositions: 'dashboard_yt_positions',
   ytResumeEnabled: 'dashboard_yt_resume_enabled',
   autoProcessedEmailIds: 'auto_processed_email_ids',
+  /** JSON `{ "lat": number, "lon": number }` for Open-Meteo `/api/weather` */
+  weatherCoords: 'dashboard_weather_coords',
+} as const;
+
+/** sessionStorage keys (tab-scoped); not cleared by Settings → Clear All Data */
+export const SESSION_KEYS = {
+  viewportDesktopOverride: 'dashboard_viewport_desktop_override',
 } as const;
 

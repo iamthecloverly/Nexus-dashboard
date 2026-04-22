@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
+import type { SetViewFn } from '../config/navigation';
 
 interface IntegrationStatus {
   google: boolean;
@@ -8,7 +9,7 @@ interface IntegrationStatus {
   discord: boolean;
 }
 
-export default function Integrations({ setCurrentView }: { setCurrentView: (view: string) => void }) {
+export default function Integrations({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const { showToast } = useToast();
   const [status, setStatus] = useState<IntegrationStatus>({ google: false, github: false, discord: false });
   const [isLoading, setIsLoading] = useState(true);
