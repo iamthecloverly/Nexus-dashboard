@@ -4,10 +4,21 @@ import { google } from 'googleapis';
 import { COOKIE_OPTS } from '../config.ts';
 import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
+import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
+
+// Cache the inbox list for 60 s.  Mutations (mark-read, archive, trash, send)
+// call gmailCacheBust() so the next poll always sees fresh data.
+const GMAIL_TTL_MS = 60_000;
 
 export const gmailRouter = express.Router();
 
 const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
+
+/** Derive the cache key for a given google_tokens cookie value. */
+function gmailKey(tokensCookie: string) {
+  const tokens = parseJsonCookie(tokensCookie);
+  return tokenKey(tokens?.refresh_token ?? tokensCookie, 'gmail:messages');
+}
 
 gmailRouter.get('/messages', async (req, res) => {
   const tokensCookie = getCookie(req, 'google_tokens');
@@ -16,70 +27,77 @@ gmailRouter.get('/messages', async (req, res) => {
   try {
     const tokens = parseJsonCookie(tokensCookie);
     if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
 
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const cacheKey = gmailKey(tokensCookie);
 
-    const listRes = await gmail.users.messages.list({
-      userId: 'me',
-      labelIds: ['INBOX'],
-      maxResults: 20,
-    });
-
-    const messages = listRes.data.messages || [];
-
-    const emails = await Promise.all(messages.map(async (msg) => {
-      const detail = await gmail.users.messages.get({
-        userId: 'me',
-        id: msg.id!,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
+    const result = await cacheGet(cacheKey, GMAIL_TTL_MS, async () => {
+      const oauth2Client = getOAuth2Client(req);
+      oauth2Client.setCredentials(tokens);
+      oauth2Client.once('tokens', (newTokens) => {
+        setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
       });
 
-      const headers = detail.data.payload?.headers || [];
-      const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
-      const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-      const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // Parse "Name <email>" or just "email"
-      const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
-      const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
-      const senderEmail = nameMatch?.[2] ?? fromHeader;
-      const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        labelIds: ['INBOX'],
+        maxResults: 20,
+      });
 
-      const labelIds = detail.data.labelIds ?? [];
-      const isUnread = labelIds.includes('UNREAD');
-      const isUrgent = labelIds.includes('STARRED');
+      const messages = listRes.data.messages || [];
 
-      const msgDate = new Date(dateHeader);
-      const now = new Date();
-      const isToday = msgDate.toDateString() === now.toDateString();
-      const timeDisplay = isNaN(msgDate.getTime())
-        ? ''
-        : isToday
-          ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const emails = await Promise.all(messages.map(async (msg) => {
+        const detail = await gmail.users.messages.get({
+          userId: 'me',
+          id: msg.id!,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        });
 
-      return {
-        id: msg.id!,
-        sender: senderName,
-        senderEmail,
-        initials,
-        time: timeDisplay,
-        subject,
-        preview: detail.data.snippet ?? '',
-        unread: isUnread,
-        urgent: isUrgent,
-        archived: false,
-        deleted: false,
-      };
-    }));
+        const headers = detail.data.payload?.headers || [];
+        const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
+        const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
+        const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
 
-    res.json({ emails });
+        // Parse "Name <email>" or just "email"
+        const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
+        const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
+        const senderEmail = nameMatch?.[2] ?? fromHeader;
+        const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+
+        const labelIds = detail.data.labelIds ?? [];
+        const isUnread = labelIds.includes('UNREAD');
+        const isUrgent = labelIds.includes('STARRED');
+
+        const msgDate = new Date(dateHeader);
+        const now = new Date();
+        const isToday = msgDate.toDateString() === now.toDateString();
+        const timeDisplay = isNaN(msgDate.getTime())
+          ? ''
+          : isToday
+            ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+        return {
+          id: msg.id!,
+          sender: senderName,
+          senderEmail,
+          initials,
+          time: timeDisplay,
+          subject,
+          preview: detail.data.snippet ?? '',
+          unread: isUnread,
+          urgent: isUrgent,
+          archived: false,
+          deleted: false,
+        };
+      }));
+
+      return { emails };
+    });
+
+    res.json(result);
   } catch (error: any) {
     console.error('Error fetching gmail messages:', error);
     const status = error?.response?.status ?? error?.code;
@@ -117,6 +135,7 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
         : { addLabelIds: ['UNREAD'] },     // marking as unread
     });
 
+    cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
   } catch (error: any) {
     const status = error?.response?.status ?? error?.code;
@@ -147,6 +166,7 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
       id: req.params.id,
       requestBody: { removeLabelIds: ['INBOX'] },
     });
+    cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
   } catch (error: any) {
     const status = error?.response?.status ?? error?.code;
@@ -176,6 +196,7 @@ gmailRouter.post('/messages/:id/trash', async (req, res) => {
       userId: 'me',
       id: req.params.id,
     });
+    cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
   } catch (error: any) {
     const status = error?.response?.status ?? error?.code;
@@ -286,6 +307,7 @@ gmailRouter.post('/send', async (req, res) => {
       requestBody: { raw: encoded },
     });
 
+    cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
   } catch (error) {
     console.error('Error sending email:', error);

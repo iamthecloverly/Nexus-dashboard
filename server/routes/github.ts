@@ -2,6 +2,11 @@ import express from 'express';
 
 import { COOKIE_OPTS } from '../config.ts';
 import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
+import { cacheGet, tokenKey } from '../lib/apiCache.ts';
+
+// Cache GitHub notifications for 90 s — client already polls every 5 min,
+// this just prevents duplicate calls on page load / tab focus.
+const GITHUB_TTL_MS = 90_000;
 
 export const githubRouter = express.Router();
 
@@ -30,31 +35,39 @@ githubRouter.get('/notifications', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const response = await fetch('https://api.github.com/notifications?per_page=15&all=false', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'PersonalDashboard/1.0',
-      },
-    });
-    if (response.status === 401) return res.status(401).json({ error: 'Invalid GitHub token' });
-    if (!response.ok) return res.status(response.status).json({ error: 'GitHub API error' });
+    const cacheKey = tokenKey(token, 'github:notifications');
 
-    const raw = await response.json() as any[];
-    res.json({
-      notifications: raw.map(n => ({
-        id: n.id as string,
-        title: n.subject?.title as string,
-        type: n.subject?.type as string,
-        repo: n.repository?.full_name as string,
-        reason: n.reason as string,
-        updatedAt: n.updated_at as string,
-        url: (n.subject?.url as string | undefined)
-          ?.replace('https://api.github.com/repos/', 'https://github.com/')
-          .replace('/pulls/', '/pull/'),
-      })),
+    const result = await cacheGet(cacheKey, GITHUB_TTL_MS, async () => {
+      const response = await fetch('https://api.github.com/notifications?per_page=15&all=false', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'PersonalDashboard/1.0',
+        },
+      });
+      if (response.status === 401) throw Object.assign(new Error('Invalid GitHub token'), { status: 401 });
+      if (!response.ok) throw Object.assign(new Error('GitHub API error'), { status: response.status });
+
+      const raw = await response.json() as any[];
+      return {
+        notifications: raw.map(n => ({
+          id: n.id as string,
+          title: n.subject?.title as string,
+          type: n.subject?.type as string,
+          repo: n.repository?.full_name as string,
+          reason: n.reason as string,
+          updatedAt: n.updated_at as string,
+          url: (n.subject?.url as string | undefined)
+            ?.replace('https://api.github.com/repos/', 'https://github.com/')
+            .replace('/pulls/', '/pull/'),
+        })),
+      };
     });
-  } catch (error) {
+
+    res.json(result);
+  } catch (error: any) {
+    if (error?.status === 401) return res.status(401).json({ error: 'Invalid GitHub token' });
+    if (error?.status) return res.status(error.status).json({ error: 'GitHub API error' });
     console.error('GitHub API error:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }

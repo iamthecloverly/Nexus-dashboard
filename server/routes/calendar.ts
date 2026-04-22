@@ -4,6 +4,11 @@ import { google } from 'googleapis';
 import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
 import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
+import { cacheGet, tokenKey } from '../lib/apiCache.ts';
+
+// Cache calendar events for 45 s — short enough to feel live, long enough to
+// avoid hammering the N+1 Google API calls on every page load / refresh.
+const CALENDAR_TTL_MS = 45_000;
 
 export const calendarRouter = express.Router();
 
@@ -14,59 +19,67 @@ calendarRouter.get('/events', async (req, res) => {
   try {
     const tokens = parseJsonCookie(tokensCookie);
     if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    // Use refresh_token as the stable identity key (doesn't rotate on refresh).
+    const cacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:events');
 
-    // Get events for today using local start/end-of-day converted to UTC ISO strings.
-    const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-    const timeMin = startOfDay.toISOString();
-    const timeMax = endOfDay.toISOString();
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // Fetch all accessible calendars, then query each in parallel
-    const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-    const calendarIds = (calListRes.data.items ?? []).map(c => c.id!).filter(Boolean);
-    if (!calendarIds.length) calendarIds.push('primary');
-
-    const eventArrays = await Promise.all(
-      calendarIds.map(calId =>
-        calendar.events.list({
-          calendarId: calId,
-          timeMin,
-          timeMax,
-          timeZone,
-          maxResults: 50,
-          singleEvents: true,
-          orderBy: 'startTime',
-        }).then(r => r.data.items ?? []).catch(() => [])
-      )
-    );
-
-    // Flatten, deduplicate by iCalUID, sort by start time
-    const seen = new Set<string>();
-    const allEvents = eventArrays.flat()
-      .filter(e => {
-        const key = e.iCalUID ?? e.id;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => {
-        const aTime = a.start?.dateTime ?? a.start?.date ?? '';
-        const bTime = b.start?.dateTime ?? b.start?.date ?? '';
-        return aTime.localeCompare(bTime);
+    const result = await cacheGet(cacheKey, CALENDAR_TTL_MS, async () => {
+      const oauth2Client = getOAuth2Client(req);
+      oauth2Client.setCredentials(tokens);
+      oauth2Client.once('tokens', (newTokens) => {
+        setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
       });
 
-    res.json({ events: allEvents });
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+      // Get events for today using local start/end-of-day converted to UTC ISO strings.
+      const now = new Date();
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      const timeMin = startOfDay.toISOString();
+      const timeMax = endOfDay.toISOString();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      // Fetch all accessible calendars, then query each in parallel
+      const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
+      const calendarIds = (calListRes.data.items ?? []).map(c => c.id!).filter(Boolean);
+      if (!calendarIds.length) calendarIds.push('primary');
+
+      const eventArrays = await Promise.all(
+        calendarIds.map(calId =>
+          calendar.events.list({
+            calendarId: calId,
+            timeMin,
+            timeMax,
+            timeZone,
+            maxResults: 50,
+            singleEvents: true,
+            orderBy: 'startTime',
+          }).then(r => r.data.items ?? []).catch(() => [])
+        )
+      );
+
+      // Flatten, deduplicate by iCalUID, sort by start time
+      const seen = new Set<string>();
+      const allEvents = eventArrays.flat()
+        .filter(e => {
+          const key = e.iCalUID ?? e.id;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => {
+          const aTime = a.start?.dateTime ?? a.start?.date ?? '';
+          const bTime = b.start?.dateTime ?? b.start?.date ?? '';
+          return aTime.localeCompare(bTime);
+        });
+
+      return { events: allEvents };
+    });
+
+    res.json(result);
   } catch (error: any) {
     const status = error?.response?.status ?? error?.code;
     const causeMsg: string = error?.cause?.message ?? error?.message ?? '';
