@@ -104,7 +104,7 @@ export function DashboardDigestCard({
 
   return (
     <section
-      className="glass-panel col-span-1 md:col-span-3 lg:col-span-4 p-5 flex flex-col gap-4 relative overflow-hidden min-h-0"
+      className="glass-panel col-span-full p-5 flex flex-col gap-4 relative overflow-hidden min-h-0"
       aria-label="Dashboard digest"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/70 via-primary/40 to-violet-400/40" />
