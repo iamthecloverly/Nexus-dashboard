@@ -1,9 +1,9 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config';
-import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies';
-import { getOAuth2Client } from '../lib/googleOAuth';
+import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
+import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { getOAuth2Client } from '../lib/googleOAuth.ts';
 
 export const calendarRouter = express.Router();
 

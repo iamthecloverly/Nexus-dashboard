@@ -4,9 +4,9 @@ import { randomUUID } from 'crypto';
 import { google } from 'googleapis';
 import OpenAI from 'openai';
 
-import { COOKIE_OPTS } from '../config';
-import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies';
-import { getOAuth2Client } from '../lib/googleOAuth';
+import { COOKIE_OPTS } from '../config.ts';
+import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { getOAuth2Client } from '../lib/googleOAuth.ts';
 
 export const aiRouter = express.Router();
 

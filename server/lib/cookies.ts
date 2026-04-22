@@ -1,7 +1,7 @@
 import type express from 'express';
 import type { CookieOptions } from 'express';
 
-import { COOKIE_OPTS } from '../config';
+import { COOKIE_OPTS } from '../config.ts';
 
 export function getCookie(req: express.Request, name: string): string | undefined {
   return (req.signedCookies?.[name] as string | undefined) ?? (req.cookies?.[name] as string | undefined);

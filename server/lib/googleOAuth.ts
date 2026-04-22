@@ -1,7 +1,7 @@
 import type express from 'express';
 import { google } from 'googleapis';
 
-import { getBaseUrl } from '../config';
+import { getBaseUrl } from '../config.ts';
 
 export function getOAuth2Client(req: express.Request) {
   const baseUrl = getBaseUrl(req);

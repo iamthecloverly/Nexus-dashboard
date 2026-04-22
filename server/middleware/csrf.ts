@@ -1,6 +1,6 @@
 import type express from 'express';
 
-import { CSRF_COOKIE, CSRF_HEADER, ensureCsrfCookie, getBaseUrl } from '../config';
+import { CSRF_COOKIE, CSRF_HEADER, ensureCsrfCookie, getBaseUrl } from '../config.ts';
 
 function originFromUrlish(value: string | undefined): string | null {
   if (!value) return null;

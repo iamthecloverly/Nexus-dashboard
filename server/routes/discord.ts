@@ -1,7 +1,7 @@
 import express from 'express';
 
-import { COOKIE_OPTS } from '../config';
-import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies';
+import { COOKIE_OPTS } from '../config.ts';
+import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
 
 export const discordRouter = express.Router();
 
