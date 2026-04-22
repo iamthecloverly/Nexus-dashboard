@@ -184,19 +184,20 @@ function AppContent() {
             </AppShell>
 
             <footer
-              className="fixed left-0 right-0 z-[120] flex items-center justify-center pointer-events-none"
+              className="hidden lg:flex fixed right-0 z-[40] items-center justify-center pointer-events-none"
               style={{
-                bottom: 'calc(var(--app-bottom-nav-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem)',
+                left: 'calc(var(--app-nav-width, 0px) + 0.75rem)',
+                bottom: '1rem',
               }}
               aria-label="Footer"
             >
-              <div className="pointer-events-auto text-[11px] text-white/35">
+              <div className="pointer-events-auto text-[11px] text-white/30">
                 Made with love ❤️ by{' '}
                 <a
                   href="https://linkedin.com/in/thecloverly"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-white/55 hover:text-white/80 underline underline-offset-2 decoration-white/20 hover:decoration-white/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                  className="text-white/55 hover:text-white/80 underline underline-offset-2 decoration-white/15 hover:decoration-white/35 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                 >
                   Sribalaji
                 </a>
