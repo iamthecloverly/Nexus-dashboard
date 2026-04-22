@@ -8,16 +8,6 @@ import path from 'path';
 import { attachCsrf } from './server/middleware/csrf.ts';
 import { isProduction, SESSION_SECRET } from './server/config.ts';
 
-<<<<<<< Updated upstream
-import { authRouter } from './server/routes/auth';
-import { calendarRouter } from './server/routes/calendar';
-import { gmailRouter } from './server/routes/gmail';
-import { githubRouter } from './server/routes/github';
-import { discordRouter } from './server/routes/discord';
-import { aiRouter } from './server/routes/ai';
-import { systemRouter } from './server/routes/system';
-import { weatherRouter } from './server/routes/weather';
-=======
 import { authRouter } from './server/routes/auth.ts';
 import { calendarRouter } from './server/routes/calendar.ts';
 import { gmailRouter } from './server/routes/gmail.ts';
@@ -25,7 +15,7 @@ import { githubRouter } from './server/routes/github.ts';
 import { discordRouter } from './server/routes/discord.ts';
 import { aiRouter } from './server/routes/ai.ts';
 import { systemRouter } from './server/routes/system.ts';
->>>>>>> Stashed changes
+import { weatherRouter } from './server/routes/weather.ts';
 
 const app = express();
 const PORT = 3001;
