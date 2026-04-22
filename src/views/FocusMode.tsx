@@ -203,7 +203,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
       <header className="flex-none px-8 py-6 flex justify-between items-center z-50">
         <button
           onClick={() => setCurrentView('MainHub')}
@@ -238,7 +238,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         </div>
       </header>
 
-      <main className="flex-1 flex gap-6 px-8 pb-8 overflow-hidden max-w-[1800px] mx-auto w-full">
+      <main className="flex-1 min-h-0 flex gap-6 px-8 pb-8 overflow-hidden max-w-[1800px] mx-auto w-full">
         {/* Left Column: Timeline */}
         <section className="w-3/5 h-full flex flex-col relative glass-panel rounded-xl overflow-hidden flex-none">
           <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-background-dark/85 to-transparent z-20 pointer-events-none rounded-t-xl"></div>

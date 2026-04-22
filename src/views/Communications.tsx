@@ -202,8 +202,8 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
   }, [setCurrentView, archiveEmail, showToast]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 p-8">
-      <div className="glass-panel w-full max-w-[1200px] h-full mx-auto flex flex-col rounded-xl relative overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 p-8">
+      <div className="glass-panel w-full max-w-[1200px] flex-1 min-h-0 mx-auto flex flex-col rounded-xl relative overflow-hidden">
         {/* Header */}
         <div className="flex flex-col border-b border-white/10 shrink-0 bg-background-elevated/55">
           <div className="flex items-center justify-between px-6 pt-5 pb-4">
@@ -270,7 +270,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
         </div>
 
         {/* Email List + Detail Split */}
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 min-h-0 flex overflow-hidden relative">
           {/* Left: Email List */}
           <div className={`flex flex-col overflow-hidden transition-[width,flex] duration-300 ${detail ? 'w-80 flex-none border-r border-white/10' : 'flex-1'}`}>
             <div
