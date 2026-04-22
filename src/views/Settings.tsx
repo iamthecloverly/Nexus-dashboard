@@ -89,8 +89,6 @@ export default function Settings({
   const clearAllData = () => {
     [
       STORAGE_KEYS.tasks,
-      STORAGE_KEYS.checklist,
-      STORAGE_KEYS.checklistTitle,
       STORAGE_KEYS.profileName,
       STORAGE_KEYS.onboardingDismissed,
       STORAGE_KEYS.ytVideoId,

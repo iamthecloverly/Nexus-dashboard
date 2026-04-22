@@ -50,21 +50,6 @@ function ClockDisplay() {
   );
 }
 
-interface ChecklistItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-function isValidChecklistItem(v: unknown): v is ChecklistItem {
-  return (
-    typeof v === 'object' && v !== null &&
-    typeof (v as ChecklistItem).id === 'string' &&
-    typeof (v as ChecklistItem).text === 'string' &&
-    typeof (v as ChecklistItem).completed === 'boolean'
-  );
-}
-
 interface GithubNotification {
   id: string;
   title: string;
@@ -74,8 +59,6 @@ interface GithubNotification {
   updatedAt: string;
   url?: string;
 }
-
-const DEFAULT_CHECKLIST_TITLE = 'My Checklist';
 
 function githubTypeIcon(type: string): string {
   if (type === 'PullRequest') return 'merge';
@@ -95,26 +78,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
   const { showToast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
-
-  // Checklist
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.checklist);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed.filter(isValidChecklistItem) : [];
-    } catch { return []; }
-  });
-  const [checklistTitle, setChecklistTitle] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEYS.checklistTitle) ?? DEFAULT_CHECKLIST_TITLE; }
-    catch { return DEFAULT_CHECKLIST_TITLE; }
-  });
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const [newItemText, setNewItemText] = useState('');
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const newItemRef = useRef<HTMLInputElement>(null);
-
 
   // GitHub
   const [githubNotifs, setGithubNotifs] = useState<GithubNotification[]>([]);
@@ -221,37 +184,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
     poll: fetchDiscordStatus,
     intervalMs: 5 * 60 * 1000,
   });
-
-  // Persist checklist
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEYS.checklist, JSON.stringify(checklist)); } catch { /* quota exceeded */ }
-  }, [checklist]);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEYS.checklistTitle, checklistTitle); } catch { /* quota exceeded */ }
-  }, [checklistTitle]);
-
-  const toggleChecklistItem = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setChecklist(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
-  };
-
-  const deleteChecklistItem = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setChecklist(prev => prev.filter(item => item.id !== id));
-  };
-
-  const addChecklistItem = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && newItemText.trim()) {
-      setChecklist(prev => [...prev, { id: crypto.randomUUID(), text: newItemText.trim(), completed: false }]);
-      setNewItemText('');
-    }
-  };
-
-  const commitTitle = () => {
-    if (titleDraft.trim()) setChecklistTitle(titleDraft.trim());
-    setIsEditingTitle(false);
-  };
 
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && quickAddTitle.trim()) {
@@ -641,72 +573,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
             </div>
             <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-colors duration-700" aria-hidden="true"></div>
           </button>
-
-          {/* Dynamic Checklist */}
-          <div className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/checklist overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-400/70 via-violet-400/20 to-transparent pointer-events-none"></div>
-            <div className="flex justify-between items-start mb-3">
-              {isEditingTitle ? (
-                <input
-                  ref={titleInputRef}
-                  aria-label="Checklist title"
-                  className="bg-transparent border-b border-primary/50 text-foreground font-heading text-lg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 w-full mr-2"
-                  value={titleDraft}
-                  onChange={e => setTitleDraft(e.target.value)}
-                  onBlur={commitTitle}
-                  onKeyDown={e => { if (e.key === 'Enter') commitTitle(); if (e.key === 'Escape') setIsEditingTitle(false); }}
-                />
-              ) : (
-                <h2 className="font-heading text-lg text-foreground">{checklistTitle}</h2>
-              )}
-              <button
-                onClick={() => { setTitleDraft(checklistTitle); setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
-                aria-label="Edit checklist title"
-                className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-foreground hover:scale-110 transition-[color,transform] flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-              >
-                <span className="material-symbols-outlined !text-sm" aria-hidden="true">edit</span>
-              </button>
-            </div>
-            <div className="flex flex-col gap-1 flex-1 overflow-y-auto custom-scrollbar pr-1">
-              {checklist.map(item => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-2 py-1 text-xs group/item"
-                >
-                  <button
-                    onClick={(e) => toggleChecklistItem(item.id, e)}
-                    role="checkbox"
-                    aria-checked={item.completed}
-                    aria-label={item.text}
-                    className={`material-symbols-outlined !text-sm cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded ${item.completed ? 'text-primary' : 'text-text-muted hover:text-foreground'}`}
-                  >
-                    {item.completed ? 'check_box' : 'check_box_outline_blank'}
-                  </button>
-                  <span className={`flex-1 ${item.completed ? 'line-through text-text-muted opacity-60' : 'text-foreground'}`}>
-                    {item.text}
-                  </span>
-                  <button
-                    onClick={(e) => deleteChecklistItem(item.id, e)}
-                    aria-label={`Delete: ${item.text}`}
-                    className="opacity-0 group-hover/item:opacity-100 transition-opacity text-text-muted hover:text-accent focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-                  >
-                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
-                  </button>
-                </div>
-              ))}
-              <input
-                ref={newItemRef}
-                aria-label="Add checklist item"
-                name="checklist-item"
-                autoComplete="off"
-                className="mt-1 bg-transparent border-b border-white/10 text-xs text-foreground placeholder-text-muted/50 focus-visible:outline-none focus-visible:border-primary/40 py-1 transition-colors"
-                placeholder="+ Add item…"
-                value={newItemText}
-                onChange={e => setNewItemText(e.target.value)}
-                onKeyDown={addChecklistItem}
-              />
-            </div>
-          </div>
 
           {/* GitHub Notifications — only shown when connected */}
           {githubConnected && (
