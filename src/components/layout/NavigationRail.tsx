@@ -27,7 +27,7 @@ function RailIconButton({
       onMouseEnter={onHoverIntent}
       onFocus={onHoverIntent}
       className={[
-        'nav-link group relative flex h-12 w-full shrink-0 items-center justify-center rounded-[0.65rem]',
+        'nav-link group relative flex h-12 w-full shrink-0 items-center gap-3 rounded-[0.9rem] px-3',
         'transition-all duration-200 ease-out',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2',
         active
@@ -42,6 +42,7 @@ function RailIconButton({
       >
         {icon}
       </span>
+      <span className="text-[13px] font-semibold tracking-wide truncate">{label}</span>
     </button>
   );
 }
@@ -84,7 +85,7 @@ export function NavigationRail({
       />
 
       <div className="relative flex flex-col h-full bg-[linear-gradient(190deg,rgba(18,23,34,0.92)_0%,rgba(6,7,13,0.98)_55%,rgba(6,7,13,1)_100%)] backdrop-blur-xl border-r border-white/[0.06] shadow-[16px_0_48px_rgba(0,0,0,0.55)]">
-        <div className="px-3 pt-7 pb-2 flex justify-center">
+        <div className="px-4 pt-7 pb-2 flex justify-start">
           <button
             type="button"
             onClick={() => go('MainHub')}
@@ -101,7 +102,10 @@ export function NavigationRail({
           </button>
         </div>
 
-        <nav className="flex-1 px-3 pt-3 flex flex-col min-h-0" aria-label="Workspace">
+        <nav className="flex-1 px-4 pt-4 flex flex-col min-h-0" aria-label="Workspace">
+          <p className="px-1.5 pb-2 text-[10px] uppercase tracking-[0.22em] font-semibold text-white/30">
+            Workspace
+          </p>
           <div className="nav-rail-pod p-1.5 flex flex-col gap-1">
             {WORKSPACE_NAV.map(item => (
               <Fragment key={item.id}>
@@ -116,7 +120,10 @@ export function NavigationRail({
           </div>
         </nav>
 
-        <div className="px-3 pb-7 flex shrink-0 flex-col gap-3 mt-auto min-w-0">
+        <div className="px-4 pb-7 flex shrink-0 flex-col gap-3 mt-auto min-w-0">
+          <p className="px-1.5 text-[10px] uppercase tracking-[0.22em] font-semibold text-white/30">
+            Quick
+          </p>
           <div className="nav-rail-pod flex flex-col gap-1.5 min-w-0 w-full shrink-0 p-1.5">
             <RailIconButton
               label={musicActive ? 'Now playing — YouTube Music' : 'Open YouTube Music'}

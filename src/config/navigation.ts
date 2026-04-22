@@ -35,8 +35,8 @@ export const MOBILE_TAB_BAR: NavItem[] = [
   { id: 'Communications', label: 'Mail', icon: 'chat_bubble' },
 ];
 
-/** Pixel width of the icon rail (keep in sync with `NavigationRail` width class). */
-export const RAIL_WIDTH_PX = 80;
+/** Pixel width of the desktop navigation rail. */
+export const RAIL_WIDTH_PX = 240;
 
 /**
  * Space reserved below main content on small screens: floating bottom bar + margin + typical safe-area.
