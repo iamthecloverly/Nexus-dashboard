@@ -24,10 +24,12 @@ export function MusicPanel({
   open,
   onClose,
   onLoadVideoId,
+  videoTitles = {},
 }: {
   open: boolean;
   onClose: () => void;
   onLoadVideoId: (id: string) => void;
+  videoTitles?: Record<string, string>;
 }) {
   const { showToast } = useToast();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -162,15 +164,23 @@ export function MusicPanel({
               </button>
             </div>
             <div className="flex flex-col gap-1">
-              {recent.slice(0, MAX_RECENT).map(id => (
-                <button
-                  key={id}
-                  onClick={() => { onLoadVideoId(id); onClose(); }}
-                  className="w-full text-left px-2 py-1 rounded-md hover:bg-white/5 text-[11px] font-mono text-white/70 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  {id}
-                </button>
-              ))}
+              {recent.slice(0, MAX_RECENT).map(id => {
+                const title = videoTitles[id];
+                return (
+                  <button
+                    key={id}
+                    onClick={() => { onLoadVideoId(id); onClose(); }}
+                    className="w-full text-left px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex flex-col gap-0.5"
+                  >
+                    <span className={`text-[11px] truncate leading-snug ${title ? 'text-white/80 hover:text-white' : 'font-mono text-white/50'}`}>
+                      {title ?? id}
+                    </span>
+                    {title && (
+                      <span className="text-[10px] font-mono text-white/30 truncate">{id}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

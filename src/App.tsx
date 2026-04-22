@@ -45,6 +45,8 @@ function AppContent() {
     const raw = localStorage.getItem(STORAGE_KEYS.ytResumeEnabled);
     return raw ? raw === '1' : true;
   });
+  const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
+
   const [ytPositions, setYtPositions] = useState<Record<string, number>>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.ytPositions);
@@ -156,12 +158,16 @@ function AppContent() {
                 onToggleVisible={() => setMusicPlayerVisible(v => !v)}
                 onVolumeChange={setYtVolume}
                 onRequestLoad={handleYtRequestLoad}
+                onMetaLoaded={(id, title, author) =>
+                  setVideoTitles(prev => ({ ...prev, [id]: title + (author ? ` · ${author}` : '') }))
+                }
               />
 
               <MusicPanel
                 open={showMusicInput && !ytVideoId}
                 onClose={() => setShowMusicInput(false)}
                 onLoadVideoId={handleYtLoad}
+                videoTitles={videoTitles}
               />
 
               {currentView === 'MainHub' && <ErrorBoundary label="Main Hub"><MainHub setCurrentView={setCurrentView} /></ErrorBoundary>}

@@ -23,6 +23,7 @@ export function YouTubeAudioPlayer({
   onToggleVisible,
   onVolumeChange,
   onRequestLoad,
+  onMetaLoaded,
 }: {
   videoId: string | null;
   visible: boolean;
@@ -35,6 +36,7 @@ export function YouTubeAudioPlayer({
   onToggleVisible: () => void;
   onVolumeChange: (v: number) => void;
   onRequestLoad: (input: string) => void;
+  onMetaLoaded?: (id: string, title: string, author: string) => void;
 }) {
   const { showToast } = useToast();
   const { status: apiStatus, error: apiError } = useYouTubeIFrameApi();
@@ -52,6 +54,9 @@ export function YouTubeAudioPlayer({
 
   const progressRafRef = useRef<number | null>(null);
   const lastProgressRef = useRef<number>(0);
+
+  // Ref holding the latest global keydown handler so we only register once but always use fresh closures
+  const globalKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
   const thumb = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
   const pct = duration > 0 ? Math.max(0, Math.min(100, (progress / duration) * 100)) : 0;
@@ -386,6 +391,29 @@ export function YouTubeAudioPlayer({
     };
   }, [seekFromClientX]);
 
+  // Keep global key handler ref fresh on every render so the stable listener always gets latest closures
+  globalKeyHandlerRef.current = (e: KeyboardEvent) => {
+    if (!videoId || !visible) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); skip(-5); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); skip(5); }
+  };
+
+  // Register the global keydown listener once; it delegates to the ref above
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => globalKeyHandlerRef.current?.(e);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Notify parent when video meta (title / author) is resolved
+  useEffect(() => {
+    if (!videoId || !onMetaLoaded || meta.status !== 'ready' || !meta.title) return;
+    onMetaLoaded(videoId, meta.title, meta.author ?? '');
+  }, [videoId, meta.status, meta.title, meta.author, onMetaLoaded]);
+
   const seekKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'ArrowRight') { e.preventDefault(); skip(5); }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); skip(-5); }
@@ -602,7 +630,7 @@ export function YouTubeAudioPlayer({
               </button>
             </div>
             <p className="text-[10px] text-white/25 leading-snug">
-              Space toggles play/pause when the seek bar is focused. Arrow keys seek by 5 seconds.
+              Space toggles play/pause · ← / → seek 5 s · works globally when no text field is focused.
             </p>
           </div>
         </div>
