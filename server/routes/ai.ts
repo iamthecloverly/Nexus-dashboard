@@ -145,8 +145,10 @@ aiRouter.post('/key', (req, res) => {
 });
 
 aiRouter.get('/status', (req, res) => {
-  const key = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
-  res.json({ configured: !!key });
+  const cookieKey = getCookie(req, 'openai_key');
+  const envKey = process.env.OPENAI_API_KEY;
+  const source = cookieKey ? 'cookie' : (envKey ? 'env' : null);
+  res.json({ configured: !!(cookieKey ?? envKey), source });
 });
 
 aiRouter.post('/disconnect', (req, res) => {

@@ -34,6 +34,7 @@ export default function Settings({
 
   // AI / OpenAI key
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [aiSource, setAiSource] = useState<'cookie' | 'env' | null>(null);
   const [aiKeyDraft, setAiKeyDraft] = useState('');
   const [aiKeySaving, setAiKeySaving] = useState(false);
 
@@ -51,7 +52,8 @@ export default function Settings({
         github: githubRes.status === 'fulfilled' ? githubRes.value.connected : false,
         discord: discordRes.status === 'fulfilled' ? discordRes.value.connected : false,
       });
-      setAiConfigured(aiRes.status === 'fulfilled' ? aiRes.value.configured : false);
+      setAiConfigured(aiRes.status === 'fulfilled' ? !!aiRes.value.configured : false);
+      setAiSource(aiRes.status === 'fulfilled' ? (aiRes.value.source ?? null) : null);
     };
     fetchStatuses();
   }, []);
@@ -73,7 +75,13 @@ export default function Settings({
 
   const disconnectAi = async () => {
     await fetch('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders() });
+    // If OPENAI_API_KEY is set server-side, removing the cookie won't disable AI.
+    if (aiSource === 'env') {
+      showToast('AI is configured via server environment and cannot be removed here', 'info');
+      return;
+    }
     setAiConfigured(false);
+    setAiSource(null);
     showToast('OpenAI key removed', 'info');
   };
 
@@ -213,7 +221,12 @@ export default function Settings({
                   {aiConfigured ? 'Configured' : 'Not configured'}
                 </span>
               </div>
-              {aiConfigured ? (
+              {aiConfigured && aiSource === 'env' ? (
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                  <p className="text-sm text-foreground">Configured by the server.</p>
+                  <p className="text-[10px] text-text-muted mt-1">To change this, update <span className="font-mono">OPENAI_API_KEY</span> and restart the server.</p>
+                </div>
+              ) : aiConfigured ? (
                 <button
                   onClick={disconnectAi}
                   className="w-full py-2 rounded-lg border border-white/10 text-sm font-medium text-text-muted hover:bg-white/5 hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -242,7 +255,7 @@ export default function Settings({
                 </div>
               )}
               <p className="text-[10px] text-text-muted">
-                Used to extract tasks from emails. Key is stored in an HTTP-only cookie, never sent to any third party. Get yours at <span className="text-primary">platform.openai.com</span>
+                Used to extract tasks from emails. If you add a key here, it’s stored in an HTTP-only cookie. Email content is sent only to OpenAI for task extraction. Get a key at <span className="text-primary">platform.openai.com</span>.
               </p>
             </div>
           </section>
@@ -309,7 +322,7 @@ export default function Settings({
                 Clear all local data
               </button>
             )}
-            <p className="text-[10px] text-text-muted mt-2">Resets tasks, checklist, and profile name stored in this browser. OAuth tokens are unaffected.</p>
+            <p className="text-[10px] text-text-muted mt-2">Clears browser-stored data (tasks, profile, music, etc). Doesn’t disconnect your integrations.</p>
           </section>
         </div>
       </div>

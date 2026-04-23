@@ -59,8 +59,8 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
         body: JSON.stringify({ emailIds: ids }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        if (data.code === 'NO_AI_KEY') showToast('OpenAI key not configured — add it in Settings.', 'error');
+        if (!res.ok) {
+        if (data.code === 'NO_AI_KEY') showToast('AI not configured — add an OpenAI key in Settings (or set OPENAI_API_KEY).', 'error');
         else showToast(data.error ?? 'Failed to analyze emails', 'error');
         return;
       }
