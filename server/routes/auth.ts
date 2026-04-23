@@ -14,6 +14,9 @@ authRouter.get('/google/url', (req, res) => {
 
   const oauth2Client = getOAuth2Client(req);
   const scopes = [
+    // Needed to fetch/set google_profile (email/name) for allowlist checks.
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/calendar.readonly',
     // gmail.modify is a superset of gmail.readonly and also allows label changes
     // (mark read/unread, archive). gmail.send is required for sending.
@@ -60,16 +63,52 @@ authRouter.get('/google/callback', async (req, res) => {
     const safeOrigin = JSON.stringify(appOrigin);
     res.send(`
       <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta charset="utf-8" />
+          <title>Connected</title>
+        </head>
         <body>
           <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, ${safeOrigin});
-              window.close();
-            } else {
-              window.location.href = '/';
-            }
+            (function () {
+              var origin = ${safeOrigin};
+              try {
+                // 1) Best-case: notify the opener directly.
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, origin);
+                }
+              } catch {}
+
+              try {
+                // 2) Fallback: BroadcastChannel (survives cases where opener becomes null).
+                if (typeof BroadcastChannel !== 'undefined') {
+                  var bc = new BroadcastChannel('oauth');
+                  bc.postMessage({ type: 'OAUTH_AUTH_SUCCESS', at: Date.now() });
+                  bc.close();
+                }
+              } catch {}
+
+              try {
+                // 3) Fallback: storage event.
+                localStorage.setItem('oauth_auth_success', String(Date.now()));
+              } catch {}
+
+              // Always attempt to close (if this window was opened by script, this should work).
+              try { window.close(); } catch {}
+
+              // If closing is blocked, show a button and auto-redirect shortly.
+              setTimeout(function () {
+                try { window.location.href = '/'; } catch {}
+              }, 1200);
+            })();
           </script>
-          <p>Authentication successful. This window should close automatically.</p>
+          <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; line-height: 1.4;">
+            <h2 style="margin: 0 0 8px 0; font-size: 18px;">Authentication successful</h2>
+            <p style="margin: 0 0 16px 0; color: #555;">You can close this tab and return to the dashboard.</p>
+            <button onclick="window.close()" style="padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; background: #111; color: #fff; cursor: pointer;">
+              Close this window
+            </button>
+          </div>
         </body>
       </html>
     `);
@@ -99,6 +138,14 @@ authRouter.get('/profile', async (req, res) => {
 
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const me = await oauth2.userinfo.get();
+    // Heal sessions where the OAuth callback couldn't fetch/set google_profile.
+    // requireDashboardAccess depends on this cookie for allowlist checks.
+    setSignedCookie(
+      res,
+      'google_profile',
+      JSON.stringify({ email: me.data.email ?? null, name: me.data.name ?? null }),
+      COOKIE_OPTS,
+    );
     res.json({ email: me.data.email ?? null, name: me.data.name ?? null });
   } catch (error: any) {
     res.status(500).json({ error: error?.message ?? 'Failed to fetch profile' });

@@ -379,6 +379,33 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                 <div className="flex items-center justify-center h-full">
                   <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
                 </div>
+              ) : calendarError === 'login_required' ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+                  <span className="material-symbols-outlined text-4xl text-accent">lock</span>
+                  <p className="text-sm text-foreground font-medium">Session expired</p>
+                  <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
+                  <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
+                    Refresh
+                  </button>
+                </div>
+              ) : calendarError === 'google_profile_missing' ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+                  <span className="material-symbols-outlined text-4xl text-accent">account_circle</span>
+                  <p className="text-sm text-foreground font-medium">Google account not connected</p>
+                  <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
+                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
+                    Go to Integrations
+                  </button>
+                </div>
+              ) : calendarError === 'not_allowlisted' ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+                  <span className="material-symbols-outlined text-4xl text-accent">block</span>
+                  <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
+                  <p className="text-xs text-text-muted max-w-[260px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
+                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
+                    Go to Integrations
+                  </button>
+                </div>
               ) : !isCalendarConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-center gap-4">
                   <span className="material-symbols-outlined text-4xl text-text-muted">calendar_today</span>
@@ -712,6 +739,42 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                 {isLoadingEvents ? (
                   <div className="flex items-center justify-center py-16">
                     <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="Loading events" />
+                  </div>
+                ) : calendarError === 'login_required' ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">lock</span>
+                    <p className="text-sm text-foreground font-medium">Session expired</p>
+                    <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                ) : calendarError === 'google_profile_missing' ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">account_circle</span>
+                    <p className="text-sm text-foreground font-medium">Google account not connected</p>
+                    <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
+                    <button
+                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
+                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      Go to Integrations
+                    </button>
+                  </div>
+                ) : calendarError === 'not_allowlisted' ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">block</span>
+                    <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
+                    <p className="text-xs text-text-muted max-w-[260px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
+                    <button
+                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
+                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      Go to Integrations
+                    </button>
                   </div>
                 ) : !isCalendarConnected ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center gap-4">

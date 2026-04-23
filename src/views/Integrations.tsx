@@ -35,7 +35,26 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') checkAllStatuses();
     };
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'oauth_auth_success') checkAllStatuses();
+    };
+    window.addEventListener('storage', handleStorage);
+
+    let bc: BroadcastChannel | null = null;
+    const hasBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window;
+    if (hasBroadcastChannel) {
+      bc = new BroadcastChannel('oauth');
+      bc.onmessage = (ev) => {
+        if ((ev as MessageEvent).data?.type === 'OAUTH_AUTH_SUCCESS') checkAllStatuses();
+      };
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
+    };
   }, []);
 
   const checkAllStatuses = async () => {

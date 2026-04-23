@@ -133,6 +133,42 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         </div>
       );
     }
+    if (calendarError === 'not_allowlisted') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-accent">block</span>
+          <p className="text-sm text-white font-medium">Google account not allowlisted</p>
+          <p className="text-xs text-text-muted max-w-[280px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
+          <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            Go to Integrations
+          </button>
+        </div>
+      );
+    }
+    if (calendarError === 'login_required') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-accent">lock</span>
+          <p className="text-sm text-white font-medium">Session expired</p>
+          <p className="text-xs text-text-muted max-w-[280px]">Refresh the page and re-enter your dashboard passcode.</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            Refresh
+          </button>
+        </div>
+      );
+    }
+    if (calendarError === 'google_profile_missing') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-accent">account_circle</span>
+          <p className="text-sm text-white font-medium">Google account not connected</p>
+          <p className="text-xs text-text-muted max-w-[280px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
+          <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            Go to Integrations
+          </button>
+        </div>
+      );
+    }
     if (!isCalendarConnected) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-4">
