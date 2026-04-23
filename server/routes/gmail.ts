@@ -1,10 +1,9 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { COOKIE_OPTS } from '../config.ts';
-import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
-import { getOAuth2Client } from '../lib/googleOAuth.ts';
+import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
 
 // Cache the inbox list for 60 s.  Mutations (mark-read, archive, trash, send)
 // call gmailCacheBust() so the next poll always sees fresh data.
@@ -21,21 +20,16 @@ function gmailKey(tokensCookie: string) {
 }
 
 gmailRouter.get('/messages', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const { tokensCookie, tokens } = auth;
 
     const cacheKey = gmailKey(tokensCookie);
 
     const result = await cacheGet(cacheKey, GMAIL_TTL_MS, async () => {
-      const oauth2Client = getOAuth2Client(req);
-      oauth2Client.setCredentials(tokens);
-      oauth2Client.once('tokens', (newTokens) => {
-        setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-      });
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -109,8 +103,8 @@ gmailRouter.get('/messages', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
 
@@ -118,13 +112,8 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
   if (typeof read !== 'boolean') return res.status(400).json({ error: 'Missing read flag' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokensCookie, tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.modify({
@@ -147,18 +136,13 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/archive', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
   if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokensCookie, tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.modify({
@@ -178,18 +162,13 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/trash', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
   if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokensCookie, tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.trash({
@@ -208,17 +187,12 @@ gmailRouter.post('/messages/:id/trash', async (req, res) => {
 });
 
 gmailRouter.get('/message/:id', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const detail = await gmail.users.messages.get({
@@ -269,8 +243,8 @@ gmailRouter.get('/message/:id', async (req, res) => {
 });
 
 gmailRouter.post('/send', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   const { to, subject, body } = req.body as { to: string; subject: string; body: string };
   if (!to || !subject || !body) return res.status(400).json({ error: 'Missing to, subject, or body' });
@@ -284,10 +258,8 @@ gmailRouter.post('/send', async (req, res) => {
   const safeSubject = sanitize(subject);
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
+    const { tokensCookie, tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 

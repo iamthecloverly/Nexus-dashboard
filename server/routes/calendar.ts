@@ -1,34 +1,32 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
-import { getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
+import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
 
 // Cache calendar events for 45 s — short enough to feel live, long enough to
 // avoid hammering the N+1 Google API calls on every page load / refresh.
 const CALENDAR_TTL_MS = 45_000;
+// Calendar list changes rarely; cache the IDs longer to avoid an extra API call per refresh.
+const CALENDAR_LIST_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export const calendarRouter = express.Router();
 
 calendarRouter.get('/events', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
+    const { tokensCookie, tokens } = auth;
 
     // Use refresh_token as the stable identity key (doesn't rotate on refresh).
     const cacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:events');
 
     const result = await cacheGet(cacheKey, CALENDAR_TTL_MS, async () => {
-      const oauth2Client = getOAuth2Client(req);
-      oauth2Client.setCredentials(tokens);
-      oauth2Client.once('tokens', (newTokens) => {
-        setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-      });
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -42,10 +40,13 @@ calendarRouter.get('/events', async (req, res) => {
       const timeMax = endOfDay.toISOString();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      // Fetch all accessible calendars, then query each in parallel
-      const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-      const calendarIds = (calListRes.data.items ?? []).map(c => c.id!).filter(Boolean);
-      if (!calendarIds.length) calendarIds.push('primary');
+      // Fetch all accessible calendars (cached), then query each in parallel
+      const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
+      const calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
+        const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
+        const ids = (calListRes.data.items ?? []).map(c => c.id!).filter(Boolean);
+        return ids.length ? ids : ['primary'];
+      });
 
       const eventArrays = await Promise.all(
         calendarIds.map(calId =>

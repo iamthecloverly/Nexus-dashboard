@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import { ALLOWED_GOOGLE_EMAILS, COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
 import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
 
 export const authRouter = express.Router();
 
@@ -139,17 +140,12 @@ authRouter.get('/status', (req, res) => {
 });
 
 authRouter.get('/profile', async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const me = await oauth2.userinfo.get();

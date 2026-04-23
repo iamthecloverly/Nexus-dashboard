@@ -5,8 +5,8 @@ import { google } from 'googleapis';
 import OpenAI from 'openai';
 
 import { COOKIE_OPTS } from '../config.ts';
-import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
-import { getOAuth2Client } from '../lib/googleOAuth.ts';
+import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
 
 export const aiRouter = express.Router();
 
@@ -115,6 +115,24 @@ async function extractTasksFromEmail(
     }));
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.max(1, limit) }, async () => {
+    while (true) {
+      const my = idx++;
+      if (my >= items.length) break;
+      out[my] = await fn(items[my]!);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 aiRouter.post('/key', (req, res) => {
   const { key } = req.body as { key: string };
   if (!key?.trim()) return res.status(400).json({ error: 'Missing key' });
@@ -137,8 +155,8 @@ aiRouter.post('/disconnect', (req, res) => {
 });
 
 aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
 
   const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
@@ -148,13 +166,8 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
   if (!GMAIL_ID_RE.test(emailId.trim())) return res.status(400).json({ error: 'Invalid emailId' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
@@ -170,8 +183,8 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
 });
 
 aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated with Google' });
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
 
   const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
@@ -182,26 +195,21 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   if (safeIds.length === 0) return res.status(400).json({ error: 'No valid emailIds provided' });
 
   try {
-    const tokens = parseJsonCookie(tokensCookie);
-    if (!tokens) return res.status(401).json({ error: 'Invalid session, please reconnect' });
-    const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(tokens);
-    oauth2Client.once('tokens', (newTokens) => {
-      setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
-    });
+    const { tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
 
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
 
-    const allSuggestions: any[] = [];
-    for (const emailId of safeIds.slice(0, 10)) {
+    const batches = safeIds.slice(0, 10);
+    const perEmail = await mapWithConcurrency(batches, 3, async (emailId) => {
       try {
-        const suggestions = await extractTasksFromEmail(gmail, openai, emailId, mode);
-        allSuggestions.push(...suggestions);
+        return await extractTasksFromEmail(gmail, openai, emailId, mode);
       } catch {
-        // Skip failed emails, continue processing the rest
+        return [];
       }
-    }
+    });
+    const allSuggestions = perEmail.flat();
 
     res.json({ suggestions: allSuggestions });
   } catch (error: any) {
