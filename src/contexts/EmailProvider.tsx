@@ -23,6 +23,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         setGmailConnected(true);
         setServerError(false);
       } else if (res.status === 401 || res.status === 403) {
+        // When dashboard gate blocks (session expired / allowlist / missing profile), treat as disconnected.
         setGmailConnected(false);
         setServerError(false);
       } else {

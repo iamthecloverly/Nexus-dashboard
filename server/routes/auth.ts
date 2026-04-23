@@ -1,7 +1,7 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
+import { ALLOWED_GOOGLE_EMAILS, COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
 import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 
@@ -120,7 +120,22 @@ authRouter.get('/google/callback', async (req, res) => {
 
 authRouter.get('/status', (req, res) => {
   const tokensCookie = getCookie(req, 'google_tokens');
-  res.json({ connected: !!tokensCookie });
+  const profileCookie = getCookie(req, 'google_profile');
+  const profile = profileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(profileCookie) : null;
+  const email = (profile?.email ?? null);
+  const emailLc = email ? String(email).toLowerCase() : null;
+
+  // Note: allowlist is enforced server-side by requireDashboardAccess; this is just
+  // a convenience status for UI to avoid showing "Connected" when access will be blocked.
+  const allowlisted = emailLc ? ALLOWED_GOOGLE_EMAILS.includes(emailLc) : false;
+
+  res.json({
+    connected: !!tokensCookie,
+    tokensConnected: !!tokensCookie,
+    profileConnected: !!emailLc,
+    email: emailLc,
+    allowlisted,
+  });
 });
 
 authRouter.get('/profile', async (req, res) => {
