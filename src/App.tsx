@@ -9,6 +9,7 @@ import FocusMode from './views/FocusMode';
 import Communications from './views/Communications';
 import Integrations from './views/Integrations';
 import Settings from './views/Settings';
+import { Login } from './views/Login';
 import { useAutoEmailTasks } from './hooks/useAutoEmailTasks';
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { YouTubeAudioPlayer } from './components/youtube/YouTubeAudioPlayer';
@@ -33,6 +34,7 @@ function AppContent() {
   const isLg = useMediaQuery('(min-width: 1024px)');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [currentView, setCurrentView] = useState<ViewId>('MainHub');
+  const [unlocked, setUnlocked] = useState(false);
   const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
@@ -113,6 +115,25 @@ function AppContent() {
   }, [ytVideoId]);
 
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/session/status');
+        if (!res.ok) return;
+        const json = (await res.json()) as { loggedIn?: boolean };
+        if (!cancelled) setUnlocked(!!json.loggedIn);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!unlocked) {
+    return <Login onAuthed={() => setUnlocked(true)} />;
+  }
 
   return (
     <>

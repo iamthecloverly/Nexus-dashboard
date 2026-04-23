@@ -41,6 +41,21 @@ authRouter.get('/google/callback', async (req, res) => {
     // Store tokens in an HTTP-only cookie (signed)
     setSignedCookie(res, 'google_tokens', JSON.stringify(tokens), COOKIE_OPTS);
 
+    // Also store the user profile (email/name) once for allowlist checks.
+    try {
+      oauth2Client.setCredentials(tokens);
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const me = await oauth2.userinfo.get();
+      setSignedCookie(
+        res,
+        'google_profile',
+        JSON.stringify({ email: me.data.email ?? null, name: me.data.name ?? null }),
+        COOKIE_OPTS,
+      );
+    } catch {
+      // If profile fetch fails, token cookie is still set; client can retry via /api/auth/profile.
+    }
+
     const appOrigin = getBaseUrl(req).replace(/\/$/, '');
     const safeOrigin = JSON.stringify(appOrigin);
     res.send(`
@@ -92,6 +107,7 @@ authRouter.get('/profile', async (req, res) => {
 
 authRouter.post('/disconnect', (req, res) => {
   clearAppCookie(res, 'google_tokens', true);
+  clearAppCookie(res, 'google_profile', true);
   res.json({ success: true });
 });
 

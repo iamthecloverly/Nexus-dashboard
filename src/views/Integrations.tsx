@@ -42,14 +42,14 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
     setIsLoading(true);
     const [googleRes, githubRes, discordRes] = await Promise.allSettled([
       fetch('/api/auth/status').then(r => r.json()),
-      fetch('/api/github/status').then(r => r.json()),
-      fetch('/api/discord/status').then(r => r.json()),
+      fetch('/api/github/status').then(r => r.json()).catch(() => ({ connected: false })),
+      fetch('/api/discord/status').then(r => r.json()).catch(() => ({ connected: false })),
     ]);
     const googleConnected = googleRes.status === 'fulfilled' ? googleRes.value.connected : false;
     setStatus({
       google: googleConnected,
-      github: githubRes.status === 'fulfilled' ? githubRes.value.connected : false,
-      discord: discordRes.status === 'fulfilled' ? discordRes.value.connected : false,
+      github: githubRes.status === 'fulfilled' ? !!githubRes.value.connected : false,
+      discord: discordRes.status === 'fulfilled' ? !!discordRes.value.connected : false,
     });
     if (googleConnected) {
       try {

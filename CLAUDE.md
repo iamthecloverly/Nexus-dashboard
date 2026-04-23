@@ -51,6 +51,24 @@ Browser → Express (port 3000 in code, proxied to 5173 by Vite)
 
 Google tokens are stored server-side in an **HTTP-only cookie** (`google_tokens`). Every `/api/calendar/*` and `/api/gmail/*` route reads this cookie, builds an `OAuth2Client`, and calls Google APIs. The `oauth2Client.once('tokens', ...)` handler auto-refreshes tokens on first expiry and merges them back into the cookie — but only fires once per request, so long sessions may require re-auth via Integrations view.
 
+### Dashboard access gate (self-hosting security)
+
+In production the app is protected by **two gates**:
+
+- A signed HTTP-only **passcode session cookie** (`dashboard_session`) set via `POST /api/session/login` (env: `DASHBOARD_PASSCODE`)
+- A **Google email allowlist** check based on a signed cookie (`google_profile`) set during OAuth callback (env: `ALLOWED_GOOGLE_EMAILS`)
+
+Sensitive routers (`/api/gmail`, `/api/calendar`, `/api/github`, `/api/discord`, `/api/ai`) are protected by `server/middleware/requireDashboardAccess.ts`.
+
+### CSRF + reverse proxy notes
+
+CSRF middleware enforces:
+
+- same-origin via `Origin/Referer` compared to `APP_URL` (or request-derived origin)
+- double-submit token match (`csrf_token` cookie + `x-csrf-token` header)
+
+If self-hosting behind a reverse proxy, ensure `X-Forwarded-Proto` is set and `APP_URL` matches the external URL, otherwise POSTs can fail with `CSRF origin validation failed`.
+
 ### State management
 
 No external state library. Core React Contexts:

@@ -16,9 +16,14 @@ import { discordRouter } from './server/routes/discord.ts';
 import { aiRouter } from './server/routes/ai.ts';
 import { systemRouter } from './server/routes/system.ts';
 import { weatherRouter } from './server/routes/weather.ts';
+import { sessionRouter } from './server/routes/session.ts';
+import { requireDashboardAccess } from './server/middleware/requireDashboardAccess.ts';
 
 const app = express();
 const PORT = 3001;
+
+// When self-hosting behind a reverse proxy, this ensures req.protocol reflects x-forwarded-proto.
+app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite injects inline scripts in dev
 app.use(cookieParser(SESSION_SECRET));
@@ -30,12 +35,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/session', sessionRouter);
 app.use('/api/auth', authRouter);
-app.use('/api/calendar', calendarRouter);
-app.use('/api/gmail', gmailRouter);
-app.use('/api/github', githubRouter);
-app.use('/api/discord', discordRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/calendar', requireDashboardAccess, calendarRouter);
+app.use('/api/gmail', requireDashboardAccess, gmailRouter);
+app.use('/api/github', requireDashboardAccess, githubRouter);
+app.use('/api/discord', requireDashboardAccess, discordRouter);
+app.use('/api/ai', requireDashboardAccess, aiRouter);
 app.use('/api', weatherRouter);
 app.use('/api', systemRouter);
 
