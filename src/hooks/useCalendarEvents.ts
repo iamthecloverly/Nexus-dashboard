@@ -2,11 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
+export type CalendarError =
+  | 'login_required'
+  | 'not_connected'
+  | 'not_allowlisted'
+  | 'google_profile_missing'
+  | 'forbidden'
+  | 'api_disabled'
+  | 'fetch_error'
+  | 'network_error';
+
 interface CalendarState {
   events: CalendarEvent[];
   isLoading: boolean;
   isConnected: boolean;
-  error: string | null;
+  error: CalendarError | null;
   refetch: () => void;
 }
 
@@ -14,7 +24,7 @@ export function useCalendarEvents(): CalendarState {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CalendarError | null>(null);
 
   const refetch = useCallback(async () => {
     setIsLoading(true);

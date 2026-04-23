@@ -263,6 +263,117 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
     );
   };
 
+  const renderCalendarBody = (opts: { compact: boolean }) => {
+    if (isLoadingEvents) {
+      return opts.compact ? (
+        <div className="flex items-center justify-center h-full">
+          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="Loading events" />
+        </div>
+      );
+    }
+
+    const wrapClass = opts.compact ? 'h-full' : 'py-16';
+    const primaryBtnClass = opts.compact
+      ? 'px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10'
+      : 'px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+
+    const goIntegrations = () => {
+      if (!opts.compact) setShowSchedule(false);
+      setCurrentView('Integrations');
+    };
+
+    if (calendarError === 'login_required') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">lock</span>
+          <p className="text-sm text-foreground font-medium">Session expired</p>
+          <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
+          <button onClick={() => window.location.reload()} className={primaryBtnClass}>Refresh</button>
+        </div>
+      );
+    }
+
+    if (calendarError === 'google_profile_missing') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">account_circle</span>
+          <p className="text-sm text-foreground font-medium">Google account not connected</p>
+          <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again.</p>
+          <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
+        </div>
+      );
+    }
+
+    if (calendarError === 'not_allowlisted') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">block</span>
+          <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
+          <p className="text-xs text-text-muted max-w-[260px]">Add your email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
+          <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
+        </div>
+      );
+    }
+
+    if (!isCalendarConnected) {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-4 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-text-muted" aria-hidden="true">calendar_today</span>
+          <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
+          <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
+        </div>
+      );
+    }
+
+    if (calendarError === 'api_disabled') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">warning</span>
+          <p className="text-sm text-foreground font-medium">Google Calendar API not enabled</p>
+          <p className="text-xs text-text-muted max-w-[260px]">Enable it in your Google Cloud project, then reconnect.</p>
+          <a
+            href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
+            target="_blank"
+            rel="noreferrer"
+            className={primaryBtnClass}
+          >
+            Enable Calendar API →
+          </a>
+        </div>
+      );
+    }
+
+    if (calendarError === 'fetch_error' || calendarError === 'network_error' || calendarError === 'forbidden') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">sync_problem</span>
+          <p className="text-sm text-text-muted">Failed to load events.</p>
+          <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+        </div>
+      );
+    }
+
+    if (events.length === 0) {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-2 ${wrapClass}`}>
+          <p className="text-sm text-text-muted">No events today.</p>
+          <button
+            onClick={goIntegrations}
+            className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+          >
+            If you expect events, reconnect Google →
+          </button>
+        </div>
+      );
+    }
+
+    return events.map(renderEvent);
+  };
+
   return (
     <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden px-8 py-10 max-w-[1440px] mx-auto w-full">
       <header className="flex justify-between items-end mb-8 flex-shrink-0">
@@ -375,76 +486,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
             </div>
             <div className="relative flex-1 flex flex-col gap-7 pl-6">
               <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
-              {isLoadingEvents ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                </div>
-              ) : calendarError === 'login_required' ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-                  <span className="material-symbols-outlined text-4xl text-accent">lock</span>
-                  <p className="text-sm text-foreground font-medium">Session expired</p>
-                  <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
-                  <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
-                    Refresh
-                  </button>
-                </div>
-              ) : calendarError === 'google_profile_missing' ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-                  <span className="material-symbols-outlined text-4xl text-accent">account_circle</span>
-                  <p className="text-sm text-foreground font-medium">Google account not connected</p>
-                  <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
-                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
-                    Go to Integrations
-                  </button>
-                </div>
-              ) : calendarError === 'not_allowlisted' ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-                  <span className="material-symbols-outlined text-4xl text-accent">block</span>
-                  <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
-                  <p className="text-xs text-text-muted max-w-[260px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
-                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
-                    Go to Integrations
-                  </button>
-                </div>
-              ) : !isCalendarConnected ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-4">
-                  <span className="material-symbols-outlined text-4xl text-text-muted">calendar_today</span>
-                  <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
-                  <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10">
-                    Go to Integrations
-                  </button>
-                </div>
-              ) : calendarError === 'api_disabled' ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-                  <span className="material-symbols-outlined text-4xl text-accent">warning</span>
-                  <p className="text-sm text-foreground font-medium">Google Calendar API not enabled</p>
-                  <p className="text-xs text-text-muted max-w-[260px]">Enable it in your Google Cloud project, then reconnect.</p>
-                  <a
-                    href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20"
-                  >
-                    Enable Calendar API →
-                  </a>
-                </div>
-              ) : calendarError === 'fetch_error' ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-                  <span className="material-symbols-outlined text-3xl text-text-muted">sync_problem</span>
-                  <p className="text-sm text-text-muted">Failed to load events.</p>
-                  <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-foreground border border-white/10 transition-colors">Retry</button>
-                </div>
-              ) : events.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
-                  <p className="text-sm text-text-muted">No events today.</p>
-                  <button
-                    onClick={() => setCurrentView('Integrations')}
-                    className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-                  >
-                    If you expect events, reconnect Google →
-                  </button>
-                </div>
-              ) : events.map(renderEvent)}
+              {renderCalendarBody({ compact: true })}
             </div>
           </div>
 
@@ -736,88 +778,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
             <div className="max-w-2xl mx-auto">
               <div className="relative flex flex-col gap-7 pl-6">
                 <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
-                {isLoadingEvents ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="Loading events" />
-                  </div>
-                ) : calendarError === 'login_required' ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">lock</span>
-                    <p className="text-sm text-foreground font-medium">Session expired</p>
-                    <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                ) : calendarError === 'google_profile_missing' ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">account_circle</span>
-                    <p className="text-sm text-foreground font-medium">Google account not connected</p>
-                    <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
-                    <button
-                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      Go to Integrations
-                    </button>
-                  </div>
-                ) : calendarError === 'not_allowlisted' ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">block</span>
-                    <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
-                    <p className="text-xs text-text-muted max-w-[260px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
-                    <button
-                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      Go to Integrations
-                    </button>
-                  </div>
-                ) : !isCalendarConnected ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
-                    <span className="material-symbols-outlined text-4xl text-text-muted" aria-hidden="true">calendar_today</span>
-                    <p className="text-sm text-text-muted">Connect your Google Calendar to see your schedule.</p>
-                    <button
-                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-foreground transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      Go to Integrations
-                    </button>
-                  </div>
-                ) : calendarError === 'api_disabled' ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">warning</span>
-                    <p className="text-sm text-foreground font-medium">Google Calendar API not enabled</p>
-                    <p className="text-xs text-text-muted max-w-[260px]">Enable it in your Google Cloud project, then reconnect.</p>
-                    <a
-                      href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      Enable Calendar API →
-                    </a>
-                  </div>
-                ) : calendarError === 'fetch_error' ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">sync_problem</span>
-                    <p className="text-sm text-text-muted">Failed to load events.</p>
-                    <button onClick={fetchEvents} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-foreground border border-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Retry</button>
-                  </div>
-                ) : events.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
-                    <p className="text-sm text-text-muted">No events today.</p>
-                    <button
-                      onClick={() => { setShowSchedule(false); setCurrentView('Integrations'); }}
-                      className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-                    >
-                      If you expected events, reconnect Google →
-                    </button>
-                  </div>
-                ) : events.map(renderEvent)}
+                {renderCalendarBody({ compact: false })}
               </div>
             </div>
           </div>

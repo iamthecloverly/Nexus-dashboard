@@ -19,7 +19,7 @@ This is a **single-binary full-stack app**: `server.ts` is one Express file that
 
 ### Request flow
 ```
-Browser → Express (port 3000 in code, proxied to 5173 by Vite)
+Browser → Express (port 3001 in code, proxied to 5173 by Vite)
          ├── /api/*          → Express route handlers (Google APIs, GitHub, AI, Discord)
          └── everything else → Vite middleware (dev) / static dist/ (prod)
 ```
