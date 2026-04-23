@@ -80,7 +80,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         if (res.ok) return; // success — optimistic state is correct
         revert();
         if (res.status === 401) {
-          showToast('Gmail session expired — reconnect in Integrations', 'error');
+          showToast('Gmail access needs reconnect — open Integrations', 'error');
         } else {
           showToast('Failed to update email — try again', 'error');
         }
@@ -113,7 +113,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       .then(res => {
         if (res.ok) return;
         revert();
-        if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
+        if (res.status === 401) showToast('Gmail access needs reconnect — open Integrations', 'error');
         else showToast('Failed to archive email — try again', 'error');
       })
       .catch(() => {
@@ -143,7 +143,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       .then(res => {
         if (res.ok) return;
         revert();
-        if (res.status === 401) showToast('Gmail session expired — reconnect in Integrations', 'error');
+        if (res.status === 401) showToast('Gmail access needs reconnect — open Integrations', 'error');
         else showToast('Failed to delete email — try again', 'error');
       })
       .catch(() => {

@@ -88,7 +88,7 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
         {status?.loggedIn && !status.allowlisted && (
           <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <p className="text-xs text-text-muted">
-              You are logged in, but your connected Google account is not allowlisted.
+              You’re unlocked, but this Google account doesn’t have access to the dashboard.
             </p>
             {status.googleEmail && (
               <p className="text-xs text-text-muted font-mono mt-1">

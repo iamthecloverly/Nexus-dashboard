@@ -294,7 +294,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
                     {githubSaving ? 'Saving…' : 'Save Token'}
                   </button>
                   <p className="text-[10px] text-text-muted">
-                    Create a token at github.com/settings/tokens with <code className="bg-white/10 px-1 rounded">notifications</code> scope.
+                    Create a token at <span className="text-primary">github.com/settings/tokens</span> with <code className="bg-white/10 px-1 rounded">notifications</code> scope.
                   </p>
                 </div>
               )}

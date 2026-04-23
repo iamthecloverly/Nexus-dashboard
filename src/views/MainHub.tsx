@@ -302,7 +302,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
           <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">account_circle</span>
           <p className="text-sm text-foreground font-medium">Google account not connected</p>
-          <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and connect Google again.</p>
+          <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and reconnect Google.</p>
           <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
         </div>
       );

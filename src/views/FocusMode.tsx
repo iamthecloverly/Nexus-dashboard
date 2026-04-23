@@ -162,7 +162,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
           <span className="material-symbols-outlined text-4xl text-accent">account_circle</span>
           <p className="text-sm text-white font-medium">Google account not connected</p>
-          <p className="text-xs text-text-muted max-w-[280px]">Go to Integrations and connect Google again (this restores your profile cookie).</p>
+          <p className="text-xs text-text-muted max-w-[280px]">Go to Integrations and reconnect Google.</p>
           <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             Go to Integrations
           </button>
