@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CalendarEvent } from '../types/calendar';
-import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { apiFetchJson } from '../lib/apiFetch';
 
 export type CalendarError =
   | 'login_required'
@@ -30,33 +30,32 @@ export function useCalendarEvents(): CalendarState {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchWithTimeout('/api/calendar/events', { timeoutMs: 15_000 });
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(data.events ?? []);
-        setIsConnected(true);
-      } else if (res.status === 401) {
-        const data = await res.json().catch(() => ({} as any));
-        const code = String((data as any)?.code ?? '');
-        const msg = String((data as any)?.error ?? '');
-        setIsConnected(false);
-        if (code === 'LOGIN_REQUIRED' || msg.toLowerCase().includes('login required')) setError('login_required');
-        else setError('not_connected');
-      } else if (res.status === 403) {
-        const data = await res.json().catch(() => ({} as any));
-        const code = String((data as any)?.code ?? '');
-        const msg = String((data as any)?.error ?? '');
-        setIsConnected(false);
-        if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) setError('not_allowlisted');
-        else if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) setError('google_profile_missing');
-        else setError('forbidden');
-      } else if (res.status === 503) {
-        const data = await res.json().catch(() => ({}));
-        setIsConnected(true);
-        setError(data.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
+      const result = await apiFetchJson<{ events?: CalendarEvent[] }>('/api/calendar/events', { timeoutMs: 15_000 });
+      if ('error' in result) {
+        const err = result.error;
+        if (err.status === 401) {
+          const code = err.code ?? '';
+          const msg = err.error ?? '';
+          setIsConnected(false);
+          if (code === 'LOGIN_REQUIRED' || msg.toLowerCase().includes('login required')) setError('login_required');
+          else setError('not_connected');
+        } else if (err.status === 403) {
+          const code = err.code ?? '';
+          const msg = err.error ?? '';
+          setIsConnected(false);
+          if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) setError('not_allowlisted');
+          else if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) setError('google_profile_missing');
+          else setError('forbidden');
+        } else if (err.status === 503) {
+          setIsConnected(true);
+          setError(err.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
+        } else {
+          setIsConnected(true);
+          setError('fetch_error');
+        }
       } else {
+        setEvents(result.data.events ?? []);
         setIsConnected(true);
-        setError('fetch_error');
       }
     } catch {
       setIsConnected(false);
