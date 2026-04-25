@@ -31,5 +31,5 @@ EXPOSE 3001
 # Set production environment
 ENV NODE_ENV=production
 
-# Start the server
-CMD ["node", "--loader", "tsx", "server.ts"]
+# Start the server (Node 20+ requires --import for tsx)
+CMD ["node", "--import", "tsx", "server.ts"]

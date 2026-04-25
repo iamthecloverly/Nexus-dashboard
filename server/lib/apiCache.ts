@@ -30,11 +30,6 @@ function getHit<T>(key: string): T | null {
 function put<T>(key: string, data: T, ttlMs: number): void {
   const expiresAt = Date.now() + ttlMs;
   store.set(key, { data, expiresAt });
-  // Lazy eviction – remove after TTL so the Map doesn't grow unbounded.
-  setTimeout(() => {
-    const e = store.get(key);
-    if (e && Date.now() >= e.expiresAt) store.delete(key);
-  }, ttlMs + 500);
 }
 
 /**

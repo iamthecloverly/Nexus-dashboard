@@ -15,6 +15,67 @@ const CALENDAR_LIST_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export const calendarRouter = express.Router();
 
+function isValidDay(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isValidTimeZone(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  try {
+    // Throws RangeError on invalid IANA timezone name
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function partsInTimeZone(date: Date, timeZone: string): Record<string, number> {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(date);
+  const out: Record<string, number> = {};
+  for (const p of parts) {
+    if (p.type === 'literal') continue;
+    out[p.type] = Number(p.value);
+  }
+  return out;
+}
+
+/**
+ * Convert "YYYY-MM-DD 00:00:00" in a given IANA timezone to a UTC timestamp (ms).
+ * Minimal dependency-free approximation using iterative offset correction.
+ */
+function utcMsForZonedMidnight(day: string, timeZone: string): number {
+  const [yS, mS, dS] = day.split('-');
+  const y = Number(yS), m = Number(mS), d = Number(dS);
+  let guess = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+
+  // Iterate a few times to converge across DST boundaries.
+  for (let i = 0; i < 6; i++) {
+    const p = partsInTimeZone(new Date(guess), timeZone);
+    const localY = p.year, localM = p.month, localD = p.day;
+    const localH = p.hour ?? 0, localMin = p.minute ?? 0, localS = p.second ?? 0;
+
+    const localMs = Date.UTC(localY, localM - 1, localD, localH, localMin, localS, 0);
+    const targetLocalMs = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+
+    const deltaMs = localMs - targetLocalMs;
+    if (deltaMs === 0) break;
+    guess -= deltaMs;
+  }
+
+  return guess;
+}
+
 calendarRouter.get('/events', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
@@ -30,15 +91,36 @@ calendarRouter.get('/events', async (req, res) => {
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-      // Get events for today using local start/end-of-day converted to UTC ISO strings.
-      const now = new Date();
-      const startOfDay = new Date(now);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
-      const timeMin = startOfDay.toISOString();
-      const timeMax = endOfDay.toISOString();
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Prefer client-supplied "day" + "tz" so "today" aligns with the user's timezone.
+      // Falls back to server-local behavior if missing/invalid.
+      let timeMin: string;
+      let timeMax: string;
+      let timeZone: string;
+
+      const qDay = req.query.day;
+      const qTz = req.query.tz;
+      if (isValidDay(qDay) && isValidTimeZone(qTz)) {
+        timeZone = qTz;
+        const startUtc = utcMsForZonedMidnight(qDay, timeZone);
+        // Compute end as next day's midnight minus 1ms (handles DST days not equal to 24h)
+        const [yS, mS, dS] = qDay.split('-');
+        const y = Number(yS), m = Number(mS), d = Number(dS);
+        const nextDay = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
+        const nextKey = `${nextDay.getUTCFullYear()}-${String(nextDay.getUTCMonth() + 1).padStart(2, '0')}-${String(nextDay.getUTCDate()).padStart(2, '0')}`;
+        const nextStartUtc = utcMsForZonedMidnight(nextKey, timeZone);
+        timeMin = new Date(startUtc).toISOString();
+        timeMax = new Date(nextStartUtc - 1).toISOString();
+      } else {
+        // Fallback: server-local day boundaries (may be incorrect when server TZ != user TZ)
+        const now = new Date();
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+        timeMin = startOfDay.toISOString();
+        timeMax = endOfDay.toISOString();
+        timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      }
 
       // Fetch all accessible calendars (cached), then query each in parallel
       const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
