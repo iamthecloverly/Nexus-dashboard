@@ -128,6 +128,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   // Browser notifications: 5 minutes before each calendar event
   useCalendarNotifications(events, isCalendarConnected);
 
+  // Pre-sort events once per fetch (avoids re-sorting on every `currentTime` tick).
+  const sortedEvents = useMemo(() => {
+    if (!events || events.length === 0) return [];
+    return [...events].sort((a, b) => {
+      const as = a.start.dateTime ? parseISO(a.start.dateTime) : parseISO(a.start.date ?? '');
+      const bs = b.start.dateTime ? parseISO(b.start.dateTime) : parseISO(b.start.date ?? '');
+      return as.getTime() - bs.getTime();
+    });
+  }, [events]);
+
   // GitHub
   const [githubNotifs, setGithubNotifs] = useState<GithubNotification[]>([]);
   const [githubConnected, setGithubConnected] = useState(false);
@@ -182,14 +192,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   /** Next calendar line for digest (upcoming / now / all-day). */
   const digestNextEventSnippet = useMemo(() => {
-    if (!isCalendarConnected || calendarError || events.length === 0) return null;
+    if (!isCalendarConnected || calendarError || sortedEvents.length === 0) return null;
     const now = currentTime;
-    const sorted = [...events].sort((a, b) => {
-      const as = a.start.dateTime ? parseISO(a.start.dateTime) : parseISO(a.start.date ?? '');
-      const bs = b.start.dateTime ? parseISO(b.start.dateTime) : parseISO(b.start.date ?? '');
-      return as.getTime() - bs.getTime();
-    });
-    for (const ev of sorted) {
+    for (const ev of sortedEvents) {
       const allDay = !ev.start.dateTime;
       const start = ev.start.dateTime ? parseISO(ev.start.dateTime) : parseISO(ev.start.date ?? '');
       const end = ev.end.dateTime ? parseISO(ev.end.dateTime) : parseISO(ev.end.date ?? '');
@@ -204,7 +209,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       }
     }
     return null;
-  }, [events, currentTime, isCalendarConnected, calendarError, fmtTime]);
+  }, [sortedEvents, currentTime, isCalendarConnected, calendarError, fmtTime]);
 
   // currentTime used only for event isCurrent/isPast — 10s is sufficient precision
   useEffect(() => {
@@ -318,7 +323,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     return () => window.removeEventListener('keydown', handler);
   }, [showSchedule]);
 
-  const renderEvent = (event: CalendarEvent) => {
+  const renderEvent = useCallback((event: CalendarEvent) => {
     const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
     const endTime = event.end.dateTime ? parseISO(event.end.dateTime) : parseISO(event.end.date ?? '');
     const isAllDay = !event.start.dateTime;
@@ -357,9 +362,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         </p>
       </div>
     );
-  };
+  }, [currentTime, fmtTime]);
 
-  const renderCalendarBody = (opts: { compact: boolean }) => {
+  const renderCalendarBody = useCallback((opts: { compact: boolean }) => {
     if (isLoadingEvents) {
       return opts.compact ? (
         <div className="flex items-center justify-center h-full">
@@ -453,7 +458,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    if (events.length === 0) {
+    if (sortedEvents.length === 0) {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-2 ${wrapClass}`}>
           <p className="text-sm text-text-muted">No events today.</p>
@@ -467,8 +472,17 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    return events.map(renderEvent);
-  };
+    return sortedEvents.map(renderEvent);
+  }, [
+    isLoadingEvents,
+    sortedEvents,
+    isCalendarConnected,
+    calendarError,
+    fetchEvents,
+    renderEvent,
+    setCurrentView,
+    setShowSchedule,
+  ]);
 
   return (
     <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden px-8 py-10 max-w-[1440px] mx-auto w-full">
