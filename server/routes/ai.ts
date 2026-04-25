@@ -104,7 +104,7 @@ async function extractTasksFromEmail(
     ],
   });
 
-  const raw = JSON.parse(completion.choices[0].message.content ?? '{"tasks":[]}');
+  const raw = parseAiTasksJson(completion.choices?.[0]?.message?.content);
   return (raw.tasks ?? [])
     .filter((t: any) => t.title?.trim())
     .map((t: any) => ({
@@ -116,6 +116,18 @@ async function extractTasksFromEmail(
       reason: (t.reason as string | undefined)?.trim() ?? '',
       accepted: true,
     }));
+}
+
+export function parseAiTasksJson(content: unknown): { tasks: any[] } {
+  if (typeof content !== 'string' || !content.trim()) return { tasks: [] };
+  try {
+    const parsed = JSON.parse(content) as any;
+    if (!parsed || typeof parsed !== 'object') return { tasks: [] };
+    const tasks = Array.isArray((parsed as any).tasks) ? (parsed as any).tasks : [];
+    return { tasks };
+  } catch {
+    return { tasks: [] };
+  }
 }
 
 async function mapWithConcurrency<T, R>(

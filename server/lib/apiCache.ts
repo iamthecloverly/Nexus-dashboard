@@ -26,6 +26,22 @@ function getHit<T>(key: string): T | null {
   return entry.data;
 }
 
+function sweepExpired(): number {
+  const now = Date.now();
+  let removed = 0;
+  for (const [key, entry] of store.entries()) {
+    if (now > entry.expiresAt) {
+      store.delete(key);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+// Periodic cleanup so the cache can't grow unbounded under key churn.
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+setInterval(() => { sweepExpired(); }, SWEEP_INTERVAL_MS).unref?.();
+
 /** Store data under key for ttlMs milliseconds. */
 function put<T>(key: string, data: T, ttlMs: number): void {
   const expiresAt = Date.now() + ttlMs;
@@ -70,3 +86,8 @@ export function tokenKey(token: string, suffix: string): string {
   const hash = createHash('sha256').update(token).digest('hex').slice(0, 16);
   return `${hash}:${suffix}`;
 }
+
+export const __testOnly = {
+  sweepExpired,
+  storeSize: () => store.size,
+};

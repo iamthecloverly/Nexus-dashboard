@@ -51,12 +51,18 @@ gmailRouter.get('/messages', async (req, res) => {
       const threadList = threadsRes.data.threads || [];
 
       const emails = (await Promise.all(threadList.map(async (t) => {
-        const thread = await gmail.users.threads.get({
-          userId: 'me',
-          id: t.id!,
-          format: 'metadata',
-          metadataHeaders: ['From', 'Subject', 'Date'],
-        });
+        let thread: any;
+        try {
+          thread = await gmail.users.threads.get({
+            userId: 'me',
+            id: t.id!,
+            format: 'metadata',
+            metadataHeaders: ['From', 'Subject', 'Date'],
+          });
+        } catch (err: any) {
+          logger.warn({ error: err?.message, threadId: t.id }, 'Failed to fetch gmail thread metadata');
+          return null;
+        }
 
         const messages = thread.data.messages ?? [];
         const messageCount = messages.length;
