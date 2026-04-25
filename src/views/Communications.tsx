@@ -6,6 +6,7 @@ import { useTaskContext } from '../contexts/taskContext';
 import { useToast } from '../components/Toast';
 import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TaskSuggestion } from '../types/taskSuggestion';
+import type { TaskPriority } from '../types/task';
 import { csrfHeaders } from '../lib/csrf';
 import type { SetViewFn } from '../config/navigation';
 
@@ -75,8 +76,12 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
   };
 
   const handleAddSuggestions = (accepted: TaskSuggestion[]) => {
+    const VALID_PRIORITIES = new Set<TaskPriority>(['Priority', 'Critical']);
     for (const s of accepted) {
-      addTask({ id: s.id, title: s.title, priority: s.priority === 'Normal' ? undefined : (s.priority as 'Priority' | 'Critical'), completed: false, group: s.group });
+      const priority: TaskPriority | undefined = VALID_PRIORITIES.has(s.priority as TaskPriority)
+        ? (s.priority as TaskPriority)
+        : undefined;
+      addTask({ id: s.id, title: s.title, priority, completed: false, group: s.group });
     }
     showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');
     setSuggestions([]);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { parseISO, isBefore, isAfter, differenceInMinutes } from 'date-fns';
+import { parseISO, isBefore, isAfter, differenceInMinutes, startOfDay, differenceInCalendarDays, format } from 'date-fns';
 
 import { Task, TaskPriority } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
@@ -65,6 +65,43 @@ function githubTypeIcon(type: string): string {
   if (type === 'Issue') return 'bug_report';
   if (type === 'Release') return 'new_releases';
   return 'notifications';
+}
+
+/** Priority metadata — defined outside the component to avoid recreating on every render. */
+const PRIORITY_STYLES: Record<TaskPriority, { dot: string; badge: string; label: string; checkboxBorder: string; checkboxHover: string }> = {
+  Priority: {
+    dot: 'bg-yellow-400',
+    badge: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+    label: 'Priority',
+    checkboxBorder: 'border-yellow-400/50',
+    checkboxHover: 'group-hover/task:border-yellow-400',
+  },
+  Critical: {
+    dot: 'bg-red-400',
+    badge: 'text-red-400 bg-red-400/10 border-red-400/20',
+    label: 'Critical',
+    checkboxBorder: 'border-red-400/50',
+    checkboxHover: 'group-hover/task:border-red-400',
+  },
+};
+
+/** Returns true when a task's due date has passed (today midnight) and it is not completed. */
+function isOverdue(task: Task): boolean {
+  if (!task.dueDate || task.completed) return false;
+  return isBefore(parseISO(task.dueDate), startOfDay(new Date()));
+}
+
+/** Formats a YYYY-MM-DD due date as a short human-readable label. */
+function formatDueDate(dueDate: string): string {
+  const due = parseISO(dueDate);
+  const today = startOfDay(new Date());
+  const diff = differenceInCalendarDays(due, today);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  if (diff < 0) return `${Math.abs(diff)}d overdue`;
+  if (diff <= 7) return `in ${diff}d`;
+  return format(due, 'MMM d');
 }
 
 export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn }) {
@@ -237,35 +274,6 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [showSchedule]);
-
-  /** Returns Tailwind color classes for a priority level. */
-  const priorityStyles: Record<TaskPriority, { dot: string; badge: string; label: string }> = {
-    Priority: { dot: 'bg-yellow-400', badge: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20', label: 'Priority' },
-    Critical: { dot: 'bg-red-400', badge: 'text-red-400 bg-red-400/10 border-red-400/20', label: 'Critical' },
-  };
-
-  /** Returns true when a task's due date has passed and the task is not completed. */
-  const isOverdue = (task: Task): boolean => {
-    if (!task.dueDate || task.completed) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return new Date(task.dueDate) < today;
-  };
-
-  /** Formats a due-date string as a short, human-friendly label. */
-  const formatDueDate = (dueDate: string): string => {
-    const due = new Date(dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays === -1) return 'Yesterday';
-    if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
-    if (diffDays <= 7) return `in ${diffDays}d`;
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(dueDate));
-  };
 
   const renderEvent = (event: CalendarEvent) => {
     const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
@@ -585,7 +593,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
               {activeTasks.map(task => {
                 const overdue = isOverdue(task);
-                const pStyle = task.priority ? priorityStyles[task.priority as TaskPriority] : null;
+                const pStyle = task.priority ? PRIORITY_STYLES[task.priority as TaskPriority] : null;
                 return (
                 <div key={task.id} className={`group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border ${overdue ? 'border-red-500/30 bg-red-500/5' : 'border-transparent hover:border-border-glass'}`}>
                   <button
@@ -593,12 +601,10 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                     role="checkbox"
                     aria-checked={task.completed}
                     aria-label={task.title}
-                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 relative transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                      task.priority === 'Critical'
-                        ? 'border-red-400/50 group-hover/task:border-red-400'
-                        : task.priority === 'Priority'
-                          ? 'border-yellow-400/50 group-hover/task:border-yellow-400'
-                          : 'border-border-glass group-hover/task:border-primary/50'
+                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                      pStyle
+                        ? `${pStyle.checkboxBorder} ${pStyle.checkboxHover}`
+                        : 'border-border-glass group-hover/task:border-primary/50'
                     }`}
                   />
                   <div className="flex flex-col flex-1 min-w-0">
