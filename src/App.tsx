@@ -34,10 +34,14 @@ function AutoEmailTaskProcessor() {
 /**
  * Bridge that reads `addTask` from within the TaskProvider tree and passes it
  * up to the parent AppContent via the provided callback ref.
+ * Wraps the raw `addTask(task: Task)` so callers only need to provide a title string.
  */
 function AddTaskBridge({ onReady }: { onReady: (fn: (title: string) => void) => void }) {
   const { actions: { addTask } } = useTaskContext();
-  useLayoutEffect(() => { onReady(addTask); }, [addTask, onReady]);
+  const addTaskByTitle = useCallback((title: string) => {
+    addTask({ id: crypto.randomUUID(), title, completed: false, group: 'now' });
+  }, [addTask]);
+  useLayoutEffect(() => { onReady(addTaskByTitle); }, [addTaskByTitle, onReady]);
   return null;
 }
 
