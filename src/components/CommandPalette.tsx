@@ -158,7 +158,7 @@ export function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Jump to… or type a command"
+            placeholder="Type a command or jump to a view…"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus:outline-none py-2"
             aria-label="Filter commands"
           />

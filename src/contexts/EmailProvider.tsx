@@ -153,14 +153,12 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
   }, [showToast]);
 
   const markAllRead = useCallback(() => {
-    // Find all unread email IDs that aren't archived/deleted
-    let unreadIds: string[] = [];
-    setEmails(prev => {
-      unreadIds = prev.filter(e => e.unread && !e.archived && !e.deleted).map(e => e.id);
-      if (unreadIds.length === 0) return prev;
-      return prev.map(e => (!e.unread || e.archived || e.deleted) ? e : { ...e, unread: false });
-    });
+    // Compute the IDs to mark from current state first, then update state
+    const unreadIds = emails.filter(e => e.unread && !e.archived && !e.deleted).map(e => e.id);
     if (unreadIds.length === 0) return;
+
+    // Optimistic update
+    setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, unread: false } : e));
 
     // Fire-and-forget each mark-read request; revert all on failure
     const revert = () =>
@@ -188,7 +186,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         revert();
         showToast('Failed to mark emails as read — check your connection', 'error');
       });
-  }, [showToast]);
+  }, [emails, showToast]);
 
   return (
     <EmailContext.Provider value={{
