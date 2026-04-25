@@ -486,40 +486,82 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                   </div>
                 ) : (
                   /* Thread accordion */
-                  <div className="flex flex-col divide-y divide-white/5">
-                    {detail.threadMessages.map((msg, idx) => {
-                      const isExpanded = expandedMsgIds.has(msg.id);
-                      const isLast = idx === detail.threadMessages!.length - 1;
-                      return (
-                        <div key={msg.id} className={`${isLast ? 'flex-1' : ''}`}>
-                          <button
-                            type="button"
-                            aria-expanded={isExpanded}
-                            onClick={() => setExpandedMsgIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(msg.id)) next.delete(msg.id);
-                              else next.add(msg.id);
-                              return next;
-                            })}
-                            className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                          >
-                            <div className={`w-7 h-7 rounded-full glass-avatar flex items-center justify-center text-xs font-semibold shrink-0 ${msg.unread ? 'text-foreground' : 'text-text-muted'}`}>
-                              {msg.initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className={`text-[13px] font-semibold truncate block ${msg.unread ? 'text-foreground' : 'text-text-muted'}`}>{msg.sender}</span>
-                            </div>
-                            <span className="text-[12px] text-text-muted shrink-0 ml-2">{msg.time}</span>
-                            <span className="material-symbols-outlined text-[18px] text-text-muted shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} aria-hidden="true">expand_more</span>
-                          </button>
-                          {isExpanded && (
-                            <div className="px-5 pb-5 pt-2">
-                              <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{msg.body || '(empty)'}</pre>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="flex flex-col">
+                    {/* Thread controls */}
+                    <div className="px-5 py-2 border-b border-white/5 flex items-center justify-between bg-background-elevated/30">
+                      <span className="text-xs text-text-muted font-medium">
+                        {detail.threadMessages.length} message{detail.threadMessages.length !== 1 ? 's' : ''} in conversation
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedMsgIds(new Set(detail.threadMessages!.map(m => m.id)))}
+                          className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded px-2 py-1"
+                        >
+                          Expand all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedMsgIds(new Set([detail.threadMessages![detail.threadMessages!.length - 1].id]))}
+                          className="text-xs text-text-muted hover:text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded px-2 py-1"
+                        >
+                          Collapse all
+                        </button>
+                      </div>
+                    </div>
+                    {/* Thread messages with visual connector line */}
+                    <div className="flex flex-col divide-y divide-white/5 relative">
+                      {/* Vertical thread line */}
+                      <div className="absolute left-[36px] top-0 bottom-0 w-[2px] bg-gradient-to-b from-primary/30 via-primary/10 to-transparent pointer-events-none" aria-hidden="true" />
+                      {detail.threadMessages.map((msg, idx) => {
+                        const isExpanded = expandedMsgIds.has(msg.id);
+                        const isLast = idx === detail.threadMessages!.length - 1;
+                        return (
+                          <div key={msg.id} className={`relative ${isLast ? 'flex-1' : ''}`}>
+                            <button
+                              type="button"
+                              aria-expanded={isExpanded}
+                              onClick={() => setExpandedMsgIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(msg.id)) next.delete(msg.id);
+                                else next.add(msg.id);
+                                return next;
+                              })}
+                              className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary relative z-10"
+                            >
+                              <div className={`w-7 h-7 rounded-full glass-avatar flex items-center justify-center text-xs font-semibold shrink-0 relative ${msg.unread ? 'text-foreground ring-2 ring-primary/40' : 'text-text-muted'}`}>
+                                {msg.initials}
+                                {/* Thread position dot */}
+                                {!isLast && (
+                                  <div className="absolute -right-1 -bottom-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background-elevated" aria-hidden="true" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[13px] font-semibold truncate ${msg.unread ? 'text-foreground' : 'text-text-muted'}`}>{msg.sender}</span>
+                                  {isLast && (
+                                    <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded uppercase tracking-wide">Latest</span>
+                                  )}
+                                </div>
+                                {!isExpanded && msg.body && (
+                                  <p className="text-[12px] text-text-muted/70 truncate mt-0.5">{msg.body.split('\n')[0]}</p>
+                                )}
+                              </div>
+                              <span className="text-[12px] text-text-muted shrink-0 ml-2">{msg.time}</span>
+                              <span className="material-symbols-outlined text-[18px] text-text-muted shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} aria-hidden="true">expand_more</span>
+                            </button>
+                            {isExpanded && (
+                              <div className="px-5 pb-5 pt-2 ml-10 border-l-2 border-primary/20 bg-white/[0.01]">
+                                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/5">
+                                  <span className="text-[11px] text-text-muted">To: <span className="text-foreground/80">{msg.senderEmail}</span></span>
+                                </div>
+                                <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{msg.body || '(empty)'}</pre>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
