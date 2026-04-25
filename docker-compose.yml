@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  nexus-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-dashboard
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      # Required: Google OAuth credentials
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+
+      # Required: Session secret for cookie signing
+      - SESSION_SECRET=${SESSION_SECRET}
+
+      # Required in production: Your public URL
+      - APP_URL=${APP_URL:-http://localhost:3001}
+
+      # Optional: Dashboard access passcode
+      - DASHBOARD_PASSCODE=${DASHBOARD_PASSCODE}
+
+      # Optional: Google email allowlist (comma-separated)
+      - ALLOWED_GOOGLE_EMAILS=${ALLOWED_GOOGLE_EMAILS}
+
+      # Optional: GitHub personal access token
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+
+      # Optional: Gemini API key (for AI features)
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+      # Optional: OpenAI API key (for task extraction)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Production mode
+      - NODE_ENV=production
+    volumes:
+      # Optional: Mount logs directory to persist logs
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/system', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - nexus-network
+
+networks:
+  nexus-network:
+    driver: bridge
