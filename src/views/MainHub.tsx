@@ -7,6 +7,7 @@ import { useEmailContext } from '../contexts/emailContext';
 import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
@@ -123,6 +124,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const { showToast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
+
+  // Browser notifications: 5 minutes before each calendar event
+  useCalendarNotifications(events, isCalendarConnected);
 
   // GitHub
   const [githubNotifs, setGithubNotifs] = useState<GithubNotification[]>([]);
