@@ -94,12 +94,8 @@ app.use('/api/session', authLimiter, sessionRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/calendar', requireDashboardAccess, calendarRouter);
 app.use('/api/gmail', requireDashboardAccess, gmailRouter);
-// Apply email send rate limiter to specific route
-gmailRouter.post('/send', emailSendLimiter);
 app.use('/api/github', requireDashboardAccess, githubRouter);
 app.use('/api/discord', requireDashboardAccess, discordRouter);
-// Apply Discord send rate limiter to specific route
-discordRouter.post('/send', discordSendLimiter);
 app.use('/api/ai', requireDashboardAccess, aiRouter);
 app.use('/api', weatherRouter);
 app.use('/api', systemRouter);

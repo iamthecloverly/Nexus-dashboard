@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 
 import { COOKIE_OPTS } from '../config.ts';
 import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
@@ -9,7 +10,12 @@ import { discordWebhookSchema, discordSendSchema } from '../lib/validation.ts';
 export const discordRouter = express.Router();
 
 // Strict allowlist: only official Discord webhook URLs (prevents SSRF)
+
+// Rate limiter for Discord sending - 20 messages per hour
+const discordSendLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const DISCORD_WEBHOOK_RE = /^https:\/\/discord\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+
+// Rate limiter for Discord sending - 20 messages per hour
 
 discordRouter.post('/webhook', (req, res) => {
   const validation = discordWebhookSchema.safeParse(req.body);
@@ -33,7 +39,7 @@ discordRouter.post('/disconnect', (req, res) => {
   res.json({ success: true });
 });
 
-discordRouter.post('/send', async (req, res) => {
+discordRouter.post('/send', discordSendLimiter, async (req, res) => {
   const cookieWebhook = getCookie(req, 'discord_webhook');
   const webhook = cookieWebhook ? safeDecrypt(cookieWebhook) : null;
   if (!webhook) return res.status(401).json({ error: 'No webhook configured' });

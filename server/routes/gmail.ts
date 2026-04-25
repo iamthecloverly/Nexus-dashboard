@@ -15,9 +15,11 @@ const GMAIL_TTL_MS = 60_000;
 // Rate limiter for thread-detail fetches — one full thread = N message bodies
 const threadLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 
+
+// Rate limiter for email sending - 10 emails per hour to prevent spam
+const emailSendLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 export const gmailRouter = express.Router();
 
-const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
 
 /** Derive the cache key for a given google_tokens cookie value. */
 function gmailKey(tokensCookie: string) {
@@ -157,7 +159,7 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
 gmailRouter.post('/messages/:id/archive', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
-  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+  if (!gmailIdSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
     const { tokensCookie, tokens } = auth;
@@ -183,7 +185,7 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
 gmailRouter.post('/messages/:id/trash', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
-  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+  if (!gmailIdSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
     const { tokensCookie, tokens } = auth;
@@ -214,7 +216,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
-  if (!GMAIL_ID_RE.test(req.params.threadId)) {
+  if (!gmailIdSchema.safeParse(req.params.threadId).success) {
     return res.status(400).json({ error: 'Invalid thread id' });
   }
 
@@ -357,7 +359,7 @@ gmailRouter.get('/message/:id', async (req, res) => {
   }
 });
 
-gmailRouter.post('/send', async (req, res) => {
+gmailRouter.post('/send', emailSendLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 

@@ -1,17 +1,22 @@
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypto';
 import { SESSION_SECRET } from '../config.ts';
+import { logger } from './logger.ts';
 
 const ALGORITHM = 'aes-256-gcm';
-const SALT = 'nexus-dashboard-encryption-salt'; // Static salt for deterministic key derivation
 const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
+// Use SESSION_SECRET directly as the salt (it's already environment-specific and secret)
+// PBKDF2 iterations follow OWASP recommendations (100k minimum for 2023+)
+const PBKDF2_ITERATIONS = 100000;
+
 /**
  * Derive encryption key from SESSION_SECRET using PBKDF2
+ * Uses SESSION_SECRET itself as salt to ensure deployment-specific keys
  */
 function deriveKey(): Buffer {
-  return pbkdf2Sync(SESSION_SECRET, SALT, 100000, KEY_LENGTH, 'sha256');
+  return pbkdf2Sync(SESSION_SECRET, SESSION_SECRET, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
 }
 
 /**
@@ -44,9 +49,14 @@ export function decrypt(ciphertext: string): string {
     throw new Error('Invalid encrypted data format');
   }
 
-  const iv = Buffer.from(parts[0]!, 'base64');
-  const authTag = Buffer.from(parts[1]!, 'base64');
-  const encrypted = parts[2]!;
+  const iv = Buffer.from(parts[0], 'base64');
+  const authTag = Buffer.from(parts[1], 'base64');
+  const encrypted = parts[2];
+
+  // Validate auth tag length for security
+  if (authTag.length !== AUTH_TAG_LENGTH) {
+    throw new Error('Invalid auth tag length');
+  }
 
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
@@ -59,11 +69,16 @@ export function decrypt(ciphertext: string): string {
 
 /**
  * Safely decrypt - returns null on any error instead of throwing
+ * Logs failed attempts for security monitoring
  */
 export function safeDecrypt(ciphertext: string): string | null {
   try {
     return decrypt(ciphertext);
-  } catch {
+  } catch (error) {
+    logger.warn({
+      error: error instanceof Error ? error.message : String(error),
+      length: ciphertext?.length
+    }, 'Failed to decrypt cookie');
     return null;
   }
 }
