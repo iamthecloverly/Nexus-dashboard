@@ -21,9 +21,9 @@ COPY server ./server
 COPY tsconfig.json ./
 COPY vite.config.ts ./
 
-# Create a non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
+# Create a non-root user for security (Debian)
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs && \
     chown -R nodejs:nodejs /app
 
 # Switch to non-root user
