@@ -3,6 +3,7 @@ import { SystemMetricsDisplay } from '../components/layout/SystemMetricsDisplay'
 import { useToast } from '../components/Toast';
 import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
 import { useTheme, type AccentColor } from '../contexts/ThemeProvider';
+import { useNotificationPermission } from '../hooks/useNotificationPermission';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import type { SetViewFn } from '../config/navigation';
@@ -27,6 +28,7 @@ export default function Settings({
   const { showToast } = useToast();
   const { cpuLoad, memUsed } = useSystemMetrics();
   const { state: { mode: themeMode, accentColor }, actions: { toggleMode, setAccentColor } } = useTheme();
+  const { permission: notificationPermission, isSupported: notificationsSupported, isGranted: notificationsGranted, requestPermission } = useNotificationPermission();
   const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -110,6 +112,7 @@ export default function Settings({
       STORAGE_KEYS.weatherCoords,
       STORAGE_KEYS.themeMode,
       STORAGE_KEYS.themeAccent,
+      STORAGE_KEYS.notificationsEnabled,
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
@@ -242,6 +245,80 @@ export default function Settings({
                 </div>
               </div>
             </div>
+          </section>
+
+          {/* Notifications */}
+          <section>
+            <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Notifications</h2>
+            {!notificationsSupported ? (
+              <div className="p-4 rounded-lg bg-white/5 border border-white/5">
+                <p className="text-sm text-text-muted">Desktop notifications are not supported in this browser.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                  <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">notifications</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground font-medium">Desktop notifications</p>
+                    <p className="text-[10px] text-text-muted mt-0.5">
+                      {notificationPermission === 'granted' && 'Notifications are enabled'}
+                      {notificationPermission === 'denied' && 'Notifications are blocked. Check browser settings.'}
+                      {notificationPermission === 'default' && 'Grant permission to receive notifications'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {notificationsGranted ? (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-green-400/20 border border-green-400/30 text-green-400">
+                        Enabled
+                      </span>
+                    ) : notificationPermission === 'denied' ? (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-red-400/20 border border-red-400/30 text-red-400">
+                        Blocked
+                      </span>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          const result = await requestPermission();
+                          if (result === 'granted') {
+                            showToast('Notifications enabled', 'success');
+                            // Test notification
+                            try {
+                              const n = new Notification('Nexus Dashboard', {
+                                body: 'Notifications are now enabled!',
+                                icon: '/favicon.ico',
+                              });
+                              setTimeout(() => n.close(), 4000);
+                            } catch {
+                              // Ignore if notification fails
+                            }
+                          } else if (result === 'denied') {
+                            showToast('Notifications blocked. Check browser settings.', 'error');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary/20 border border-primary/30 text-primary hover:bg-primary/30 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      >
+                        Enable
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {notificationsGranted && (
+                  <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                    <p className="text-xs text-foreground font-medium mb-2">Notification types:</p>
+                    <ul className="text-[11px] text-text-muted space-y-1 ml-4">
+                      <li className="flex items-start gap-2">
+                        <span className="text-primary">•</span>
+                        <span>Calendar events (5 minutes before)</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-primary">•</span>
+                        <span>Task reminders (when due date arrives)</span>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Local system snapshot (same `/api/system` poll as Main Hub tile) */}
