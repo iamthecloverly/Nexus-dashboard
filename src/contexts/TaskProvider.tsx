@@ -6,12 +6,14 @@ import { TaskContext } from './taskContext';
 const DEFAULT_TASKS: Task[] = [];
 
 function isValidTask(t: unknown): t is Task {
+  const task = t as Task;
   return (
     typeof t === 'object' && t !== null &&
-    typeof (t as Task).id === 'string' && (t as Task).id.length > 0 &&
-    typeof (t as Task).title === 'string' &&
-    typeof (t as Task).completed === 'boolean' &&
-    ((t as Task).group === 'now' || (t as Task).group === 'next')
+    typeof task.id === 'string' && task.id.length > 0 &&
+    typeof task.title === 'string' &&
+    typeof task.completed === 'boolean' &&
+    (task.group === 'now' || task.group === 'next') &&
+    (task.tags === undefined || (Array.isArray(task.tags) && task.tags.every(tag => typeof tag === 'string')))
   );
 }
 

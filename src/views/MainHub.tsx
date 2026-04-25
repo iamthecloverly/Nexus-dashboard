@@ -14,6 +14,7 @@ import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 import { SystemMetricsTile } from '../components/dashboard/SystemMetricsTile';
 import { DashboardDigestCard } from '../components/dashboard/DashboardDigestCard';
+import { TagInput } from '../components/TagInput';
 import type { SetViewFn } from '../config/navigation';
 
 /**
@@ -164,6 +165,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [quickAddGroup, setQuickAddGroup] = useState<'now' | 'next'>('now');
   const [quickAddPriority, setQuickAddPriority] = useState<TaskPriority | undefined>(undefined);
   const [quickAddDueDate, setQuickAddDueDate] = useState('');
+  const [quickAddTags, setQuickAddTags] = useState<string[]>([]);
   const quickAddRef = useRef<HTMLInputElement>(null);
 
   const { remainingTasks, activeTasks, completedTasks } = useMemo(() => {
@@ -271,17 +273,20 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         group: quickAddGroup,
         priority: quickAddPriority,
         dueDate: quickAddDueDate || undefined,
+        tags: quickAddTags.length > 0 ? quickAddTags : undefined,
       });
       showToast('Task added', 'success');
       setQuickAddTitle('');
       setQuickAddPriority(undefined);
       setQuickAddDueDate('');
+      setQuickAddTags([]);
       setShowQuickAdd(false);
     }
     if (e.key === 'Escape') {
       setQuickAddTitle('');
       setQuickAddPriority(undefined);
       setQuickAddDueDate('');
+      setQuickAddTags([]);
       setShowQuickAdd(false);
     }
   };
@@ -677,6 +682,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                           {formatDueDate(task.dueDate, todayStart)}
                         </span>
                       )}
+                      {task.tags && task.tags.length > 0 && task.tags.map((tag) => (
+                        <span key={tag} className="inline-flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/5 border border-primary/20 px-1.5 py-0.5 rounded">
+                          <span className="material-symbols-outlined !text-[10px]" aria-hidden="true">label</span>
+                          {tag}
+                        </span>
+                      ))}
                       {overdue && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 uppercase tracking-wide">
                           <span className="material-symbols-outlined !text-[11px]" aria-hidden="true">warning</span>
@@ -861,6 +872,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 onChange={e => setQuickAddDueDate(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:border-primary/50 transition-colors [color-scheme:dark]"
               />
+            </div>
+            {/* Tags */}
+            <div className="mt-3">
+              <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium block mb-1">Tags (optional)</label>
+              <TagInput tags={quickAddTags} onChange={setQuickAddTags} placeholder="Add tags..." maxTags={5} />
             </div>
             <p className="text-[10px] text-text-muted mt-2">Press Esc to cancel</p>
           </div>
