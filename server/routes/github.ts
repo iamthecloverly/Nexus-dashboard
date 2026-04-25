@@ -3,6 +3,9 @@ import express from 'express';
 import { COOKIE_OPTS } from '../config.ts';
 import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
+import { logger } from '../lib/logger.ts';
+import { encrypt, safeDecrypt } from '../lib/encryption.ts';
+import { githubTokenSchema } from '../lib/validation.ts';
 
 // Cache GitHub notifications for 90 s — client already polls every 5 min,
 // this just prevents duplicate calls on page load / tab focus.
@@ -11,13 +14,15 @@ const GITHUB_TTL_MS = 90_000;
 export const githubRouter = express.Router();
 
 githubRouter.post('/token', (req, res) => {
-  const { token } = req.body as { token: string };
-  if (!token?.trim()) return res.status(400).json({ error: 'Missing token' });
-  // Validate GitHub PAT format (classic: ghp_, fine-grained: github_pat_, OAuth: gho_)
-  if (!/^(ghp_|github_pat_|gho_)[\w]+$/.test(token.trim())) {
-    return res.status(400).json({ error: 'Invalid GitHub token format' });
+  const validation = githubTokenSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
-  setSignedCookie(res, 'github_token', token.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+
+  const { token } = validation.data;
+  const encrypted = encrypt(token);
+  setSignedCookie(res, 'github_token', encrypted, { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  logger.info('GitHub token configured');
   res.json({ success: true });
 });
 
@@ -31,7 +36,8 @@ githubRouter.post('/disconnect', (req, res) => {
 });
 
 githubRouter.get('/notifications', async (req, res) => {
-  const token = getCookie(req, 'github_token');
+  const cookieToken = getCookie(req, 'github_token');
+  const token = cookieToken ? safeDecrypt(cookieToken) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
@@ -68,7 +74,7 @@ githubRouter.get('/notifications', async (req, res) => {
   } catch (error: any) {
     if (error?.status === 401) return res.status(401).json({ error: 'Invalid GitHub token' });
     if (error?.status) return res.status(error.status).json({ error: 'GitHub API error' });
-    console.error('GitHub API error:', error);
+    logger.error({ error: error?.message }, 'GitHub API error');
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });

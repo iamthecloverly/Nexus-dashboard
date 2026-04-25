@@ -10,6 +10,9 @@ export const STORAGE_KEYS = {
   autoProcessedEmailIds: 'auto_processed_email_ids',
   /** JSON `{ "lat": number, "lon": number }` for Open-Meteo `/api/weather` */
   weatherCoords: 'dashboard_weather_coords',
+  themeMode: 'dashboard_theme_mode',
+  themeAccent: 'dashboard_theme_accent',
+  notificationsEnabled: 'dashboard_notifications_enabled',
 } as const;
 
 /** sessionStorage keys (tab-scoped); not cleared by Settings → Clear All Data */

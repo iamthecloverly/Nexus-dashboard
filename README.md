@@ -79,6 +79,77 @@
 | `npm run lint` | Type-check with `tsc --noEmit` |
 | `npm run preview` | Serve the production build locally |
 
+## Docker Deployment
+
+The easiest way to deploy Nexus Dashboard is using Docker:
+
+### Quick Start with Docker Compose
+
+1. Build the frontend locally:
+   ```bash
+   npm run build
+   ```
+
+2. Create a `.env` file with your configuration:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+3. Start the container:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access the dashboard at `http://localhost:3001`
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` includes:
+- Health checks to ensure the service is running
+- Automatic restart policy
+- Volume mount for persistent logs (optional)
+- All required environment variables
+
+### Manual Docker Commands
+
+Build the frontend first:
+```bash
+npm run build
+```
+
+Build the Docker image:
+```bash
+docker build -t nexus-dashboard .
+```
+
+Run the container:
+```bash
+docker run -d \
+  --name nexus-dashboard \
+  -p 3001:3001 \
+  -e GOOGLE_CLIENT_ID=your_client_id \
+  -e GOOGLE_CLIENT_SECRET=your_secret \
+  -e SESSION_SECRET=your_session_secret \
+  -e APP_URL=https://yourdomain.com \
+  -e DASHBOARD_PASSCODE=your_passcode \
+  -e ALLOWED_GOOGLE_EMAILS=your@email.com \
+  nexus-dashboard
+```
+
+Stop the container:
+```bash
+docker stop nexus-dashboard
+docker rm nexus-dashboard
+```
+
+### Docker Notes
+
+- The Dockerfile expects a pre-built `dist/` directory (run `npm run build` first)
+- The container runs as a non-root user (`nodejs:nodejs`) for security
+- Health checks monitor the `/api/system` endpoint
+- Logs can be viewed with `docker logs nexus-dashboard` or persisted via volume mount
+
 ## Architecture
 
 The app is a single Express process. In development, Vite runs as middleware inside Express (no separate frontend server). In production, Express serves the `dist/` build.

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { SystemMetricsDisplay } from '../components/layout/SystemMetricsDisplay';
 import { useToast } from '../components/Toast';
 import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
+import { useTheme, type AccentColor } from '../contexts/ThemeProvider';
+import { useNotificationPermission } from '../hooks/useNotificationPermission';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import type { SetViewFn } from '../config/navigation';
@@ -25,6 +27,8 @@ export default function Settings({
 }) {
   const { showToast } = useToast();
   const { cpuLoad, memUsed } = useSystemMetrics();
+  const { state: { mode: themeMode, accentColor }, actions: { toggleMode, setAccentColor } } = useTheme();
+  const { permission: notificationPermission, isSupported: notificationsSupported, isGranted: notificationsGranted, requestPermission } = useNotificationPermission();
   const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -106,6 +110,9 @@ export default function Settings({
       STORAGE_KEYS.ytResumeEnabled,
       STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
       STORAGE_KEYS.weatherCoords,
+      STORAGE_KEYS.themeMode,
+      STORAGE_KEYS.themeAccent,
+      STORAGE_KEYS.notificationsEnabled,
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
@@ -180,6 +187,138 @@ export default function Settings({
                 </div>
               )}
             </div>
+          </section>
+
+          {/* Theme */}
+          <section>
+            <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Appearance</h2>
+            <div className="flex flex-col gap-3">
+              {/* Theme Mode Toggle */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">
+                  {themeMode === 'dark' ? 'dark_mode' : 'light_mode'}
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm text-foreground font-medium">Theme mode</p>
+                  <p className="text-[10px] text-text-muted mt-0.5">Switch between light and dark modes</p>
+                </div>
+                <button
+                  onClick={() => { toggleMode(); showToast(`Switched to ${themeMode === 'dark' ? 'light' : 'dark'} mode`, 'info'); }}
+                  aria-label="Toggle theme mode"
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                    themeMode === 'dark'
+                      ? 'bg-white/10 border-white/20 text-foreground'
+                      : 'bg-primary/20 border-primary/30 text-primary'
+                  }`}
+                >
+                  {themeMode === 'dark' ? 'Dark' : 'Light'}
+                </button>
+              </div>
+
+              {/* Accent Color Picker */}
+              <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                <p className="text-sm text-foreground font-medium mb-3">Accent color</p>
+                <div className="grid grid-cols-6 gap-2">
+                  {(['sky', 'purple', 'rose', 'emerald', 'amber', 'indigo'] as AccentColor[]).map(color => {
+                    const colors: Record<AccentColor, string> = {
+                      sky: '#38bdf8',
+                      purple: '#a78bfa',
+                      rose: '#fb7185',
+                      emerald: '#34d399',
+                      amber: '#fbbf24',
+                      indigo: '#818cf8',
+                    };
+                    const isSelected = accentColor === color;
+                    return (
+                      <button
+                        key={color}
+                        onClick={() => { setAccentColor(color); showToast(`Accent color: ${color}`, 'info'); }}
+                        aria-label={`Set accent color to ${color}`}
+                        className={`w-full aspect-square rounded-lg transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                          isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-background-dark scale-110' : 'hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: colors[color] }}
+                        title={color.charAt(0).toUpperCase() + color.slice(1)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Notifications */}
+          <section>
+            <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Notifications</h2>
+            {!notificationsSupported ? (
+              <div className="p-4 rounded-lg bg-white/5 border border-white/5">
+                <p className="text-sm text-text-muted">Desktop notifications are not supported in this browser.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                  <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">notifications</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground font-medium">Desktop notifications</p>
+                    <p className="text-[10px] text-text-muted mt-0.5">
+                      {notificationPermission === 'granted' && 'Notifications are enabled'}
+                      {notificationPermission === 'denied' && 'Notifications are blocked. Check browser settings.'}
+                      {notificationPermission === 'default' && 'Grant permission to receive notifications'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {notificationsGranted ? (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-green-400/20 border border-green-400/30 text-green-400">
+                        Enabled
+                      </span>
+                    ) : notificationPermission === 'denied' ? (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-red-400/20 border border-red-400/30 text-red-400">
+                        Blocked
+                      </span>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          const result = await requestPermission();
+                          if (result === 'granted') {
+                            showToast('Notifications enabled', 'success');
+                            // Test notification
+                            try {
+                              const n = new Notification('Nexus Dashboard', {
+                                body: 'Notifications are now enabled!',
+                                icon: '/favicon.ico',
+                              });
+                              setTimeout(() => n.close(), 4000);
+                            } catch {
+                              // Ignore if notification fails
+                            }
+                          } else if (result === 'denied') {
+                            showToast('Notifications blocked. Check browser settings.', 'error');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary/20 border border-primary/30 text-primary hover:bg-primary/30 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      >
+                        Enable
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {notificationsGranted && (
+                  <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                    <p className="text-xs text-foreground font-medium mb-2">Notification types:</p>
+                    <ul className="text-[11px] text-text-muted space-y-1 ml-4">
+                      <li className="flex items-start gap-2">
+                        <span className="text-primary">•</span>
+                        <span>Calendar events (5 minutes before)</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-primary">•</span>
+                        <span>Task reminders (when due date arrives)</span>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Local system snapshot (same `/api/system` poll as Main Hub tile) */}
