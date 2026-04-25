@@ -1,42 +1,148 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 
 import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
 import { CalendarEvent } from '../types/calendar';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
 import type { SetViewFn } from '../config/navigation';
+
+/** Timer presets. `isBreak` determines cosmetic colour in the UI. */
+const PRESETS = [
+  { label: '5 min', seconds: 5 * 60, isBreak: true },
+  { label: '10 min', seconds: 10 * 60, isBreak: true },
+  { label: '25 min', seconds: 25 * 60, isBreak: false },
+  { label: '50 min', seconds: 50 * 60, isBreak: false },
+] as const;
+
+const POMODORO_KEY = 'dashboard_pomodoro_sessions';
+
+function todayKey(): string {
+  return format(new Date(), 'yyyy-MM-dd');
+}
+
+function loadSessionsData(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(POMODORO_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSessionsData(data: Record<string, number>) {
+  try { localStorage.setItem(POMODORO_KEY, JSON.stringify(data)); } catch { /* quota */ }
+}
+
+/** Plays a short triple-beep completion sound via the Web Audio API. */
+function playCompletionSound() {
+  try {
+    const ctx = new AudioContext();
+    const beepAt = (startTime: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.35, startTime + 0.01);
+      gain.gain.linearRampToValueAtTime(0, startTime + 0.18);
+      osc.start(startTime);
+      osc.stop(startTime + 0.2);
+    };
+    beepAt(ctx.currentTime);
+    beepAt(ctx.currentTime + 0.25);
+    beepAt(ctx.currentTime + 0.5);
+    // Close context after all beeps finish
+    setTimeout(() => ctx.close(), 1500);
+  } catch {
+    // AudioContext may be unavailable in some environments — silently ignore
+  }
+}
 
 export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask } } = useTaskContext();
-  const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes
+
+  const [selectedPreset, setSelectedPreset] = useState(2); // default to 25 min
+  const [timeLeft, setTimeLeft] = useState(PRESETS[2].seconds);
   const [isActive, setIsActive] = useState(false);
+  const justCompletedRef = useRef(false);
+
+  // Pomodoro session count
+  const [sessionsData, setSessionsData] = useState<Record<string, number>>(loadSessionsData);
+  const todayCount = sessionsData[todayKey()] ?? 0;
+
+  // Streak: consecutive days with at least 1 session
+  const streak = useMemo(() => {
+    const data = sessionsData;
+    let count = 0;
+    let checkDate = new Date();
+    // Don't count today if no sessions yet
+    while (true) {
+      const key = format(checkDate, 'yyyy-MM-dd');
+      if (!(data[key] > 0)) break;
+      count++;
+      checkDate = new Date(checkDate.getTime() - 86_400_000);
+    }
+    return count;
+  }, [sessionsData]);
 
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
+  useCalendarNotifications(events, isCalendarConnected);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Tick + completion in one effect — stops the timer inside the updater
-  // rather than reacting to timeLeft in a second effect (avoids an extra render cycle)
   useEffect(() => {
     if (!isActive) return;
     const interval = setInterval(() => {
       setTimeLeft(t => {
-        if (t <= 1) { setIsActive(false); return 0; }
+        if (t <= 1) {
+          setIsActive(false);
+          justCompletedRef.current = true;
+          return 0;
+        }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
   }, [isActive]);
 
+  // Handle completion side effects (sound + session increment)
+  useEffect(() => {
+    if (!justCompletedRef.current) return;
+    justCompletedRef.current = false;
+
+    // Only count focus sessions (non-break) as Pomodoros
+    const preset = PRESETS[selectedPreset];
+    if (!preset.isBreak) {
+      const key = todayKey();
+      setSessionsData(prev => {
+        const updated = { ...prev, [key]: (prev[key] ?? 0) + 1 };
+        saveSessionsData(updated);
+        return updated;
+      });
+    }
+
+    playCompletionSound();
+  });
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);
     return () => clearInterval(timer);
   }, []);
 
+  const selectPreset = useCallback((index: number) => {
+    setSelectedPreset(index);
+    setIsActive(false);
+    setTimeLeft(PRESETS[index].seconds);
+  }, []);
+
   const toggleTimer = () => setIsActive(!isActive);
   const resetTimer = () => {
     setIsActive(false);
-    setTimeLeft(25 * 60);
+    setTimeLeft(PRESETS[selectedPreset].seconds);
   };
 
   const formatTime = (seconds: number) => {
@@ -44,6 +150,9 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
+
+  const currentPreset = PRESETS[selectedPreset];
+  const isBreak = currentPreset.isBreak;
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
@@ -252,12 +361,29 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           FOCUS MODE
         </div>
         <div className="flex items-center gap-4">
-          <div className={`glass-panel rounded-full px-5 py-2 flex items-center gap-4 border-white/20 transition-colors hover:border-primary/40 group ${isActive ? 'shadow-[0_0_15px_rgba(6,232,249,0.2)]' : ''}`}>
+          {/* Timer presets */}
+          <div className="hidden sm:flex items-center gap-1 glass-panel rounded-full px-2 py-1.5 border-white/10">
+            {PRESETS.map((p, i) => (
+              <button
+                key={p.label}
+                onClick={() => selectPreset(i)}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                  selectedPreset === i
+                    ? p.isBreak
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : 'bg-primary/20 text-primary border border-primary/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                }`}
+              >{p.label}</button>
+            ))}
+          </div>
+          {/* Timer control */}
+          <div className={`glass-panel rounded-full px-5 py-2 flex items-center gap-4 border-white/20 transition-colors hover:border-primary/40 group ${isActive ? (isBreak ? 'shadow-[0_0_15px_rgba(74,222,128,0.2)]' : 'shadow-[0_0_15px_rgba(6,232,249,0.2)]') : ''}`}>
             <div className="flex flex-col items-center">
-              <span className={`text-[10px] ${isActive ? 'text-primary' : 'text-slate-400'} font-bold uppercase tracking-tighter leading-none mb-0.5 ${isActive ? 'group-hover:animate-pulse' : ''}`}>
-                {isActive ? 'Focusing' : 'Paused'}
+              <span className={`text-[10px] font-bold uppercase tracking-tighter leading-none mb-0.5 ${isActive ? (isBreak ? 'text-green-400' : 'text-primary') : 'text-slate-400'} ${isActive ? 'group-hover:animate-pulse' : ''}`}>
+                {isActive ? (isBreak ? 'Break' : 'Focusing') : timeLeft === currentPreset.seconds ? 'Ready' : 'Paused'}
               </span>
-              <span className={`text-lg font-heading font-bold ${isActive ? 'text-white' : 'text-slate-300'} tabular-nums leading-none`}>
+              <span className={`text-lg font-heading font-bold tabular-nums leading-none ${isActive ? 'text-white' : 'text-slate-300'}`}>
                 {formatTime(timeLeft)}
               </span>
             </div>
@@ -343,7 +469,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
                         )}
                       </div>
                       {task.priority && !task.completed && (
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/20 text-red-200 border border-red-500/20 flex-shrink-0">{task.priority}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] border flex-shrink-0 ${task.priority === 'Critical' ? 'bg-red-500/20 text-red-300 border-red-500/20' : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/20'}`}>{task.priority}</span>
                       )}
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button
@@ -417,20 +543,30 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
             </div>
           </div>
 
-          {/* Session Info */}
+          {/* Session Info + Pomodoro History */}
           <div className="glass-panel rounded-xl p-4 flex items-center justify-between h-auto flex-none">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-[20px]">timer</span>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isBreak ? 'bg-green-500/10 border-green-500/20' : 'bg-primary/10 border-primary/20'}`}>
+                <span className={`material-symbols-outlined text-[20px] ${isBreak ? 'text-green-400' : 'text-primary'}`}>timer</span>
               </div>
               <div>
                 <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Session</p>
-                <p className="text-sm text-slate-100 font-medium">{isActive ? 'In progress' : timeLeft === 25 * 60 ? 'Not started' : 'Paused'}</p>
+                <p className="text-sm text-slate-100 font-medium">{isActive ? (isBreak ? 'Break' : 'In progress') : timeLeft === currentPreset.seconds ? 'Not started' : 'Paused'}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Remaining</p>
-              <p className={`text-sm font-mono font-bold ${isActive ? 'text-primary' : 'text-slate-400'}`}>{formatTime(timeLeft)}</p>
+            <div className="flex items-center gap-4">
+              {todayCount > 0 && (
+                <div className="text-center">
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Today</p>
+                  <p className="text-sm font-bold text-slate-100">
+                    {todayCount} session{todayCount !== 1 ? 's' : ''}{streak > 1 ? ` 🔥${streak}` : ''}
+                  </p>
+                </div>
+              )}
+              <div className="text-right">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Remaining</p>
+                <p className={`text-sm font-mono font-bold ${isActive ? (isBreak ? 'text-green-400' : 'text-primary') : 'text-slate-400'}`}>{formatTime(timeLeft)}</p>
+              </div>
             </div>
           </div>
         </section>

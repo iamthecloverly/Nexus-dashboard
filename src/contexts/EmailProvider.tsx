@@ -3,7 +3,7 @@ import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
-import type { Email } from '../types/email';
+import type { Email, ThreadMessage } from '../types/email';
 import { EmailContext } from './emailContext';
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
@@ -152,10 +152,59 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       });
   }, [showToast]);
 
+  const markAllRead = useCallback(() => {
+    // Compute the IDs to mark from current state first, then update state
+    const unreadIds = emails.filter(e => e.unread && !e.archived && !e.deleted).map(e => e.id);
+    if (unreadIds.length === 0) return;
+
+    // Optimistic update
+    setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, unread: false } : e));
+
+    // Fire-and-forget each mark-read request; revert all on failure
+    const revert = () =>
+      setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, unread: true } : e));
+
+    Promise.all(
+      unreadIds.map(id =>
+        fetch(`/api/gmail/messages/${id}/mark-read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+          body: JSON.stringify({ read: true }),
+        }),
+      ),
+    )
+      .then(results => {
+        const anyFailed = results.some(r => !r.ok);
+        if (anyFailed) {
+          revert();
+          showToast('Some emails could not be marked read — try again', 'error');
+        } else {
+          showToast(`${unreadIds.length} email${unreadIds.length !== 1 ? 's' : ''} marked as read`, 'success');
+        }
+      })
+      .catch(() => {
+        revert();
+        showToast('Failed to mark emails as read — check your connection', 'error');
+      });
+  }, [emails, showToast]);
+
+  const fetchThread = useCallback(async (threadId: string): Promise<ThreadMessage[]> => {
+    try {
+      const res = await fetchWithTimeout(`/api/gmail/thread/${encodeURIComponent(threadId)}`, { timeoutMs: 15_000 });
+      if (res.ok) {
+        const data = await res.json();
+        return data.messages ?? [];
+      }
+    } catch {
+      // fall through
+    }
+    return [];
+  }, []);
+
   return (
     <EmailContext.Provider value={{
       state: { emails, gmailConnected, emailsLoading, serverError },
-      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails },
+      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails, markAllRead, fetchThread },
     }}>
       {children}
     </EmailContext.Provider>

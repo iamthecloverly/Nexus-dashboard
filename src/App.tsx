@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
 import { TaskProvider } from './contexts/TaskProvider';
+import { useTaskContext } from './contexts/taskContext';
 import { EmailProvider } from './contexts/EmailProvider';
+import { useEmailContext } from './contexts/emailContext';
 import MainHub from './views/MainHub';
 import FocusMode from './views/FocusMode';
 import Communications from './views/Communications';
@@ -29,12 +31,40 @@ function AutoEmailTaskProcessor() {
   return null;
 }
 
+/**
+ * Bridge that reads `addTask` from within the TaskProvider tree and passes it
+ * up to the parent AppContent via the provided callback ref.
+ * Wraps the raw `addTask(task: Task)` so callers only need to provide a title string.
+ */
+function AddTaskBridge({ onReady }: { onReady: (fn: (title: string) => void) => void }) {
+  const { actions: { addTask } } = useTaskContext();
+  const addTaskByTitle = useCallback((title: string) => {
+    addTask({ id: crypto.randomUUID(), title, completed: false, group: 'now' });
+  }, [addTask]);
+  useLayoutEffect(() => { onReady(addTaskByTitle); }, [addTaskByTitle, onReady]);
+  return null;
+}
+
+/**
+ * Bridge that reads email actions from within the EmailProvider tree and passes
+ * them up to the parent AppContent via the provided callback ref.
+ */
+function EmailActionsBridge({ onReady }: { onReady: (actions: { markAllRead: () => void }) => void }) {
+  const { actions } = useEmailContext();
+  useLayoutEffect(() => { onReady({ markAllRead: actions.markAllRead }); }, [actions.markAllRead, onReady]);
+  return null;
+}
+
 function AppContent() {
   const { showToast } = useToast();
   const isLg = useMediaQuery('(min-width: 1024px)');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [currentView, setCurrentView] = useState<ViewId>('MainHub');
   const [unlocked, setUnlocked] = useState(false);
+  // Trigger counters — incrementing signals the target view to perform an action
+  const [quickAddTrigger, setQuickAddTrigger] = useState(0);
+  const [composeTrigger, setComposeTrigger] = useState(0);
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
   const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
@@ -114,6 +144,33 @@ function AppContent() {
     else setShowMusicInput(v => !v);
   }, [ytVideoId]);
 
+  // addTask ref — populated by AddTaskBridge (which lives inside TaskProvider)
+  const addTaskRef = useRef<((title: string) => void) | null>(null);
+  // markAllRead ref — populated by EmailActionsBridge (which lives inside EmailProvider)
+  const markAllReadRef = useRef<(() => void) | null>(null);
+
+  const handlePaletteOpenQuickAdd = useCallback(() => {
+    setCurrentView('MainHub');
+    setQuickAddTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteComposeEmail = useCallback(() => {
+    setCurrentView('Communications');
+    setComposeTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteRefreshCalendar = useCallback(() => {
+    setCurrentView('MainHub');
+    setCalendarRefreshTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteAddTask = useCallback((title: string) => {
+    if (addTaskRef.current) {
+      addTaskRef.current(title);
+      showToast(`Task "${title}" added`, 'success');
+    }
+  }, [showToast]);
+
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
 
   useEffect(() => {
@@ -140,6 +197,8 @@ function AppContent() {
       <TaskProvider>
         <EmailProvider>
           <AutoEmailTaskProcessor />
+          <AddTaskBridge onReady={fn => { addTaskRef.current = fn; }} />
+          <EmailActionsBridge onReady={actions => { markAllReadRef.current = actions.markAllRead; }} />
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -191,9 +250,24 @@ function AppContent() {
                 videoTitles={videoTitles}
               />
 
-              {currentView === 'MainHub' && <ErrorBoundary label="Main Hub"><MainHub setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'MainHub' && (
+                <ErrorBoundary label="Main Hub">
+                  <MainHub
+                    setCurrentView={setCurrentView}
+                    externalQuickAddTrigger={quickAddTrigger}
+                    externalCalendarRefreshTrigger={calendarRefreshTrigger}
+                  />
+                </ErrorBoundary>
+              )}
               {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
-              {currentView === 'Communications' && <ErrorBoundary label="Communications"><Communications setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'Communications' && (
+                <ErrorBoundary label="Communications">
+                  <Communications
+                    setCurrentView={setCurrentView}
+                    externalComposeTrigger={composeTrigger}
+                  />
+                </ErrorBoundary>
+              )}
               {currentView === 'Integrations' && <ErrorBoundary label="Integrations"><Integrations setCurrentView={setCurrentView} /></ErrorBoundary>}
               {currentView === 'Settings' && (
                 <ErrorBoundary label="Settings">
@@ -236,6 +310,11 @@ function AppContent() {
               onClose={() => setCommandPaletteOpen(false)}
               setCurrentView={setCurrentView}
               onToggleMusic={toggleMusicChrome}
+              onOpenQuickAdd={handlePaletteOpenQuickAdd}
+              onComposeEmail={handlePaletteComposeEmail}
+              onMarkAllRead={() => markAllReadRef.current?.()}
+              onRefreshCalendar={handlePaletteRefreshCalendar}
+              onAddTask={handlePaletteAddTask}
             />
           </div>
         </EmailProvider>

@@ -1,5 +1,6 @@
 import express from 'express';
 import { google } from 'googleapis';
+import rateLimit from 'express-rate-limit';
 
 import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
@@ -8,6 +9,9 @@ import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/goog
 // Cache the inbox list for 60 s.  Mutations (mark-read, archive, trash, send)
 // call gmailCacheBust() so the next poll always sees fresh data.
 const GMAIL_TTL_MS = 60_000;
+
+// Rate limiter for thread-detail fetches — one full thread = N message bodies
+const threadLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 
 export const gmailRouter = express.Router();
 
@@ -33,26 +37,32 @@ gmailRouter.get('/messages', async (req, res) => {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      const listRes = await gmail.users.messages.list({
+      // Fetch inbox threads (one row per conversation)
+      const threadsRes = await gmail.users.threads.list({
         userId: 'me',
         labelIds: ['INBOX'],
-        maxResults: 20,
+        maxResults: 15,
       });
 
-      const messages = listRes.data.messages || [];
+      const threadList = threadsRes.data.threads || [];
 
-      const emails = await Promise.all(messages.map(async (msg) => {
-        const detail = await gmail.users.messages.get({
+      const emails = (await Promise.all(threadList.map(async (t) => {
+        const thread = await gmail.users.threads.get({
           userId: 'me',
-          id: msg.id!,
+          id: t.id!,
           format: 'metadata',
           metadataHeaders: ['From', 'Subject', 'Date'],
         });
 
-        const headers = detail.data.payload?.headers || [];
-        const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
-        const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-        const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
+        const messages = thread.data.messages ?? [];
+        const messageCount = messages.length;
+        const latestMsg = messages[messages.length - 1];
+        if (!latestMsg) return null;
+
+        const headers = latestMsg.payload?.headers || [];
+        const fromHeader = headers.find((h: any) => h.name === 'From')?.value ?? '';
+        const subject = headers.find((h: any) => h.name === 'Subject')?.value ?? '(no subject)';
+        const dateHeader = headers.find((h: any) => h.name === 'Date')?.value ?? '';
 
         // Parse "Name <email>" or just "email"
         const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
@@ -60,7 +70,7 @@ gmailRouter.get('/messages', async (req, res) => {
         const senderEmail = nameMatch?.[2] ?? fromHeader;
         const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
 
-        const labelIds = detail.data.labelIds ?? [];
+        const labelIds = latestMsg.labelIds ?? [];
         const isUnread = labelIds.includes('UNREAD');
         const isUrgent = labelIds.includes('STARRED');
 
@@ -74,19 +84,21 @@ gmailRouter.get('/messages', async (req, res) => {
             : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
         return {
-          id: msg.id!,
+          id: latestMsg.id!,
+          threadId: t.id!,
+          messageCount,
           sender: senderName,
           senderEmail,
           initials,
           time: timeDisplay,
           subject,
-          preview: detail.data.snippet ?? '',
+          preview: thread.data.snippet ?? latestMsg.snippet ?? '',
           unread: isUnread,
           urgent: isUrgent,
           archived: false,
           deleted: false,
         };
-      }));
+      }))).filter(Boolean);
 
       return { emails };
     });
@@ -186,6 +198,102 @@ gmailRouter.post('/messages/:id/trash', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/gmail/thread/:threadId
+ * Returns all messages in a Gmail thread, each with its decoded plain-text body.
+ * Used by the thread detail view to show the full conversation.
+ */
+gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+
+  if (!GMAIL_ID_RE.test(req.params.threadId)) {
+    return res.status(400).json({ error: 'Invalid thread id' });
+  }
+
+  try {
+    const { tokens } = auth;
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    const thread = await gmail.users.threads.get({
+      userId: 'me',
+      id: req.params.threadId,
+      format: 'full',
+    });
+
+    // Recursively extract plain-text body from MIME tree (same logic as /message/:id)
+    const extractBody = (payload: any): string => {
+      if (!payload) return '';
+      if (payload.mimeType === 'text/plain' && payload.body?.data) {
+        return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+      }
+      if (payload.parts) {
+        for (const part of payload.parts) {
+          const result = extractBody(part);
+          if (result) return result;
+        }
+      }
+      if (payload.mimeType === 'text/html' && payload.body?.data) {
+        return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+      }
+      return '';
+    };
+
+    const messages = (thread.data.messages ?? []).map((msg) => {
+      const headers = msg.payload?.headers ?? [];
+      const fromHeader = headers.find((h: any) => h.name === 'From')?.value ?? '';
+      const dateHeader = headers.find((h: any) => h.name === 'Date')?.value ?? '';
+
+      const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
+      const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
+      const senderEmail = nameMatch?.[2] ?? fromHeader;
+      const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+
+      const msgDate = new Date(dateHeader);
+      const now = new Date();
+      const isToday = msgDate.toDateString() === now.toDateString();
+      const timeDisplay = isNaN(msgDate.getTime())
+        ? ''
+        : isToday
+          ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+      const labelIds = msg.labelIds ?? [];
+      const isUnread = labelIds.includes('UNREAD');
+
+      return {
+        id: msg.id!,
+        sender: senderName,
+        senderEmail,
+        initials,
+        time: timeDisplay,
+        body: extractBody(msg.payload),
+        unread: isUnread,
+      };
+    });
+
+    res.json({ messages });
+  } catch (error: any) {
+    console.error('Error fetching gmail thread:', error?.message ?? error);
+    const status = error?.response?.status ?? error?.code;
+    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Token expired or invalid' });
+    }
+    res.status(500).json({ error: 'Failed to fetch thread' });
+  }
+});
+
 gmailRouter.get('/message/:id', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
@@ -218,13 +326,13 @@ gmailRouter.get('/message/:id', async (req, res) => {
       // HTML fallback: strip tags
       if (payload.mimeType === 'text/html' && payload.body?.data) {
         return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
           .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
           .replace(/\s{2,}/g, ' ')
           .trim();
       }
