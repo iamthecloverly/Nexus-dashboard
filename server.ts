@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 
@@ -30,6 +31,9 @@ app.set('trust proxy', 1);
 
 // Pino HTTP logging middleware
 app.use(pinoHttp({ logger }));
+
+// Compression middleware - gzip/deflate responses
+app.use(compression());
 
 app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite injects inline scripts in dev
 app.use(cookieParser(SESSION_SECRET));
