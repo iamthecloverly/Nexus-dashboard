@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
 import { TaskProvider } from './contexts/TaskProvider';
 import { EmailProvider } from './contexts/EmailProvider';
+import { useEmailContext } from './contexts/emailContext';
 import MainHub from './views/MainHub';
 import FocusMode from './views/FocusMode';
 import Communications from './views/Communications';
@@ -35,6 +36,10 @@ function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [currentView, setCurrentView] = useState<ViewId>('MainHub');
   const [unlocked, setUnlocked] = useState(false);
+  // Trigger counters — incrementing signals the target view to perform an action
+  const [quickAddTrigger, setQuickAddTrigger] = useState(0);
+  const [composeTrigger, setComposeTrigger] = useState(0);
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
   const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
@@ -114,6 +119,23 @@ function AppContent() {
     else setShowMusicInput(v => !v);
   }, [ytVideoId]);
 
+  const { actions: { markAllRead } } = useEmailContext();
+
+  const handlePaletteOpenQuickAdd = useCallback(() => {
+    setCurrentView('MainHub');
+    setQuickAddTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteComposeEmail = useCallback(() => {
+    setCurrentView('Communications');
+    setComposeTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteRefreshCalendar = useCallback(() => {
+    setCurrentView('MainHub');
+    setCalendarRefreshTrigger(n => n + 1);
+  }, []);
+
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
 
   useEffect(() => {
@@ -191,9 +213,24 @@ function AppContent() {
                 videoTitles={videoTitles}
               />
 
-              {currentView === 'MainHub' && <ErrorBoundary label="Main Hub"><MainHub setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'MainHub' && (
+                <ErrorBoundary label="Main Hub">
+                  <MainHub
+                    setCurrentView={setCurrentView}
+                    externalQuickAddTrigger={quickAddTrigger}
+                    externalCalendarRefreshTrigger={calendarRefreshTrigger}
+                  />
+                </ErrorBoundary>
+              )}
               {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
-              {currentView === 'Communications' && <ErrorBoundary label="Communications"><Communications setCurrentView={setCurrentView} /></ErrorBoundary>}
+              {currentView === 'Communications' && (
+                <ErrorBoundary label="Communications">
+                  <Communications
+                    setCurrentView={setCurrentView}
+                    externalComposeTrigger={composeTrigger}
+                  />
+                </ErrorBoundary>
+              )}
               {currentView === 'Integrations' && <ErrorBoundary label="Integrations"><Integrations setCurrentView={setCurrentView} /></ErrorBoundary>}
               {currentView === 'Settings' && (
                 <ErrorBoundary label="Settings">
@@ -236,6 +273,10 @@ function AppContent() {
               onClose={() => setCommandPaletteOpen(false)}
               setCurrentView={setCurrentView}
               onToggleMusic={toggleMusicChrome}
+              onOpenQuickAdd={handlePaletteOpenQuickAdd}
+              onComposeEmail={handlePaletteComposeEmail}
+              onMarkAllRead={markAllRead}
+              onRefreshCalendar={handlePaletteRefreshCalendar}
             />
           </div>
         </EmailProvider>

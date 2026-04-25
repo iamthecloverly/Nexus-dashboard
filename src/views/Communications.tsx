@@ -33,7 +33,13 @@ interface EmailDetail {
   loading: boolean;
 }
 
-export default function Communications({ setCurrentView }: { setCurrentView: SetViewFn }) {
+interface CommunicationsProps {
+  setCurrentView: SetViewFn;
+  /** Increment to open the compose panel from outside (e.g. command palette). */
+  externalComposeTrigger?: number;
+}
+
+export default function Communications({ setCurrentView, externalComposeTrigger }: CommunicationsProps) {
   const { state: { emails, gmailConnected, emailsLoading, serverError }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();
@@ -100,6 +106,12 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
 
   // Reset keyboard selection whenever the visible list changes (search or refresh)
   useEffect(() => { setSelectedIndex(0); }, [visibleEmails]);
+
+  // Open compose when triggered from outside (e.g. command palette)
+  useEffect(() => {
+    if (!externalComposeTrigger) return;
+    setCompose(EMPTY_COMPOSE);
+  }, [externalComposeTrigger]);
 
   // Keep a ref in sync so the keyboard handler never needs to re-register
   stateRef.current.visibleEmails = visibleEmails;

@@ -16,6 +16,7 @@ export interface EmailActions {
   archiveEmail: (id: string, e?: React.MouseEvent) => void;
   deleteEmail: (id: string, e?: React.MouseEvent) => void;
   refreshEmails: () => void;
+  markAllRead: () => void;
 }
 
 export interface EmailContextValue {
