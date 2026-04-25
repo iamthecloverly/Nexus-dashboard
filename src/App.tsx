@@ -65,17 +65,27 @@ function AppContent() {
   const [quickAddTrigger, setQuickAddTrigger] = useState(0);
   const [composeTrigger, setComposeTrigger] = useState(0);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
-  const [ytVideoId, setYtVideoId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null);
+  const [ytVideoId, setYtVideoId] = useState<string | null>(() => {
+    try { return localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null; } catch { return null; }
+  });
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
   const [ytVolume, setYtVolume] = useState<number>(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.ytVolume);
-    const n = raw ? Number(raw) : 80;
-    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 80;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ytVolume);
+      const n = raw ? Number(raw) : 80;
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 80;
+    } catch {
+      return 80;
+    }
   });
   const [resumeEnabled, setResumeEnabled] = useState<boolean>(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.ytResumeEnabled);
-    return raw ? raw === '1' : true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ytResumeEnabled);
+      return raw ? raw === '1' : true;
+    } catch {
+      return true;
+    }
   });
   const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
 
@@ -112,7 +122,7 @@ function AppContent() {
 
   const handleYtClose = () => {
     setYtVideoId(null);
-    localStorage.removeItem(STORAGE_KEYS.ytVideoId);
+    try { localStorage.removeItem(STORAGE_KEYS.ytVideoId); } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -173,23 +183,29 @@ function AppContent() {
 
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
 
+  const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/session/status');
+      if (!res.ok) return;
+      const json = (await res.json()) as { loggedIn?: boolean; allowlisted?: boolean; googleEmail?: string | null };
+      // Align SPA gate with server gate (requireDashboardAccess)
+      setUnlocked(!!json.loggedIn && !!json.allowlisted && !!json.googleEmail);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch('/api/session/status');
-        if (!res.ok) return;
-        const json = (await res.json()) as { loggedIn?: boolean };
-        if (!cancelled) setUnlocked(!!json.loggedIn);
-      } catch {
-        // ignore
-      }
+      if (cancelled) return;
+      await checkSession();
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [checkSession]);
 
   if (!unlocked) {
-    return <Login onAuthed={() => setUnlocked(true)} />;
+    return <Login onAuthed={() => { void checkSession(); }} />;
   }
 
   return (
@@ -277,7 +293,7 @@ function AppContent() {
                     onResumeEnabledChange={setResumeEnabled}
                     onClearMusicSession={() => {
                       setYtVideoId(null);
-                      localStorage.removeItem(STORAGE_KEYS.ytVideoId);
+                      try { localStorage.removeItem(STORAGE_KEYS.ytVideoId); } catch { /* ignore */ }
                     }}
                   />
                 </ErrorBoundary>
