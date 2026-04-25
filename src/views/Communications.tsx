@@ -76,7 +76,7 @@ export default function Communications({ setCurrentView }: { setCurrentView: Set
 
   const handleAddSuggestions = (accepted: TaskSuggestion[]) => {
     for (const s of accepted) {
-      addTask({ id: s.id, title: s.title, priority: s.priority === 'Normal' ? undefined : s.priority, completed: false, group: s.group });
+      addTask({ id: s.id, title: s.title, priority: s.priority === 'Normal' ? undefined : (s.priority as 'Priority' | 'Critical'), completed: false, group: s.group });
     }
     showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');
     setSuggestions([]);

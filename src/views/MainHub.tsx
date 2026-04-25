@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { parseISO, isBefore, isAfter, differenceInMinutes } from 'date-fns';
 
-import { Task } from '../types/task';
+import { Task, TaskPriority } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
 import { useEmailContext } from '../contexts/emailContext';
 import { CalendarEvent } from '../types/calendar';
@@ -103,6 +103,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddGroup, setQuickAddGroup] = useState<'now' | 'next'>('now');
+  const [quickAddPriority, setQuickAddPriority] = useState<TaskPriority | undefined>(undefined);
+  const [quickAddDueDate, setQuickAddDueDate] = useState('');
   const quickAddRef = useRef<HTMLInputElement>(null);
 
   const { remainingTasks, activeTasks, completedTasks } = useMemo(() => {
@@ -187,12 +189,26 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
 
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && quickAddTitle.trim()) {
-      addTask({ id: crypto.randomUUID(), title: quickAddTitle.trim(), completed: false, group: quickAddGroup });
+      addTask({
+        id: crypto.randomUUID(),
+        title: quickAddTitle.trim(),
+        completed: false,
+        group: quickAddGroup,
+        priority: quickAddPriority,
+        dueDate: quickAddDueDate || undefined,
+      });
       showToast('Task added', 'success');
       setQuickAddTitle('');
+      setQuickAddPriority(undefined);
+      setQuickAddDueDate('');
       setShowQuickAdd(false);
     }
-    if (e.key === 'Escape') { setQuickAddTitle(''); setShowQuickAdd(false); }
+    if (e.key === 'Escape') {
+      setQuickAddTitle('');
+      setQuickAddPriority(undefined);
+      setQuickAddDueDate('');
+      setShowQuickAdd(false);
+    }
   };
 
   const commitTaskEdit = (id: string) => {
@@ -221,6 +237,35 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [showSchedule]);
+
+  /** Returns Tailwind color classes for a priority level. */
+  const priorityStyles: Record<TaskPriority, { dot: string; badge: string; label: string }> = {
+    Priority: { dot: 'bg-yellow-400', badge: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20', label: 'Priority' },
+    Critical: { dot: 'bg-red-400', badge: 'text-red-400 bg-red-400/10 border-red-400/20', label: 'Critical' },
+  };
+
+  /** Returns true when a task's due date has passed and the task is not completed. */
+  const isOverdue = (task: Task): boolean => {
+    if (!task.dueDate || task.completed) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(task.dueDate) < today;
+  };
+
+  /** Formats a due-date string as a short, human-friendly label. */
+  const formatDueDate = (dueDate: string): string => {
+    const due = new Date(dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays === -1) return 'Yesterday';
+    if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
+    if (diffDays <= 7) return `in ${diffDays}d`;
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(dueDate));
+  };
 
   const renderEvent = (event: CalendarEvent) => {
     const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
@@ -538,17 +583,24 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
               </div>
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
-              {activeTasks.map(task => (
-                <div key={task.id} className="group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border border-transparent hover:border-border-glass">
+              {activeTasks.map(task => {
+                const overdue = isOverdue(task);
+                const pStyle = task.priority ? priorityStyles[task.priority as TaskPriority] : null;
+                return (
+                <div key={task.id} className={`group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border ${overdue ? 'border-red-500/30 bg-red-500/5' : 'border-transparent hover:border-border-glass'}`}>
                   <button
                     onClick={() => toggleTask(task.id)}
                     role="checkbox"
                     aria-checked={task.completed}
                     aria-label={task.title}
-                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 relative transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${task.priority === 'Critical' ? 'border-accent/50 group-hover/task:border-accent' : 'border-border-glass group-hover/task:border-primary/50'}`}
-                  >
-                    {task.priority === 'Critical' && <div className="absolute inset-1 bg-accent rounded-sm"></div>}
-                  </button>
+                    className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 relative transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                      task.priority === 'Critical'
+                        ? 'border-red-400/50 group-hover/task:border-red-400'
+                        : task.priority === 'Priority'
+                          ? 'border-yellow-400/50 group-hover/task:border-yellow-400'
+                          : 'border-border-glass group-hover/task:border-primary/50'
+                    }`}
+                  />
                   <div className="flex flex-col flex-1 min-w-0">
                     {editingTaskId === task.id ? (
                       <input
@@ -563,12 +615,29 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                       <button
                         type="button"
                         onClick={() => { setEditingTaskId(task.id); setEditingTaskTitle(task.title); }}
-                        className={`text-left text-sm font-medium text-foreground cursor-text transition-colors ${task.priority === 'Critical' ? 'group-hover/task:text-accent' : 'group-hover/task:text-primary'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded`}
+                        className="text-left text-sm font-medium text-foreground cursor-text transition-colors group-hover/task:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                       >{task.title}</button>
                     )}
-                    {task.priority && (
-                      <span className={`text-[10px] mt-1 uppercase ${task.priority === 'Critical' ? 'text-accent font-bold' : task.priority === 'Priority' ? 'text-primary font-bold tracking-tighter' : 'text-text-muted'}`}>{task.priority}</span>
-                    )}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {pStyle && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${pStyle.badge}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${pStyle.dot}`} aria-hidden="true" />
+                          {pStyle.label}
+                        </span>
+                      )}
+                      {task.dueDate && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${overdue ? 'text-red-400' : 'text-text-muted'}`}>
+                          <span className="material-symbols-outlined !text-[11px]" aria-hidden="true">calendar_today</span>
+                          {formatDueDate(task.dueDate)}
+                        </span>
+                      )}
+                      {overdue && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 uppercase tracking-wide">
+                          <span className="material-symbols-outlined !text-[11px]" aria-hidden="true">warning</span>
+                          Overdue
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => deleteTask(task.id)}
@@ -578,7 +647,8 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                     <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                   </button>
                 </div>
-              ))}
+                );
+              })}
               {completedTasks.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border-glass">
                   {completedTasks.map(task => (
@@ -698,7 +768,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
 
       {showQuickAdd && (
         <div className="fixed inset-0 z-50 flex items-end justify-end p-10 pointer-events-none">
-          <div className="glass-panel rounded-2xl p-4 w-72 pointer-events-auto shadow-2xl border border-primary/30">
+          <div className="glass-panel rounded-2xl p-4 w-80 pointer-events-auto shadow-2xl border border-primary/30">
             <p className="text-xs text-primary font-bold uppercase tracking-widest mb-3">Quick Add Task</p>
             <input
               ref={quickAddRef}
@@ -709,6 +779,7 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
               onChange={e => setQuickAddTitle(e.target.value)}
               onKeyDown={handleQuickAdd}
             />
+            {/* Group selector */}
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setQuickAddGroup('now')}
@@ -718,6 +789,32 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
                 onClick={() => setQuickAddGroup('next')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${quickAddGroup === 'next' ? 'bg-primary text-background-dark' : 'bg-white/5 text-text-muted hover:text-foreground'}`}
               >Next</button>
+            </div>
+            {/* Priority selector */}
+            <div className="flex gap-1.5 mt-3">
+              <button
+                onClick={() => setQuickAddPriority(undefined)}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-colors ${!quickAddPriority ? 'bg-white/15 text-foreground' : 'bg-white/5 text-text-muted hover:text-foreground'}`}
+              >None</button>
+              <button
+                onClick={() => setQuickAddPriority('Priority')}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-colors ${quickAddPriority === 'Priority' ? 'bg-yellow-400/20 text-yellow-400 border border-yellow-400/30' : 'bg-white/5 text-text-muted hover:text-yellow-400/80'}`}
+              >Priority</button>
+              <button
+                onClick={() => setQuickAddPriority('Critical')}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-colors ${quickAddPriority === 'Critical' ? 'bg-red-400/20 text-red-400 border border-red-400/30' : 'bg-white/5 text-text-muted hover:text-red-400/80'}`}
+              >Critical</button>
+            </div>
+            {/* Due date */}
+            <div className="mt-3">
+              <label htmlFor="quick-add-due-date" className="text-[10px] text-text-muted uppercase tracking-wide font-medium block mb-1">Due date (optional)</label>
+              <input
+                id="quick-add-due-date"
+                type="date"
+                value={quickAddDueDate}
+                onChange={e => setQuickAddDueDate(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:border-primary/50 transition-colors [color-scheme:dark]"
+              />
             </div>
             <p className="text-[10px] text-text-muted mt-2">Press Esc to cancel</p>
           </div>
