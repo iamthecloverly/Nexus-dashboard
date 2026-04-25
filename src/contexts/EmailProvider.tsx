@@ -3,7 +3,7 @@ import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
-import type { Email } from '../types/email';
+import type { Email, ThreadMessage } from '../types/email';
 import { EmailContext } from './emailContext';
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
@@ -188,10 +188,23 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       });
   }, [emails, showToast]);
 
+  const fetchThread = useCallback(async (threadId: string): Promise<ThreadMessage[]> => {
+    try {
+      const res = await fetchWithTimeout(`/api/gmail/thread/${encodeURIComponent(threadId)}`, { timeoutMs: 15_000 });
+      if (res.ok) {
+        const data = await res.json();
+        return data.messages ?? [];
+      }
+    } catch {
+      // fall through
+    }
+    return [];
+  }, []);
+
   return (
     <EmailContext.Provider value={{
       state: { emails, gmailConnected, emailsLoading, serverError },
-      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails, markAllRead },
+      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails, markAllRead, fetchThread },
     }}>
       {children}
     </EmailContext.Provider>

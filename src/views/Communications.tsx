@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
-import { Email } from '../types/email';
+import { Email, ThreadMessage } from '../types/email';
 import { useEmailContext } from '../contexts/emailContext';
 import { useTaskContext } from '../contexts/taskContext';
 import { useToast } from '../components/Toast';
@@ -22,15 +22,22 @@ const EMPTY_COMPOSE: ComposeState = { to: '', subject: '', body: '', sending: fa
 const KEYBOARD_SHORTCUTS = [['C', 'Compose'], ['E', 'Archive'], ['Esc', 'Close'], ['↑↓', 'Navigate']] as const;
 /** Mirrors the server-side check — catches typos before the round-trip */
 const isValidEmail = (addr: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.trim());
+/** Valid task priority values — declared at module level to avoid per-render Set creation */
+const VALID_PRIORITIES = new Set<TaskPriority>(['Priority', 'Critical']);
 
 interface EmailDetail {
   id: string;
+  threadId?: string;
+  messageCount?: number;
   subject: string;
   sender: string;
   senderEmail: string;
   time: string;
   body: string;
   loading: boolean;
+  /** Expanded thread messages — populated when messageCount > 1 */
+  threadMessages?: ThreadMessage[];
+  threadLoading?: boolean;
 }
 
 interface CommunicationsProps {
@@ -40,7 +47,7 @@ interface CommunicationsProps {
 }
 
 export default function Communications({ setCurrentView, externalComposeTrigger }: CommunicationsProps) {
-  const { state: { emails, gmailConnected, emailsLoading, serverError }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails } } = useEmailContext();
+  const { state: { emails, gmailConnected, emailsLoading, serverError }, actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails, fetchThread } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +55,8 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [compose, setCompose] = useState<ComposeState | null>(null);
   const [detail, setDetail] = useState<EmailDetail | null>(null);
+  /** Set of message IDs that are currently expanded in the thread accordion */
+  const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
 
   // AI task extraction
@@ -82,7 +91,6 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
   };
 
   const handleAddSuggestions = (accepted: TaskSuggestion[]) => {
-    const VALID_PRIORITIES = new Set<TaskPriority>(['Priority', 'Critical']);
     for (const s of accepted) {
       const priority: TaskPriority | undefined = VALID_PRIORITIES.has(s.priority as TaskPriority)
         ? (s.priority as TaskPriority)
@@ -123,10 +131,25 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
   };
 
   const openDetail = async (email: Email) => {
-    setDetail({ id: email.id, subject: email.subject, sender: email.sender, senderEmail: email.senderEmail ?? '', time: email.time, body: '', loading: true });
+    // Reset thread expansion — newest message (last in list) will auto-expand after load
+    setExpandedMsgIds(new Set());
+    setDetail({
+      id: email.id,
+      threadId: email.threadId,
+      messageCount: email.messageCount,
+      subject: email.subject,
+      sender: email.sender,
+      senderEmail: email.senderEmail ?? '',
+      time: email.time,
+      body: '',
+      loading: true,
+      threadMessages: undefined,
+      threadLoading: (email.messageCount ?? 1) > 1,
+    });
     if (email.unread) {
       toggleRead(email.id); // no event needed — programmatic call
     }
+    // Fetch single-message body
     try {
       const res = await fetch(`/api/gmail/message/${email.id}`);
       if (res.ok) {
@@ -137,6 +160,18 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
       }
     } catch {
       setDetail(prev => prev?.id === email.id ? { ...prev, body: '(Failed to fetch message)', loading: false } : prev);
+    }
+    // Fetch full thread when conversation has more than one message
+    if ((email.messageCount ?? 1) > 1 && email.threadId) {
+      const threadId = email.threadId;
+      const messages = await fetchThread(threadId);
+      setDetail(prev =>
+        prev?.id === email.id ? { ...prev, threadMessages: messages, threadLoading: false } : prev,
+      );
+      // Auto-expand the latest message (last in the list)
+      if (messages.length > 0) {
+        setExpandedMsgIds(new Set([messages[messages.length - 1].id]));
+      }
     }
   };
 
@@ -349,7 +384,17 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                           <span className={`font-semibold text-[15px] truncate ${email.unread ? 'text-foreground' : 'text-text-muted font-medium'}`}>{email.sender}</span>
                           <span className={`text-[13px] font-medium flex-shrink-0 ml-2 ${email.urgent ? 'text-rose-300' : email.unread ? 'text-primary' : 'text-text-muted'}`}>{email.time}</span>
                         </div>
-                        <h3 className={`font-medium text-[14px] mb-0.5 truncate ${email.unread ? 'text-foreground' : 'text-text-muted'}`}>{email.subject}</h3>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className={`font-medium text-[14px] truncate ${email.unread ? 'text-foreground' : 'text-text-muted'}`}>{email.subject}</h3>
+                          {(email.messageCount ?? 1) > 1 && (
+                            <span
+                              aria-label={`${email.messageCount} messages in thread`}
+                              className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-white/10 border border-white/15 text-[10px] font-bold text-text-muted shrink-0"
+                            >
+                              {email.messageCount}
+                            </span>
+                          )}
+                        </div>
                         {!detail && <p className={`text-[13px] truncate leading-relaxed ${email.unread ? 'text-text-muted' : 'text-text-muted/70'}`}>{email.preview}</p>}
                       </div>
 
@@ -393,7 +438,15 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
               {/* Detail Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-heading font-semibold text-lg text-white truncate">{detail.subject}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading font-semibold text-lg text-white truncate">{detail.subject}</h3>
+                    {(detail.messageCount ?? 1) > 1 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary shrink-0">
+                        <span className="material-symbols-outlined !text-[12px]" aria-hidden="true">forum</span>
+                        {detail.messageCount}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-text-muted mt-0.5 truncate">{detail.sender} &lt;{detail.senderEmail}&gt;</p>
                 </div>
                 <div className="flex items-center gap-1 ml-4 flex-shrink-0">
@@ -413,14 +466,61 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                   </button>
                 </div>
               </div>
-              {/* Detail Body */}
-              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                {detail.loading ? (
+              {/* Detail Body — single message or thread accordion */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {(detail.messageCount ?? 1) <= 1 ? (
+                  /* Single message view */
+                  <div className="p-6">
+                    {detail.loading ? (
+                      <div className="flex items-center justify-center h-32">
+                        <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      </div>
+                    ) : (
+                      <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{detail.body || '(empty)'}</pre>
+                    )}
+                  </div>
+                ) : detail.threadLoading || !detail.threadMessages ? (
+                  /* Thread loading */
                   <div className="flex items-center justify-center h-32">
-                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   </div>
                 ) : (
-                  <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{detail.body || '(empty)'}</pre>
+                  /* Thread accordion */
+                  <div className="flex flex-col divide-y divide-white/5">
+                    {detail.threadMessages.map((msg, idx) => {
+                      const isExpanded = expandedMsgIds.has(msg.id);
+                      const isLast = idx === detail.threadMessages!.length - 1;
+                      return (
+                        <div key={msg.id} className={`${isLast ? 'flex-1' : ''}`}>
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedMsgIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(msg.id)) next.delete(msg.id);
+                              else next.add(msg.id);
+                              return next;
+                            })}
+                            className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                          >
+                            <div className={`w-7 h-7 rounded-full glass-avatar flex items-center justify-center text-xs font-semibold shrink-0 ${msg.unread ? 'text-foreground' : 'text-text-muted'}`}>
+                              {msg.initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`text-[13px] font-semibold truncate block ${msg.unread ? 'text-foreground' : 'text-text-muted'}`}>{msg.sender}</span>
+                            </div>
+                            <span className="text-[12px] text-text-muted shrink-0 ml-2">{msg.time}</span>
+                            <span className="material-symbols-outlined text-[18px] text-text-muted shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} aria-hidden="true">expand_more</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="px-5 pb-5 pt-2">
+                              <pre className="text-sm text-foreground/85 whitespace-pre-wrap break-words font-sans leading-relaxed">{msg.body || '(empty)'}</pre>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

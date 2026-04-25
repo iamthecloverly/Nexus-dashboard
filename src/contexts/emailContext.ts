@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type React from 'react';
-import type { Email } from '../types/email';
+import type { Email, ThreadMessage } from '../types/email';
 
 export interface EmailState {
   emails: Email[];
@@ -17,6 +17,8 @@ export interface EmailActions {
   deleteEmail: (id: string, e?: React.MouseEvent) => void;
   refreshEmails: () => void;
   markAllRead: () => void;
+  /** Fetches all messages in a thread by threadId. Returns empty array on error. */
+  fetchThread: (threadId: string) => Promise<ThreadMessage[]>;
 }
 
 export interface EmailContextValue {
