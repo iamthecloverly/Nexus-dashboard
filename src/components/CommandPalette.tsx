@@ -7,11 +7,20 @@ export type CommandPaletteProps = {
   setCurrentView: SetViewFn;
   /** Same behavior as rail music control (toggle player or open load panel). */
   onToggleMusic: () => void;
+  /** Navigate to MainHub and open the quick-add FAB. */
+  onOpenQuickAdd: () => void;
+  /** Navigate to Communications and open the compose panel. */
+  onComposeEmail: () => void;
+  /** Mark all unread emails as read. */
+  onMarkAllRead: () => void;
+  /** Trigger a calendar refresh and navigate to MainHub. */
+  onRefreshCalendar: () => void;
 };
 
 type Cmd =
   | { kind: 'view'; id: ViewId; label: string; icon: string }
-  | { kind: 'music'; label: string; icon: string };
+  | { kind: 'music'; label: string; icon: string }
+  | { kind: 'action'; id: string; label: string; icon: string };
 
 const COMMANDS: Cmd[] = [
   { kind: 'view', id: 'MainHub', label: 'Main Hub', icon: 'dashboard' },
@@ -20,6 +29,10 @@ const COMMANDS: Cmd[] = [
   { kind: 'view', id: 'Integrations', label: 'Integrations', icon: 'extension' },
   { kind: 'view', id: 'Settings', label: 'Settings', icon: 'settings' },
   { kind: 'music', label: 'Music — toggle player or open library', icon: 'library_music' },
+  { kind: 'action', id: 'add-task', label: 'Add task', icon: 'add_task' },
+  { kind: 'action', id: 'compose-email', label: 'Compose email', icon: 'edit_square' },
+  { kind: 'action', id: 'mark-all-read', label: 'Mark all emails as read', icon: 'drafts' },
+  { kind: 'action', id: 'refresh-calendar', label: 'Refresh calendar', icon: 'event_available' },
 ];
 
 function isTypingTarget(el: Element | null): boolean {
@@ -29,7 +42,22 @@ function isTypingTarget(el: Element | null): boolean {
   return (el as HTMLElement).isContentEditable === true;
 }
 
-export function CommandPalette({ open, onClose, setCurrentView, onToggleMusic }: CommandPaletteProps) {
+function cmdKey(c: Cmd): string {
+  if (c.kind === 'view') return `view-${c.id}`;
+  if (c.kind === 'action') return `action-${c.id}`;
+  return 'music';
+}
+
+export function CommandPalette({
+  open,
+  onClose,
+  setCurrentView,
+  onToggleMusic,
+  onOpenQuickAdd,
+  onComposeEmail,
+  onMarkAllRead,
+  onRefreshCalendar,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,11 +84,29 @@ export function CommandPalette({ open, onClose, setCurrentView, onToggleMusic }:
 
   const run = useCallback(
     (c: Cmd) => {
-      if (c.kind === 'view') setCurrentView(c.id);
-      else onToggleMusic();
+      if (c.kind === 'view') {
+        setCurrentView(c.id);
+      } else if (c.kind === 'music') {
+        onToggleMusic();
+      } else {
+        switch (c.id) {
+          case 'add-task':
+            onOpenQuickAdd();
+            break;
+          case 'compose-email':
+            onComposeEmail();
+            break;
+          case 'mark-all-read':
+            onMarkAllRead();
+            break;
+          case 'refresh-calendar':
+            onRefreshCalendar();
+            break;
+        }
+      }
       onClose();
     },
-    [setCurrentView, onToggleMusic, onClose],
+    [setCurrentView, onToggleMusic, onOpenQuickAdd, onComposeEmail, onMarkAllRead, onRefreshCalendar, onClose],
   );
 
   useEffect(() => {
@@ -112,7 +158,7 @@ export function CommandPalette({ open, onClose, setCurrentView, onToggleMusic }:
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Jump to…"
+            placeholder="Jump to… or type a command"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus:outline-none py-2"
             aria-label="Filter commands"
           />
@@ -123,7 +169,7 @@ export function CommandPalette({ open, onClose, setCurrentView, onToggleMusic }:
             <li className="px-4 py-6 text-sm text-text-muted text-center">No matches</li>
           ) : (
             filtered.map((c, i) => (
-              <li key={c.kind === 'view' ? c.id : 'music'}>
+              <li key={cmdKey(c)}>
                 <button
                   type="button"
                   onClick={() => run(c)}
@@ -134,7 +180,10 @@ export function CommandPalette({ open, onClose, setCurrentView, onToggleMusic }:
                   <span className="material-symbols-outlined text-text-muted text-[20px]" aria-hidden="true">
                     {c.icon}
                   </span>
-                  <span>{c.label}</span>
+                  <span className="flex-1">{c.label}</span>
+                  {c.kind === 'action' && (
+                    <span className="text-[10px] text-text-muted/60 border border-white/10 rounded px-1.5 py-0.5 font-mono shrink-0">action</span>
+                  )}
                 </button>
               </li>
             ))

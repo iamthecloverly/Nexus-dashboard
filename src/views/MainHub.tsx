@@ -104,7 +104,15 @@ function formatDueDate(dueDate: string): string {
   return format(due, 'MMM d');
 }
 
-export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn }) {
+interface MainHubProps {
+  setCurrentView: SetViewFn;
+  /** Increment to open the quick-add FAB from outside (e.g. command palette). */
+  externalQuickAddTrigger?: number;
+  /** Increment to trigger a calendar refetch from outside (e.g. command palette). */
+  externalCalendarRefreshTrigger?: number;
+}
+
+export default function MainHub({ setCurrentView, externalQuickAddTrigger, externalCalendarRefreshTrigger }: MainHubProps) {
   const fmtTime = useMemo(() => new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
     minute: '2-digit',
@@ -223,6 +231,19 @@ export default function MainHub({ setCurrentView }: { setCurrentView: SetViewFn 
     poll: fetchDiscordStatus,
     intervalMs: 5 * 60 * 1000,
   });
+
+  // External triggers from command palette
+  useEffect(() => {
+    if (!externalQuickAddTrigger) return;
+    setShowQuickAdd(true);
+    setTimeout(() => quickAddRef.current?.focus(), 50);
+  }, [externalQuickAddTrigger]);
+
+  useEffect(() => {
+    if (!externalCalendarRefreshTrigger) return;
+    fetchEvents();
+    showToast('Calendar refreshed', 'info');
+  }, [externalCalendarRefreshTrigger, fetchEvents, showToast]);
 
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && quickAddTitle.trim()) {

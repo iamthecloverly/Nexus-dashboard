@@ -152,10 +152,48 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       });
   }, [showToast]);
 
+  const markAllRead = useCallback(() => {
+    // Find all unread email IDs that aren't archived/deleted
+    let unreadIds: string[] = [];
+    setEmails(prev => {
+      unreadIds = prev.filter(e => e.unread && !e.archived && !e.deleted).map(e => e.id);
+      if (unreadIds.length === 0) return prev;
+      return prev.map(e => (!e.unread || e.archived || e.deleted) ? e : { ...e, unread: false });
+    });
+    if (unreadIds.length === 0) return;
+
+    // Fire-and-forget each mark-read request; revert all on failure
+    const revert = () =>
+      setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, unread: true } : e));
+
+    Promise.all(
+      unreadIds.map(id =>
+        fetch(`/api/gmail/messages/${id}/mark-read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+          body: JSON.stringify({ read: true }),
+        }),
+      ),
+    )
+      .then(results => {
+        const anyFailed = results.some(r => !r.ok);
+        if (anyFailed) {
+          revert();
+          showToast('Some emails could not be marked read — try again', 'error');
+        } else {
+          showToast(`${unreadIds.length} email${unreadIds.length !== 1 ? 's' : ''} marked as read`, 'success');
+        }
+      })
+      .catch(() => {
+        revert();
+        showToast('Failed to mark emails as read — check your connection', 'error');
+      });
+  }, [showToast]);
+
   return (
     <EmailContext.Provider value={{
       state: { emails, gmailConnected, emailsLoading, serverError },
-      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails },
+      actions: { toggleRead, archiveEmail, deleteEmail, refreshEmails, markAllRead },
     }}>
       {children}
     </EmailContext.Provider>
