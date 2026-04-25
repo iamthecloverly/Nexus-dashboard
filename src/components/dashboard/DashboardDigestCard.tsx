@@ -1,7 +1,9 @@
-import { useCallback, memo } from 'react';
+import { useCallback, memo, useState } from 'react';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 import { useWeatherForecast } from '../../hooks/useWeatherForecast';
+import { csrfHeaders } from '../../lib/csrf';
 import type { SetViewFn } from '../../config/navigation';
+import type { CalendarEvent } from '../../types/calendar';
 
 /** Material Symbols ligature name for WMO weather_code (stable icon names only). */
 function weatherMaterialIconName(code: number | null): string {
@@ -47,8 +49,12 @@ type DigestProps = {
   /** Calendar: show next-up line when connected and snippet exists */
   calendarConnected: boolean;
   nextEventSnippet: string | null;
+  /** Raw calendar events forwarded to the AI brief generator */
+  calendarEvents: CalendarEvent[];
   /** Tasks remaining (active) */
   remainingTasks: number;
+  /** Whether the AI key is configured */
+  aiConfigured: boolean;
 };
 
 export function DashboardDigestCard({
@@ -61,7 +67,9 @@ export function DashboardDigestCard({
   discordWebhookConfigured,
   calendarConnected,
   nextEventSnippet,
+  calendarEvents,
   remainingTasks,
+  aiConfigured,
 }: DigestProps) {
   const showGmail = gmailConnected || gmailServerError;
   const showGithub = githubConnected;
@@ -71,6 +79,42 @@ export function DashboardDigestCard({
 
   /** Show tile while loading, when we have data, or after a failed fetch (compact retry — never blank placeholder). */
   const showWeatherTile = loading || !!data || !!error;
+
+  // AI daily brief
+  const [brief, setBrief] = useState<string | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
+
+  const fetchBrief = useCallback(async () => {
+    setBriefLoading(true);
+    setBriefError(null);
+    try {
+      const eventsPayload = calendarEvents.slice(0, 20).map(e => ({
+        summary: e.summary,
+        start: e.start.dateTime ?? e.start.date ?? '',
+        end: e.end.dateTime ?? e.end.date ?? '',
+      }));
+      const res = await fetch('/api/ai/daily-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({
+          calendarEvents: eventsPayload,
+          unreadEmailCount: unreadCount,
+          activeTaskCount: remainingTasks,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBriefError(data.error ?? 'Failed to generate brief');
+      } else {
+        setBrief(data.brief ?? '');
+      }
+    } catch {
+      setBriefError('Network error — check your connection');
+    } finally {
+      setBriefLoading(false);
+    }
+  }, [calendarEvents, unreadCount, remainingTasks]);
 
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -292,6 +336,41 @@ export function DashboardDigestCard({
           </div>
         )}
       </div>
+
+      {/* AI Daily Brief — only shown when AI is configured */}
+      {aiConfigured && (
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 flex gap-3 items-start">
+          <span className="material-symbols-outlined text-violet-400 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
+            auto_awesome
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Today's brief</p>
+              <button
+                type="button"
+                onClick={fetchBrief}
+                disabled={briefLoading}
+                aria-label="Generate AI daily brief"
+                className="flex items-center gap-1 text-[11px] font-medium text-violet-400 hover:text-violet-300 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400 rounded"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${briefLoading ? 'animate-spin' : ''}`} aria-hidden="true">
+                  {briefLoading ? 'progress_activity' : brief ? 'refresh' : 'play_circle'}
+                </span>
+                {brief ? 'Refresh' : 'Generate'}
+              </button>
+            </div>
+            {brief ? (
+              <p className="text-sm text-foreground/90 leading-relaxed">{brief}</p>
+            ) : briefError ? (
+              <p className="text-xs text-red-400">{briefError}</p>
+            ) : (
+              <p className="text-xs text-text-muted italic">
+                Click Generate for a 2–3 sentence AI summary of your day.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

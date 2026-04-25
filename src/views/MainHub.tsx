@@ -87,15 +87,14 @@ const PRIORITY_STYLES: Record<TaskPriority, { dot: string; badge: string; label:
 };
 
 /** Returns true when a task's due date has passed (today midnight) and it is not completed. */
-function isOverdue(task: Task): boolean {
+function isOverdue(task: Task, today: Date): boolean {
   if (!task.dueDate || task.completed) return false;
-  return isBefore(parseISO(task.dueDate), startOfDay(new Date()));
+  return isBefore(parseISO(task.dueDate), today);
 }
 
 /** Formats a YYYY-MM-DD due date as a short human-readable label. */
-function formatDueDate(dueDate: string): string {
+function formatDueDate(dueDate: string, today: Date): string {
   const due = parseISO(dueDate);
-  const today = startOfDay(new Date());
   const diff = differenceInCalendarDays(due, today);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
@@ -133,6 +132,17 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [githubConnected, setGithubConnected] = useState(false);
 
   const [discordWebhookConfigured, setDiscordWebhookConfigured] = useState(false);
+
+  // AI configured status (for daily brief)
+  const [aiConfigured, setAiConfigured] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/ai/status')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d?.configured) setAiConfigured(true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Onboarding banner
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(STORAGE_KEYS.onboardingDismissed));
@@ -199,6 +209,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     const timer = setInterval(() => setCurrentTime(new Date()), 10_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Memoized start-of-today date for overdue checks — only recomputes when currentTime date changes
+  const todayStart = useMemo(() => startOfDay(currentTime), [currentTime]);
 
   // GitHub notifications — poll every 5 minutes
   const fetchGithub = useCallback(async () => {
@@ -505,7 +518,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             discordWebhookConfigured={discordWebhookConfigured}
             calendarConnected={isCalendarConnected && !calendarError}
             nextEventSnippet={digestNextEventSnippet}
+            calendarEvents={events}
             remainingTasks={remainingTasks}
+            aiConfigured={aiConfigured}
           />
 
           {/* Calendar Widget */}
@@ -617,7 +632,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
               {activeTasks.map(task => {
-                const overdue = isOverdue(task);
+                const overdue = isOverdue(task, todayStart);
                 const pStyle = task.priority ? PRIORITY_STYLES[task.priority as TaskPriority] : null;
                 return (
                 <div key={task.id} className={`group/task flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover transition-[background-color,border-color] border ${overdue ? 'border-red-500/30 bg-red-500/5' : 'border-transparent hover:border-border-glass'}`}>
@@ -659,7 +674,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       {task.dueDate && (
                         <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${overdue ? 'text-red-400' : 'text-text-muted'}`}>
                           <span className="material-symbols-outlined !text-[11px]" aria-hidden="true">calendar_today</span>
-                          {formatDueDate(task.dueDate)}
+                          {formatDueDate(task.dueDate, todayStart)}
                         </span>
                       )}
                       {overdue && (

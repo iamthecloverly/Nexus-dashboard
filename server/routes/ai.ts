@@ -184,6 +184,67 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
   }
 });
 
+aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
+  const auth = getGoogleTokensFromCookie(req);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
+
+  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
+  if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
+
+  const {
+    calendarEvents = [],
+    unreadEmailCount = 0,
+    activeTaskCount = 0,
+  } = req.body as {
+    calendarEvents?: Array<{ summary?: string; start?: string; end?: string }>;
+    unreadEmailCount?: number;
+    activeTaskCount?: number;
+  };
+
+  // Validate input sizes to prevent prompt injection / abuse
+  const safeEvents = calendarEvents.slice(0, 20).map(e => ({
+    summary: (typeof e.summary === 'string' ? e.summary : '').slice(0, 120),
+    start: (typeof e.start === 'string' ? e.start : '').slice(0, 30),
+    end: (typeof e.end === 'string' ? e.end : '').slice(0, 30),
+  }));
+
+  const eventsText = safeEvents.length
+    ? safeEvents.map(e => `- ${e.summary || 'Event'} (${e.start}–${e.end})`).join('\n')
+    : 'No events today';
+
+  const prompt = [
+    `Today's schedule: ${eventsText}`,
+    `Unread emails: ${Number(unreadEmailCount) || 0}`,
+    `Active tasks remaining: ${Number(activeTaskCount) || 0}`,
+  ].join('\n');
+
+  try {
+    const openai = new OpenAI({ apiKey: openAIKey });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.5,
+      max_tokens: 160,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a concise personal assistant. Given a user\'s agenda, write exactly 2–3 short, motivating sentences as a daily brief. ' +
+            'Mention the busiest part of the day, any inbox urgency, and a quick encouragement about their task list. ' +
+            'Plain text only — no markdown, no bullets, no lists.',
+        },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    const brief = (completion.choices[0].message.content ?? '').trim();
+    res.json({ brief });
+  } catch (error: any) {
+    console.error('AI daily-brief error:', error?.message ?? error);
+    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    res.status(500).json({ error: 'Failed to generate daily brief' });
+  }
+});
+
 aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });

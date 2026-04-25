@@ -78,13 +78,13 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
   const streak = useMemo(() => {
     const data = sessionsData;
     let count = 0;
-    const d = new Date();
+    let checkDate = new Date();
     // Don't count today if no sessions yet
     while (true) {
-      const key = format(d, 'yyyy-MM-dd');
+      const key = format(checkDate, 'yyyy-MM-dd');
       if (!(data[key] > 0)) break;
       count++;
-      d.setDate(d.getDate() - 1);
+      checkDate = new Date(checkDate.getTime() - 86_400_000);
     }
     return count;
   }, [sessionsData]);

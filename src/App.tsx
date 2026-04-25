@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
 import { TaskProvider } from './contexts/TaskProvider';
+import { useTaskContext } from './contexts/taskContext';
 import { EmailProvider } from './contexts/EmailProvider';
 import { useEmailContext } from './contexts/emailContext';
 import MainHub from './views/MainHub';
@@ -27,6 +28,26 @@ import { CommandPalette, useCommandPaletteShortcut } from './components/CommandP
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
   useAutoEmailTasks();
+  return null;
+}
+
+/**
+ * Bridge that reads `addTask` from within the TaskProvider tree and passes it
+ * up to the parent AppContent via the provided callback ref.
+ */
+function AddTaskBridge({ onReady }: { onReady: (fn: (title: string) => void) => void }) {
+  const { actions: { addTask } } = useTaskContext();
+  useLayoutEffect(() => { onReady(addTask); }, [addTask, onReady]);
+  return null;
+}
+
+/**
+ * Bridge that reads email actions from within the EmailProvider tree and passes
+ * them up to the parent AppContent via the provided callback ref.
+ */
+function EmailActionsBridge({ onReady }: { onReady: (actions: { markAllRead: () => void }) => void }) {
+  const { actions } = useEmailContext();
+  useLayoutEffect(() => { onReady({ markAllRead: actions.markAllRead }); }, [actions.markAllRead, onReady]);
   return null;
 }
 
@@ -119,7 +140,10 @@ function AppContent() {
     else setShowMusicInput(v => !v);
   }, [ytVideoId]);
 
-  const { actions: { markAllRead } } = useEmailContext();
+  // addTask ref — populated by AddTaskBridge (which lives inside TaskProvider)
+  const addTaskRef = useRef<((title: string) => void) | null>(null);
+  // markAllRead ref — populated by EmailActionsBridge (which lives inside EmailProvider)
+  const markAllReadRef = useRef<(() => void) | null>(null);
 
   const handlePaletteOpenQuickAdd = useCallback(() => {
     setCurrentView('MainHub');
@@ -135,6 +159,13 @@ function AppContent() {
     setCurrentView('MainHub');
     setCalendarRefreshTrigger(n => n + 1);
   }, []);
+
+  const handlePaletteAddTask = useCallback((title: string) => {
+    if (addTaskRef.current) {
+      addTaskRef.current(title);
+      showToast(`Task "${title}" added`, 'success');
+    }
+  }, [showToast]);
 
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
 
@@ -162,6 +193,8 @@ function AppContent() {
       <TaskProvider>
         <EmailProvider>
           <AutoEmailTaskProcessor />
+          <AddTaskBridge onReady={fn => { addTaskRef.current = fn; }} />
+          <EmailActionsBridge onReady={actions => { markAllReadRef.current = actions.markAllRead; }} />
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -275,8 +308,9 @@ function AppContent() {
               onToggleMusic={toggleMusicChrome}
               onOpenQuickAdd={handlePaletteOpenQuickAdd}
               onComposeEmail={handlePaletteComposeEmail}
-              onMarkAllRead={markAllRead}
+              onMarkAllRead={() => markAllReadRef.current?.()}
               onRefreshCalendar={handlePaletteRefreshCalendar}
+              onAddTask={handlePaletteAddTask}
             />
           </div>
         </EmailProvider>
