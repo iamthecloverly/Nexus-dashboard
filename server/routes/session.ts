@@ -8,6 +8,8 @@ import {
   DASHBOARD_SESSION_COOKIE_OPTS,
 } from '../config.ts';
 import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { logger } from '../lib/logger.ts';
+import { loginSchema } from '../lib/validation.ts';
 
 type GoogleProfileCookie = { email?: string | null; name?: string | null };
 
@@ -35,15 +37,19 @@ sessionRouter.get('/status', (req, res) => {
 });
 
 sessionRouter.post('/login', (req, res) => {
-  const { passcode } = (req.body ?? {}) as { passcode?: unknown };
-  if (typeof passcode !== 'string' || !passcode) {
-    return res.status(400).json({ error: 'Missing passcode' });
+  const validation = loginSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
+
+  const { passcode } = validation.data;
   if (!DASHBOARD_PASSCODE || !safeEqual(passcode, DASHBOARD_PASSCODE)) {
+    logger.warn('Failed login attempt');
     return res.status(401).json({ error: 'Invalid passcode' });
   }
 
   setSignedCookie(res, DASHBOARD_SESSION_COOKIE, '1', DASHBOARD_SESSION_COOKIE_OPTS);
+  logger.info('User logged in successfully');
   res.json({ success: true });
 });
 
@@ -51,6 +57,7 @@ sessionRouter.post('/logout', (_req, res) => {
   clearAppCookie(res, DASHBOARD_SESSION_COOKIE, true);
   clearAppCookie(res, 'google_tokens', true);
   clearAppCookie(res, 'google_profile', true);
+  logger.info('User logged out');
   res.json({ success: true });
 });
 

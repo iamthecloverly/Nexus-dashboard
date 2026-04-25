@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { logger } from '../lib/logger.ts';
+import { gmailIdSchema, markReadSchema, sendEmailSchema } from '../lib/validation.ts';
 
 // Cache the inbox list for 60 s.  Mutations (mark-read, archive, trash, send)
 // call gmailCacheBust() so the next poll always sees fresh data.
@@ -105,7 +107,7 @@ gmailRouter.get('/messages', async (req, res) => {
 
     res.json(result);
   } catch (error: any) {
-    console.error('Error fetching gmail messages:', error);
+    logger.error({ error: error?.message }, 'Error fetching gmail messages');
     const status = error?.response?.status ?? error?.code;
     if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
@@ -118,10 +120,15 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
-  if (!GMAIL_ID_RE.test(req.params.id)) return res.status(400).json({ error: 'Invalid message id' });
+  const idValidation = gmailIdSchema.safeParse(req.params.id);
+  if (!idValidation.success) return res.status(400).json({ error: 'Invalid message id' });
 
-  const { read } = req.body as { read: boolean };
-  if (typeof read !== 'boolean') return res.status(400).json({ error: 'Missing read flag' });
+  const bodyValidation = markReadSchema.safeParse(req.body);
+  if (!bodyValidation.success) {
+    return res.status(400).json({ error: bodyValidation.error.issues[0]?.message || 'Invalid input' });
+  }
+
+  const { read } = bodyValidation.data;
 
   try {
     const { tokensCookie, tokens } = auth;
@@ -285,7 +292,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
 
     res.json({ messages });
   } catch (error: any) {
-    console.error('Error fetching gmail thread:', error?.message ?? error);
+    logger.error({ error: error?.message }, 'Error fetching gmail thread');
     const status = error?.response?.status ?? error?.code;
     if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
@@ -341,7 +348,7 @@ gmailRouter.get('/message/:id', async (req, res) => {
 
     res.json({ body: extractBody(detail.data.payload) });
   } catch (error: any) {
-    console.error('Error fetching gmail message:', error?.message ?? error);
+    logger.error({ error: error?.message }, 'Error fetching gmail message');
     const status = error?.response?.status ?? error?.code;
     if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
@@ -354,11 +361,12 @@ gmailRouter.post('/send', async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { to, subject, body } = req.body as { to: string; subject: string; body: string };
-  if (!to || !subject || !body) return res.status(400).json({ error: 'Missing to, subject, or body' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
-    return res.status(400).json({ error: 'Invalid recipient email address' });
+  const validation = sendEmailSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
+
+  const { to, subject, body } = validation.data;
 
   // Sanitize headers to prevent CRLF injection
   const sanitize = (s: string) => s.replace(/[\r\n]/g, '');
@@ -388,9 +396,10 @@ gmailRouter.post('/send', async (req, res) => {
     });
 
     cacheBust(gmailKey(tokensCookie));
+    logger.info({ to: safeTO }, 'Email sent successfully');
     res.json({ success: true });
   } catch (error) {
-    console.error('Error sending email:', error);
+    logger.error({ error }, 'Error sending email');
     res.status(500).json({ error: 'Failed to send email' });
   }
 });

@@ -7,6 +7,9 @@ import OpenAI from 'openai';
 import { COOKIE_OPTS } from '../config.ts';
 import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { logger } from '../lib/logger.ts';
+import { encrypt, safeDecrypt } from '../lib/encryption.ts';
+import { aiKeySchema, extractTasksSchema, extractTasksBulkSchema, dailyBriefSchema } from '../lib/validation.ts';
 
 export const aiRouter = express.Router();
 
@@ -134,13 +137,15 @@ async function mapWithConcurrency<T, R>(
 }
 
 aiRouter.post('/key', (req, res) => {
-  const { key } = req.body as { key: string };
-  if (!key?.trim()) return res.status(400).json({ error: 'Missing key' });
-  // Validate OpenAI key format
-  if (!/^sk-[\w-]{20,}$/.test(key.trim())) {
-    return res.status(400).json({ error: 'Invalid OpenAI API key format' });
+  const validation = aiKeySchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
-  setSignedCookie(res, 'openai_key', key.trim(), { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+
+  const { key } = validation.data;
+  const encrypted = encrypt(key);
+  setSignedCookie(res, 'openai_key', encrypted, { ...COOKIE_OPTS, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  logger.info('OpenAI API key configured');
   res.json({ success: true });
 });
 
@@ -160,12 +165,17 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
 
-  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
+  const validation = extractTasksSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
+  }
+
+  const cookieKey = getCookie(req, 'openai_key');
+  const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
+  const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
-  const { emailId } = req.body as { emailId: string };
-  if (!emailId?.trim()) return res.status(400).json({ error: 'Missing emailId' });
-  if (!GMAIL_ID_RE.test(emailId.trim())) return res.status(400).json({ error: 'Invalid emailId' });
+  const { emailId } = validation.data;
 
   try {
     const { tokens } = auth;
@@ -175,9 +185,10 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
     const openai = new OpenAI({ apiKey: openAIKey });
 
     const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
+    logger.info({ emailId, count: suggestions.length }, 'Extracted tasks from email');
     res.json({ suggestions });
   } catch (error: any) {
-    console.error('AI extract-tasks error:', error?.message ?? error);
+    logger.error({ error: error?.message, emailId }, 'AI extract-tasks error');
     if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
     if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
     res.status(500).json({ error: 'Failed to extract tasks' });
@@ -188,24 +199,27 @@ aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
 
-  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
+  const validation = dailyBriefSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
+  }
+
+  const cookieKey = getCookie(req, 'openai_key');
+  const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
+  const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
   const {
     calendarEvents = [],
     unreadEmailCount = 0,
     activeTaskCount = 0,
-  } = req.body as {
-    calendarEvents?: Array<{ summary?: string; start?: string; end?: string }>;
-    unreadEmailCount?: number;
-    activeTaskCount?: number;
-  };
+  } = validation.data;
 
-  // Validate input sizes to prevent prompt injection / abuse
-  const safeEvents = calendarEvents.slice(0, 20).map(e => ({
-    summary: (typeof e.summary === 'string' ? e.summary : '').slice(0, 120),
-    start: (typeof e.start === 'string' ? e.start : '').slice(0, 30),
-    end: (typeof e.end === 'string' ? e.end : '').slice(0, 30),
+  // Validate input sizes to prevent prompt injection / abuse (already validated by Zod)
+  const safeEvents = calendarEvents.map(e => ({
+    summary: e.summary ?? '',
+    start: e.start ?? '',
+    end: e.end ?? '',
   }));
 
   const eventsText = safeEvents.length
@@ -237,9 +251,10 @@ aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
     });
 
     const brief = (completion.choices[0].message.content ?? '').trim();
+    logger.info('Generated daily brief');
     res.json({ brief });
   } catch (error: any) {
-    console.error('AI daily-brief error:', error?.message ?? error);
+    logger.error({ error: error?.message }, 'AI daily-brief error');
     if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
     res.status(500).json({ error: 'Failed to generate daily brief' });
   }
@@ -249,13 +264,17 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   const auth = getGoogleTokensFromCookie(req);
   if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
 
-  const openAIKey = getCookie(req, 'openai_key') ?? process.env.OPENAI_API_KEY;
+  const validation = extractTasksBulkSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
+  }
+
+  const cookieKey = getCookie(req, 'openai_key');
+  const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
+  const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
-  const { emailIds, mode = 'manual' } = req.body as { emailIds: string[]; mode?: 'manual' | 'auto' };
-  if (!Array.isArray(emailIds) || emailIds.length === 0) return res.status(400).json({ error: 'Missing emailIds' });
-  const safeIds = emailIds.filter(id => typeof id === 'string' && GMAIL_ID_RE.test(id));
-  if (safeIds.length === 0) return res.status(400).json({ error: 'No valid emailIds provided' });
+  const { emailIds, mode = 'manual' } = validation.data;
 
   try {
     const { tokens } = auth;
@@ -264,7 +283,7 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
 
-    const batches = safeIds.slice(0, 10);
+    const batches = emailIds;
     const perEmail = await mapWithConcurrency(batches, 3, async (emailId) => {
       try {
         return await extractTasksFromEmail(gmail, openai, emailId, mode);
@@ -274,9 +293,10 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     });
     const allSuggestions = perEmail.flat();
 
+    logger.info({ emailCount: emailIds.length, taskCount: allSuggestions.length }, 'Bulk extracted tasks');
     res.json({ suggestions: allSuggestions });
   } catch (error: any) {
-    console.error('AI extract-tasks-bulk error:', error?.message ?? error);
+    logger.error({ error: error?.message }, 'AI extract-tasks-bulk error');
     if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
     if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
     res.status(500).json({ error: 'Failed to extract tasks' });
