@@ -24,7 +24,6 @@ import { SystemMetricsProvider } from './contexts/SystemMetricsProvider';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useViewportDesktopGate } from './hooks/useViewportDesktopGate';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
-import { ThemeProvider } from './contexts/ThemeProvider';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -348,14 +347,12 @@ function ViewportGate({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <SystemMetricsProvider>
-          <ViewportGate>
-            <AppContent />
-          </ViewportGate>
-        </SystemMetricsProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <ToastProvider>
+      <SystemMetricsProvider>
+        <ViewportGate>
+          <AppContent />
+        </ViewportGate>
+      </SystemMetricsProvider>
+    </ToastProvider>
   );
 }

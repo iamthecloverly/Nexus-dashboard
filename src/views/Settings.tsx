@@ -108,8 +108,6 @@ export default function Settings({
       STORAGE_KEYS.ytResumeEnabled,
       STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
       STORAGE_KEYS.weatherCoords,
-      STORAGE_KEYS.themeMode,
-      STORAGE_KEYS.themeAccent,
       STORAGE_KEYS.notificationsEnabled,
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);

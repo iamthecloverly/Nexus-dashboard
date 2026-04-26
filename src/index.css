@@ -6,18 +6,6 @@
   color-scheme: dark;
 }
 
-/* Light theme variables */
-:root[data-theme="light"] {
-  color-scheme: light;
-  --color-background-dark: #f8f9fa;
-  --color-background-elevated: #ffffff;
-  --color-surface: #f1f3f5;
-  --color-surface-hover: #e9ecef;
-  --color-foreground: #1a1a1a;
-  --color-text-muted: #64748b;
-  --color-border-glass: rgba(0, 0, 0, 0.1);
-}
-
 /*
   Nexus theme — dark, low-contrast base + single cool accent (sky).
   Prefer Tailwind utilities: bg-background-dark, text-foreground, text-text-muted, border-border-glass, text-primary…
