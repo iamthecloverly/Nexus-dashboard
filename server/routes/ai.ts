@@ -121,17 +121,21 @@ async function extractTasksFromEmail(
 
   const raw = parseAiTasksJson(completion.choices?.[0]?.message?.content);
   const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
+  type Priority = (typeof PRIORITIES)[number];
   return raw.tasks
     .filter((t: RawAiTask) => typeof t.title === 'string' && t.title.trim())
-    .map((t: RawAiTask) => ({
-      id: randomUUID(),
-      emailId,
-      title: (t.title as string).trim(),
-      priority: PRIORITIES.includes(t.priority as 'Normal' | 'Priority' | 'Critical') ? (t.priority as 'Normal' | 'Priority' | 'Critical') : 'Normal',
-      group: t.group === 'next' ? 'next' : 'now',
-      reason: typeof t.reason === 'string' ? t.reason.trim() : '',
-      accepted: true,
-    }));
+    .map((t: RawAiTask) => {
+      const priority: Priority = PRIORITIES.includes(t.priority as Priority) ? (t.priority as Priority) : 'Normal';
+      return {
+        id: randomUUID(),
+        emailId,
+        title: (t.title as string).trim(),
+        priority,
+        group: t.group === 'next' ? 'next' : 'now',
+        reason: typeof t.reason === 'string' ? t.reason.trim() : '',
+        accepted: true,
+      };
+    });
 }
 
 export function parseAiTasksJson(content: unknown): { tasks: RawAiTask[] } {

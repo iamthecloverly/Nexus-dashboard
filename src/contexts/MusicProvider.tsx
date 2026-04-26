@@ -133,6 +133,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     handleYtRequestLoad,
     toggleMusicChrome,
     clearMusicSession,
+    // setState functions from useState are stable references — included here for explicitness
+    setMusicPlayerVisible,
+    setYtVolume,
+    setResumeEnabled,
+    setVideoTitles,
+    setShowMusicInput,
   ]);
 
   return <MusicContext.Provider value={value}>{children}</MusicContext.Provider>;

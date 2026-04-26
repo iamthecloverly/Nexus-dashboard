@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { SESSION_SECRET } from '../../config';
 import { discordRouter } from '../discord';
 
+// Note: this test app intentionally omits CSRF middleware — it tests the Discord route handler in isolation.
 function makeApp() {
   const app = express();
   app.use(express.json());
