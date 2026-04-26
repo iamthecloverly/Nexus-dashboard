@@ -126,7 +126,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     }
 
     playCompletionSound();
-  });
+  }, [selectedPreset]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);

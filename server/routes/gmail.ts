@@ -2,7 +2,7 @@ import express from 'express';
 import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 
-import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
+import { parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
@@ -23,7 +23,7 @@ export const gmailRouter = express.Router();
 
 /** Derive the cache key for a given google_tokens cookie value. */
 function gmailKey(tokensCookie: string) {
-  const tokens = parseJsonCookie(tokensCookie);
+  const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
   return tokenKey(tokens?.refresh_token ?? tokensCookie, 'gmail:messages');
 }
 

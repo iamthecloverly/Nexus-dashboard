@@ -345,7 +345,7 @@ export function DashboardDigestCard({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2 mb-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Today's brief</p>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Today&apos;s brief</p>
               <button
                 type="button"
                 onClick={fetchBrief}

@@ -23,6 +23,6 @@ export function clearAppCookie(res: express.Response, name: string, httpOnly: bo
 }
 
 // Safely parse a JSON cookie; returns null on bad JSON
-export function parseJsonCookie<T = any>(cookie: string): T | null {
+export function parseJsonCookie<T = unknown>(cookie: string): T | null {
   try { return JSON.parse(cookie) as T; } catch { return null; }
 }

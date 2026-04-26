@@ -16,8 +16,6 @@ export const aiRouter = express.Router();
 // Rate limiter for AI endpoints (max 20 req/min — each call loops up to 10 OpenAI requests)
 const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false });
 
-const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
-
 /** Recursively extract plain-text body from a Gmail MIME payload */
 function extractGmailBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
   if (!payload) return '';
@@ -77,13 +75,30 @@ Be very conservative. When in doubt, return no tasks.
 Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
 Max 3 tasks. Return {"tasks": []} if nothing is clearly actionable.`;
 
+type AiTask = {
+  id: string;
+  emailId: string;
+  title: string;
+  priority: 'Normal' | 'Priority' | 'Critical';
+  group: 'now' | 'next';
+  reason: string;
+  accepted: boolean;
+};
+
+type RawAiTask = {
+  title?: unknown;
+  priority?: unknown;
+  group?: unknown;
+  reason?: unknown;
+};
+
 /** Shared logic: fetch one email's metadata + body, call GPT-4o-mini, return suggestions */
 async function extractTasksFromEmail(
   gmail: ReturnType<typeof google.gmail>,
   openai: OpenAI,
   emailId: string,
   mode: 'manual' | 'auto' = 'manual',
-): Promise<any[]> {
+): Promise<AiTask[]> {
   const [meta, full] = await Promise.all([
     gmail.users.messages.get({ userId: 'me', id: emailId, format: 'metadata', metadataHeaders: ['From', 'Subject'] }),
     gmail.users.messages.get({ userId: 'me', id: emailId, format: 'full' }),
@@ -105,25 +120,26 @@ async function extractTasksFromEmail(
   });
 
   const raw = parseAiTasksJson(completion.choices?.[0]?.message?.content);
-  return (raw.tasks ?? [])
-    .filter((t: any) => t.title?.trim())
-    .map((t: any) => ({
+  const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
+  return raw.tasks
+    .filter((t: RawAiTask) => typeof t.title === 'string' && t.title.trim())
+    .map((t: RawAiTask) => ({
       id: randomUUID(),
       emailId,
       title: (t.title as string).trim(),
-      priority: (['Normal', 'Priority', 'Critical'] as const).includes(t.priority) ? t.priority : 'Normal',
+      priority: PRIORITIES.includes(t.priority as 'Normal' | 'Priority' | 'Critical') ? (t.priority as 'Normal' | 'Priority' | 'Critical') : 'Normal',
       group: t.group === 'next' ? 'next' : 'now',
-      reason: (t.reason as string | undefined)?.trim() ?? '',
+      reason: typeof t.reason === 'string' ? t.reason.trim() : '',
       accepted: true,
     }));
 }
 
-export function parseAiTasksJson(content: unknown): { tasks: any[] } {
+export function parseAiTasksJson(content: unknown): { tasks: RawAiTask[] } {
   if (typeof content !== 'string' || !content.trim()) return { tasks: [] };
   try {
-    const parsed = JSON.parse(content) as any;
+    const parsed = JSON.parse(content) as Record<string, unknown>;
     if (!parsed || typeof parsed !== 'object') return { tasks: [] };
-    const tasks = Array.isArray((parsed as any).tasks) ? (parsed as any).tasks : [];
+    const tasks = Array.isArray(parsed.tasks) ? (parsed.tasks as RawAiTask[]) : [];
     return { tasks };
   } catch {
     return { tasks: [] };
@@ -199,10 +215,11 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
     const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
     logger.info({ emailId, count: suggestions.length }, 'Extracted tasks from email');
     res.json({ suggestions });
-  } catch (error: any) {
-    logger.error({ error: error?.message, emailId }, 'AI extract-tasks error');
-    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
-    if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
+  } catch (error) {
+    const err = error as { status?: number; message?: string };
+    logger.error({ error: err?.message, emailId }, 'AI extract-tasks error');
+    if (err?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    if (err?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
     res.status(500).json({ error: 'Failed to extract tasks' });
   }
 });
@@ -265,9 +282,10 @@ aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
     const brief = (completion.choices[0].message.content ?? '').trim();
     logger.info('Generated daily brief');
     res.json({ brief });
-  } catch (error: any) {
-    logger.error({ error: error?.message }, 'AI daily-brief error');
-    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+  } catch (error) {
+    const err = error as { status?: number; message?: string };
+    logger.error({ error: err?.message }, 'AI daily-brief error');
+    if (err?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
     res.status(500).json({ error: 'Failed to generate daily brief' });
   }
 });
@@ -307,10 +325,11 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
 
     logger.info({ emailCount: emailIds.length, taskCount: allSuggestions.length }, 'Bulk extracted tasks');
     res.json({ suggestions: allSuggestions });
-  } catch (error: any) {
-    logger.error({ error: error?.message }, 'AI extract-tasks-bulk error');
-    if (error?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
-    if (error?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
+  } catch (error) {
+    const err = error as { status?: number; message?: string };
+    logger.error({ error: err?.message }, 'AI extract-tasks-bulk error');
+    if (err?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    if (err?.message?.includes('invalid_grant')) return res.status(401).json({ error: 'Google session expired, please reconnect' });
     res.status(500).json({ error: 'Failed to extract tasks' });
   }
 });
