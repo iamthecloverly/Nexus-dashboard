@@ -325,7 +325,11 @@ export function YouTubeAudioPlayer({
     if (!playerRef.current) return;
     try {
       if (playerStatus === 'playback_unavailable') return;
-      playing ? playerRef.current.pauseVideo?.() : playerRef.current.playVideo?.();
+      if (playing) {
+        playerRef.current.pauseVideo?.();
+      } else {
+        playerRef.current.playVideo?.();
+      }
     } catch { /* ignore */ }
   };
 

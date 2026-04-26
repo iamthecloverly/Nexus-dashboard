@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { SystemMetricsDisplay } from '../components/layout/SystemMetricsDisplay';
 import { useToast } from '../components/Toast';
 import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
+import { useMusicContext } from '../contexts/musicContext';
 import { useNotificationPermission } from '../hooks/useNotificationPermission';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
@@ -15,17 +16,12 @@ interface ConnectionStatus {
 
 export default function Settings({
   setCurrentView,
-  resumeEnabled,
-  onResumeEnabledChange,
-  onClearMusicSession,
 }: {
   setCurrentView: SetViewFn;
-  resumeEnabled: boolean;
-  onResumeEnabledChange: (next: boolean) => void;
-  onClearMusicSession: () => void;
 }) {
   const { showToast } = useToast();
   const { cpuLoad, memUsed } = useSystemMetrics();
+  const { resumeEnabled, setResumeEnabled, clearMusicSession } = useMusicContext();
   const { permission: notificationPermission, isSupported: notificationsSupported, isGranted: notificationsGranted, requestPermission } = useNotificationPermission();
   const [profileName, setProfileName] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
   const [nameDraft, setNameDraft] = useState(() => localStorage.getItem(STORAGE_KEYS.profileName) ?? '');
@@ -116,14 +112,13 @@ export default function Settings({
 
   const toggleResume = () => {
     const next = !resumeEnabled;
-    try { localStorage.setItem(STORAGE_KEYS.ytResumeEnabled, next ? '1' : '0'); } catch { /* quota */ }
-    onResumeEnabledChange(next);
+    setResumeEnabled(next);
     showToast(next ? 'Music resume enabled' : 'Music resume disabled', 'info');
   };
 
   const clearMusicData = () => {
     [STORAGE_KEYS.ytVideoId, STORAGE_KEYS.ytVolume, STORAGE_KEYS.ytRecent, STORAGE_KEYS.ytPositions].forEach(k => localStorage.removeItem(k));
-    onClearMusicSession();
+    clearMusicSession();
     showToast('Music data cleared', 'info');
   };
 

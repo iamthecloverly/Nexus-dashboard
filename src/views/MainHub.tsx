@@ -185,9 +185,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     return { remainingTasks: active.length, activeTasks: active, completedTasks: completed };
   }, [tasks]);
 
-  const { unreadEmails, unreadCount, lastUnreadEmail } = useMemo(() => {
+  const { unreadCount, lastUnreadEmail } = useMemo(() => {
     const unread = emails.filter(e => e.unread && !e.archived && !e.deleted);
-    return { unreadEmails: unread, unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
+    return { unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
   }, [emails]);
 
   /** Next calendar line for digest (upcoming / now / all-day). */

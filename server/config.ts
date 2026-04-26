@@ -57,7 +57,7 @@ export const CSRF_COOKIE_OPTS: CookieOptions = {
 };
 
 export function ensureCsrfCookie(req: express.Request, res: express.Response) {
-  const existing = (req as any).cookies?.[CSRF_COOKIE];
+  const existing = req.cookies[CSRF_COOKIE];
   if (!existing) {
     res.cookie(CSRF_COOKIE, randomUUID(), CSRF_COOKIE_OPTS);
   }

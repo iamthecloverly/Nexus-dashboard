@@ -6,6 +6,8 @@ import { TaskProvider } from './contexts/TaskProvider';
 import { useTaskContext } from './contexts/taskContext';
 import { EmailProvider } from './contexts/EmailProvider';
 import { useEmailContext } from './contexts/emailContext';
+import { MusicProvider } from './contexts/MusicProvider';
+import { useMusicContext } from './contexts/musicContext';
 import MainHub from './views/MainHub';
 import FocusMode from './views/FocusMode';
 import Communications from './views/Communications';
@@ -13,9 +15,7 @@ import Integrations from './views/Integrations';
 import Settings from './views/Settings';
 import { Login } from './views/Login';
 import { useAutoEmailTasks } from './hooks/useAutoEmailTasks';
-import { STORAGE_KEYS } from './constants/storageKeys';
 import { YouTubeAudioPlayer } from './components/youtube/YouTubeAudioPlayer';
-import { extractYouTubeVideoId } from './components/youtube/youtube';
 import { MusicPanel } from './components/youtube/MusicPanel';
 import { preloadYouTubeIFrameApi } from './components/youtube/useYouTubeIFrameApi';
 import { MOBILE_BOTTOM_NAV_HEIGHT_PX, type ViewId } from './config/navigation';
@@ -38,25 +38,6 @@ function AppAuthed({
   quickAddTrigger,
   composeTrigger,
   calendarRefreshTrigger,
-  ytVideoId,
-  setYtVideoId,
-  showMusicInput,
-  setShowMusicInput,
-  musicPlayerVisible,
-  setMusicPlayerVisible,
-  ytVolume,
-  setYtVolume,
-  resumeEnabled,
-  setResumeEnabled,
-  videoTitles,
-  setVideoTitles,
-  ytPositions,
-  savePosition,
-  ytBottomOffsetPx,
-  handleYtClose,
-  handleYtLoad,
-  handleYtRequestLoad,
-  toggleMusicChrome,
   commandPaletteOpen,
   setCommandPaletteOpen,
   handlePaletteOpenQuickAdd,
@@ -69,25 +50,6 @@ function AppAuthed({
   quickAddTrigger: number;
   composeTrigger: number;
   calendarRefreshTrigger: number;
-  ytVideoId: string | null;
-  setYtVideoId: React.Dispatch<React.SetStateAction<string | null>>;
-  showMusicInput: boolean;
-  setShowMusicInput: React.Dispatch<React.SetStateAction<boolean>>;
-  musicPlayerVisible: boolean;
-  setMusicPlayerVisible: React.Dispatch<React.SetStateAction<boolean>>;
-  ytVolume: number;
-  setYtVolume: React.Dispatch<React.SetStateAction<number>>;
-  resumeEnabled: boolean;
-  setResumeEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-  videoTitles: Record<string, string>;
-  setVideoTitles: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  ytPositions: Record<string, number>;
-  savePosition: (videoId: string, seconds: number) => void;
-  ytBottomOffsetPx: number;
-  handleYtClose: () => void;
-  handleYtLoad: (id: string) => void;
-  handleYtRequestLoad: (input: string) => void;
-  toggleMusicChrome: () => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handlePaletteOpenQuickAdd: () => void;
@@ -97,6 +59,29 @@ function AppAuthed({
   const { showToast } = useToast();
   const { actions: { addTask } } = useTaskContext();
   const { actions: { markAllRead } } = useEmailContext();
+  const {
+    ytVideoId,
+    showMusicInput,
+    musicPlayerVisible,
+    ytVolume,
+    resumeEnabled,
+    videoTitles,
+    ytPositions,
+    savePosition,
+    handleYtLoad,
+    handleYtClose,
+    handleYtRequestLoad,
+    toggleMusicChrome,
+    setMusicPlayerVisible,
+    setYtVolume,
+    setVideoTitles,
+    setShowMusicInput,
+  } = useMusicContext();
+
+  const ytBottomOffsetPx =
+    currentView === 'MainHub'
+      ? (isLg ? 96 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 96)
+      : (isLg ? 24 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 24);
 
   const handlePaletteAddTask = useCallback((title: string) => {
     addTask({ id: crypto.randomUUID(), title, completed: false, group: 'now' });
@@ -180,12 +165,6 @@ function AppAuthed({
             <ErrorBoundary label="Settings">
               <Settings
                 setCurrentView={setCurrentView}
-                resumeEnabled={resumeEnabled}
-                onResumeEnabledChange={setResumeEnabled}
-                onClearMusicSession={() => {
-                  setYtVideoId(null);
-                  try { localStorage.removeItem(STORAGE_KEYS.ytVideoId); } catch { /* ignore */ }
-                }}
               />
             </ErrorBoundary>
           )}
@@ -229,7 +208,6 @@ function AppAuthed({
 }
 
 function AppContent() {
-  const { showToast } = useToast();
   const isLg = useMediaQuery('(min-width: 1024px)');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [currentView, setCurrentView] = useState<ViewId>('MainHub');
@@ -238,94 +216,6 @@ function AppContent() {
   const [quickAddTrigger, setQuickAddTrigger] = useState(0);
   const [composeTrigger, setComposeTrigger] = useState(0);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
-  const [ytVideoId, setYtVideoId] = useState<string | null>(() => {
-    try { return localStorage.getItem(STORAGE_KEYS.ytVideoId) ?? null; } catch { return null; }
-  });
-  const [showMusicInput, setShowMusicInput] = useState(false);
-  const [musicPlayerVisible, setMusicPlayerVisible] = useState(true);
-  const [ytVolume, setYtVolume] = useState<number>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.ytVolume);
-      const n = raw ? Number(raw) : 80;
-      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 80;
-    } catch {
-      return 80;
-    }
-  });
-  const [resumeEnabled, setResumeEnabled] = useState<boolean>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.ytResumeEnabled);
-      return raw ? raw === '1' : true;
-    } catch {
-      return true;
-    }
-  });
-  const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
-
-  const [ytPositions, setYtPositions] = useState<Record<string, number>>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.ytPositions);
-      const parsed = raw ? JSON.parse(raw) : {};
-      if (!parsed || typeof parsed !== 'object') return {};
-      const out: Record<string, number> = {};
-      for (const [k, v] of Object.entries(parsed)) {
-        if (typeof k === 'string' && typeof v === 'number' && Number.isFinite(v)) out[k] = v;
-      }
-      return out;
-    } catch {
-      return {};
-    }
-  });
-
-  const handleYtLoad = useCallback((id: string) => {
-    setYtVideoId(id);
-    try { localStorage.setItem(STORAGE_KEYS.ytVideoId, id); } catch { /* quota exceeded */ }
-    setShowMusicInput(false);
-    setMusicPlayerVisible(true);
-  }, []);
-
-  const handleYtRequestLoad = useCallback((input: string) => {
-    const id = extractYouTubeVideoId(input);
-    if (!id) {
-      showToast('Paste a valid YouTube link or 11‑character video ID', 'error');
-      return;
-    }
-    handleYtLoad(id);
-  }, [handleYtLoad, showToast]);
-
-  const handleYtClose = () => {
-    setYtVideoId(null);
-    try { localStorage.removeItem(STORAGE_KEYS.ytVideoId); } catch { /* ignore */ }
-  };
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEYS.ytVolume, String(ytVolume)); } catch { /* quota exceeded */ }
-  }, [ytVolume]);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEYS.ytResumeEnabled, resumeEnabled ? '1' : '0'); } catch { /* quota exceeded */ }
-  }, [resumeEnabled]);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEYS.ytPositions, JSON.stringify(ytPositions)); } catch { /* quota exceeded */ }
-  }, [ytPositions]);
-
-  const savePosition = useCallback((videoId: string, seconds: number) => {
-    setYtPositions(prev => {
-      if (Math.abs((prev[videoId] ?? 0) - seconds) < 1) return prev;
-      return { ...prev, [videoId]: seconds };
-    });
-  }, []);
-
-  const ytBottomOffsetPx =
-    currentView === 'MainHub'
-      ? (isLg ? 96 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 96)
-      : (isLg ? 24 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 24);
-
-  const toggleMusicChrome = useCallback(() => {
-    if (ytVideoId) setMusicPlayerVisible(v => !v);
-    else setShowMusicInput(v => !v);
-  }, [ytVideoId]);
 
   const handlePaletteOpenQuickAdd = useCallback(() => {
     setCurrentView('MainHub');
@@ -372,38 +262,21 @@ function AppContent() {
   return (
     <TaskProvider>
       <EmailProvider>
-        <AppAuthed
-          currentView={currentView}
-          setCurrentView={setCurrentView}
-          isLg={isLg}
-          quickAddTrigger={quickAddTrigger}
-          composeTrigger={composeTrigger}
-          calendarRefreshTrigger={calendarRefreshTrigger}
-          ytVideoId={ytVideoId}
-          setYtVideoId={setYtVideoId}
-          showMusicInput={showMusicInput}
-          setShowMusicInput={setShowMusicInput}
-          musicPlayerVisible={musicPlayerVisible}
-          setMusicPlayerVisible={setMusicPlayerVisible}
-          ytVolume={ytVolume}
-          setYtVolume={setYtVolume}
-          resumeEnabled={resumeEnabled}
-          setResumeEnabled={setResumeEnabled}
-          videoTitles={videoTitles}
-          setVideoTitles={setVideoTitles}
-          ytPositions={ytPositions}
-          savePosition={savePosition}
-          ytBottomOffsetPx={ytBottomOffsetPx}
-          handleYtClose={handleYtClose}
-          handleYtLoad={handleYtLoad}
-          handleYtRequestLoad={handleYtRequestLoad}
-          toggleMusicChrome={toggleMusicChrome}
-          commandPaletteOpen={commandPaletteOpen}
-          setCommandPaletteOpen={setCommandPaletteOpen}
-          handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
-          handlePaletteComposeEmail={handlePaletteComposeEmail}
-          handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
-        />
+        <MusicProvider>
+          <AppAuthed
+            currentView={currentView}
+            setCurrentView={setCurrentView}
+            isLg={isLg}
+            quickAddTrigger={quickAddTrigger}
+            composeTrigger={composeTrigger}
+            calendarRefreshTrigger={calendarRefreshTrigger}
+            commandPaletteOpen={commandPaletteOpen}
+            setCommandPaletteOpen={setCommandPaletteOpen}
+            handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
+            handlePaletteComposeEmail={handlePaletteComposeEmail}
+            handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
+          />
+        </MusicProvider>
       </EmailProvider>
     </TaskProvider>
   );

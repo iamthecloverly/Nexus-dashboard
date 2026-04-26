@@ -54,27 +54,32 @@ githubRouter.get('/notifications', async (req, res) => {
       if (response.status === 401) throw Object.assign(new Error('Invalid GitHub token'), { status: 401 });
       if (!response.ok) throw Object.assign(new Error('GitHub API error'), { status: response.status });
 
-      const raw = await response.json() as any[];
+      const raw = await response.json() as Record<string, unknown>[];
       return {
-        notifications: raw.map(n => ({
-          id: n.id as string,
-          title: n.subject?.title as string,
-          type: n.subject?.type as string,
-          repo: n.repository?.full_name as string,
-          reason: n.reason as string,
-          updatedAt: n.updated_at as string,
-          url: (n.subject?.url as string | undefined)
-            ?.replace('https://api.github.com/repos/', 'https://github.com/')
-            .replace('/pulls/', '/pull/'),
-        })),
+        notifications: raw.map(n => {
+          const subject = n.subject as Record<string, unknown> | undefined;
+          const repo = n.repository as Record<string, unknown> | undefined;
+          return {
+            id: n.id as string,
+            title: subject?.title as string,
+            type: subject?.type as string,
+            repo: repo?.full_name as string,
+            reason: n.reason as string,
+            updatedAt: n.updated_at as string,
+            url: (subject?.url as string | undefined)
+              ?.replace('https://api.github.com/repos/', 'https://github.com/')
+              .replace('/pulls/', '/pull/'),
+          };
+        }),
       };
     });
 
     res.json(result);
-  } catch (error: any) {
-    if (error?.status === 401) return res.status(401).json({ error: 'Invalid GitHub token' });
-    if (error?.status) return res.status(error.status).json({ error: 'GitHub API error' });
-    logger.error({ error: error?.message }, 'GitHub API error');
+  } catch (error) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 401) return res.status(401).json({ error: 'Invalid GitHub token' });
+    if (err?.status) return res.status(err.status).json({ error: 'GitHub API error' });
+    logger.error({ error: err?.message }, 'GitHub API error');
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
