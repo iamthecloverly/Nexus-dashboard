@@ -62,7 +62,7 @@ export function TagInput({ tags, onChange, placeholder = 'Add tag...', maxTags =
           onChange={e => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={tags.length === 0 ? placeholder : ''}
-          className="flex-1 min-w-[80px] bg-transparent text-sm text-foreground placeholder-text-muted/50 focus:outline-none"
+          className="flex-1 min-w-[80px] bg-transparent text-sm text-foreground placeholder-text-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded"
           aria-label="Tag input"
         />
       )}

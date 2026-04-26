@@ -205,7 +205,7 @@ export function CommandPalette({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Type a command or jump to a view…"
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus:outline-none py-2"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded py-2"
               aria-label="Filter commands"
             />
             <kbd className="hidden sm:inline text-[10px] text-text-muted border border-white/15 rounded px-1.5 py-0.5 font-mono">Esc</kbd>
@@ -226,7 +226,7 @@ export function CommandPalette({
                 if (e.key === 'Enter') { e.preventDefault(); submitInlineTask(); }
               }}
               placeholder="Task title… then press Enter"
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus:outline-none py-2"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-text-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded py-2"
               aria-label="New task title"
             />
             <button

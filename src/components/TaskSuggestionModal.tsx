@@ -104,7 +104,7 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                   {/* Title */}
                   {editingId === item.id ? (
                     <input
-                      className="w-full bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus:outline-none mb-1"
+                      className="w-full bg-white/5 border border-primary/40 rounded px-2 py-0.5 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 mb-1"
                       value={editDraft}
                       onChange={e => setEditDraft(e.target.value)}
                       onBlur={() => commitEdit(item.id)}
@@ -114,13 +114,15 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                       }}
                     />
                   ) : (
-                    <p
-                      className="text-sm font-medium text-white cursor-text hover:text-primary transition-colors mb-1 leading-snug"
+                    <button
+                      type="button"
+                      className="text-left w-full text-sm font-medium text-white cursor-text hover:text-primary transition-colors mb-1 leading-snug rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                       onClick={() => { setEditingId(item.id); setEditDraft(item.title); }}
+                      aria-label="Edit task title"
                       title="Click to edit"
                     >
                       {item.title}
-                    </p>
+                    </button>
                   )}
 
                   {/* Reason */}

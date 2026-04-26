@@ -325,12 +325,12 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
                     value={githubPat}
                     onChange={e => setGithubPat(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSaveGithub()}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
                   />
                   <button
                     onClick={handleSaveGithub}
                     disabled={githubSaving || !githubPat.trim()}
-                    className="w-full py-2 rounded-lg bg-primary/20 border border-primary/30 text-sm font-medium text-primary hover:bg-primary/30 transition-colors disabled:opacity-40"
+                    className="w-full py-2 rounded-lg bg-primary/20 border border-primary/30 text-sm font-medium text-primary hover:bg-primary/30 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     {githubSaving ? 'Saving…' : 'Update'}
                   </button>
