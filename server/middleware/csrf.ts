@@ -1,6 +1,7 @@
 import type express from 'express';
 
 import { CSRF_COOKIE, CSRF_HEADER, ensureCsrfCookie, getBaseUrl } from '../config.ts';
+import { getCookie } from '../lib/cookies.ts';
 
 function originFromUrlish(value: string | undefined): string | null {
   if (!value) return null;
@@ -34,7 +35,7 @@ export function attachCsrf(app: express.Express) {
       return res.status(403).json({ error: 'CSRF origin validation failed' });
     }
 
-    const cookieToken = (req as any).cookies?.[CSRF_COOKIE];
+    const cookieToken = getCookie(req, CSRF_COOKIE);
     const headerToken = req.get(CSRF_HEADER);
     if (!cookieToken || !headerToken || headerToken !== cookieToken) {
       return res.status(403).json({ error: 'CSRF validation failed' });

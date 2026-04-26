@@ -158,8 +158,9 @@ authRouter.get('/profile', async (req, res) => {
       COOKIE_OPTS,
     );
     res.json({ email: me.data.email ?? null, name: me.data.name ?? null });
-  } catch (error: any) {
-    res.status(500).json({ error: error?.message ?? 'Failed to fetch profile' });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Failed to fetch profile';
+    res.status(500).json({ error: msg });
   }
 });
 

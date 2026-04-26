@@ -22,7 +22,7 @@ export function getGoogleTokensFromCookie(req: express.Request): { tokensCookie:
 export function createAuthedGoogleClient(req: express.Request, res: express.Response, tokens: GoogleTokens) {
   const oauth2Client = getOAuth2Client(req);
   oauth2Client.setCredentials(tokens);
-  oauth2Client.once('tokens', (newTokens) => {
+  oauth2Client.on('tokens', (newTokens) => {
     setSignedCookie(res, 'google_tokens', JSON.stringify({ ...tokens, ...newTokens }), COOKIE_OPTS);
   });
   return oauth2Client;

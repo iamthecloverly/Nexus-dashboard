@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
-import { google } from 'googleapis';
+import { google, type gmail_v1 } from 'googleapis';
 import OpenAI from 'openai';
 
 import { COOKIE_OPTS } from '../config.ts';
@@ -19,7 +19,7 @@ const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, 
 const GMAIL_ID_RE = /^[a-zA-Z0-9_-]{6,32}$/;
 
 /** Recursively extract plain-text body from a Gmail MIME payload */
-function extractGmailBody(payload: any): string {
+function extractGmailBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
   if (!payload) return '';
   if (payload.mimeType === 'text/plain' && payload.body?.data) {
     return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
@@ -90,8 +90,8 @@ async function extractTasksFromEmail(
   ]);
 
   const headers = meta.data.payload?.headers ?? [];
-  const subject = headers.find((h: any) => h.name === 'Subject')?.value ?? '(no subject)';
-  const from    = headers.find((h: any) => h.name === 'From')?.value ?? '';
+  const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
+  const from    = headers.find(h => h.name === 'From')?.value ?? '';
   const body    = extractGmailBody(full.data.payload).slice(0, 3000);
 
   const completion = await openai.chat.completions.create({
