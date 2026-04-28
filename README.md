@@ -76,8 +76,30 @@
 |---------|-------------|
 | `npm run dev` | Start dev server (Express + Vite HMR) |
 | `npm run build` | Production Vite build |
-| `npm run lint` | Type-check with `tsc --noEmit` |
+| `npm run lint` | Type-check with `tsc --noEmit` + ESLint |
 | `npm run preview` | Serve the production build locally |
+| `npm test` | Run the Vitest test suite (watch mode) |
+| `npm run test:coverage` | Run tests and generate a coverage report |
+
+## Testing
+
+The project uses [Vitest](https://vitest.dev/) with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) for both server-side and client-side tests.
+
+```bash
+npm test                # Watch mode (re-runs on file changes)
+npm run test:coverage   # Coverage report in coverage/
+npx vitest --run        # Single run (CI)
+```
+
+Test files live next to the code they test in `__tests__/` sub-directories:
+
+- `server/lib/__tests__/` — utility helpers (cache, validation, cookies, encryption)
+- `server/middleware/__tests__/` — CSRF and auth middleware
+- `server/routes/__tests__/` — Express route handlers
+- `src/lib/__tests__/` — client-side utility functions
+- `src/hooks/__tests__/` — React hooks
+- `src/contexts/__tests__/` — React context providers
+- `src/config/__tests__/` — navigation config
 
 ## Docker Deployment
 

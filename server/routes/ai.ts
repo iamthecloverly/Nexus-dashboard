@@ -337,3 +337,5 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     res.status(500).json({ error: 'Failed to extract tasks' });
   }
 });
+
+export const __testOnly = { extractGmailBody };
