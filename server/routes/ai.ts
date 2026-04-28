@@ -289,7 +289,7 @@ aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
   } catch (error) {
     const err = error as { status?: number; message?: string };
     logger.error({ error: err?.message }, 'AI daily-brief error');
-    if (err?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key' });
+    if (err?.status === 401) return res.status(401).json({ error: 'Invalid OpenAI API key', code: 'INVALID_KEY' });
     res.status(500).json({ error: 'Failed to generate daily brief' });
   }
 });
