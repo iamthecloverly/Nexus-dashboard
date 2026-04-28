@@ -105,7 +105,12 @@ export function DashboardDigestCard({
       });
       const data = await res.json();
       if (!res.ok) {
-        setBriefError(data.error ?? 'Failed to generate brief');
+        const code = data.code;
+        if (code === 'INVALID_KEY' || code === 'NO_AI_KEY' || res.status === 401) {
+          setBriefError('key_invalid');
+        } else {
+          setBriefError(data.error ?? 'Failed to generate brief');
+        }
       } else {
         setBrief(data.brief ?? '');
       }
@@ -362,7 +367,21 @@ export function DashboardDigestCard({
             {brief ? (
               <p className="text-sm text-foreground/90 leading-relaxed">{brief}</p>
             ) : briefError ? (
-              <p className="text-xs text-red-400">{briefError}</p>
+              briefError === 'key_invalid' ? (
+                <p className="text-xs text-red-400">
+                  OpenAI API key is missing or invalid.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('Settings')}
+                    className="underline hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400 rounded"
+                  >
+                    Go to Settings
+                  </button>{' '}
+                  to add or update your key.
+                </p>
+              ) : (
+                <p className="text-xs text-red-400">{briefError}</p>
+              )
             ) : (
               <p className="text-xs text-text-muted italic">
                 Click Generate for a 2–3 sentence AI summary of your day.
