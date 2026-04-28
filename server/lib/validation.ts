@@ -18,8 +18,8 @@ export const sendEmailSchema = z.object({
 //   Legacy secret keys:        sk-<48 alphanumeric chars>
 //   Project API keys:          sk-proj-<variable length>
 //   Service-account keys:      sk-svcacct-<variable length>
-// The character set is deliberately broad (printable ASCII minus whitespace) so
-// that future key formats introduced by OpenAI continue to work.
+// The allowed characters are alphanumeric, underscores, and hyphens — the
+// full set used by all known OpenAI key variants.
 export const aiKeySchema = z.object({
   key: z.string().regex(/^sk-[A-Za-z0-9_-]{10,}$/, 'Invalid OpenAI API key format'),
 });

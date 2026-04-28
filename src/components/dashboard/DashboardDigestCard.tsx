@@ -105,7 +105,7 @@ export function DashboardDigestCard({
       });
       const data = await res.json();
       if (!res.ok) {
-        const code: string | undefined = data.code;
+        const code = data.code;
         if (code === 'INVALID_KEY' || code === 'NO_AI_KEY' || res.status === 401) {
           setBriefError('key_invalid');
         } else {
