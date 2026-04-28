@@ -7,6 +7,7 @@ import { aiRouter, parseAiTasksJson, __testOnly } from '../ai';
 
 const { extractGmailBody } = __testOnly;
 
+// Note: this test app intentionally omits CSRF middleware — it tests the AI route handler in isolation.
 function makeApp() {
   const app = express();
   app.use(express.json());
