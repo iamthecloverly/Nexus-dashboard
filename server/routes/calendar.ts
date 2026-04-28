@@ -6,6 +6,7 @@ import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { logger } from '../lib/logger.ts';
 
 // Cache calendar events for 45 s — short enough to feel live, long enough to
 // avoid hammering the N+1 Google API calls on every page load / refresh.
@@ -163,16 +164,17 @@ calendarRouter.get('/events', async (req, res) => {
     });
 
     res.json(result);
-  } catch (error: any) {
-    const status = error?.response?.status ?? error?.code;
-    const causeMsg: string = error?.cause?.message ?? error?.message ?? '';
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number }; code?: string; cause?: { message?: string }; message?: string };
+    const status = err?.response?.status ?? err?.code;
+    const causeMsg: string = err?.cause?.message ?? err?.message ?? '';
     if (causeMsg.includes('disabled') || causeMsg.includes('has not been used')) {
       return res.status(503).json({ error: 'Google Calendar API is not enabled in your Cloud project', code: 'API_DISABLED' });
     }
-    if (status === 401 || error?.message?.includes('invalid_grant')) {
+    if (status === 401 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
-    console.error('Error fetching calendar events:', error);
+    logger.error({ error }, 'Error fetching calendar events');
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
@@ -212,7 +214,7 @@ calendarRouter.get('/debug', async (req, res) => {
       id: r.data.id,
       summary: r.data.summary,
       timeZone: r.data.timeZone,
-    })).catch((err: any) => ({ error: err?.message ?? String(err) }));
+    })).catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
 
     const perCalendar = await Promise.all(uniqueIds.map(async (calendarId) => {
       try {
@@ -247,7 +249,7 @@ calendarRouter.get('/debug', async (req, res) => {
               } : undefined;
             })();
         return { calendarId, meta, count: evs.length, sample };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const li = items.find(c => c.id === calendarId);
         const meta = li ? {
           primary: !!li.primary,
@@ -257,7 +259,7 @@ calendarRouter.get('/debug', async (req, res) => {
           summary: li.summary,
           timeZone: li.timeZone,
         } : (calendarId === 'primary' ? { primary: true } : undefined);
-        return { calendarId, meta, error: err?.message ?? String(err) };
+        return { calendarId, meta, error: err instanceof Error ? err.message : String(err) };
       }
     }));
 
@@ -276,7 +278,7 @@ calendarRouter.get('/debug', async (req, res) => {
         busySample: (calendars[id]?.busy ?? []).slice(0, 5),
       });
       return { primary: pick('primary') };
-    }).catch((err: any) => ({ error: err?.message ?? String(err) }));
+    }).catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
 
     res.json({
       now: now.toISOString(),
@@ -297,7 +299,7 @@ calendarRouter.get('/debug', async (req, res) => {
       perCalendar,
       freeBusy,
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error?.message ?? 'debug_failed' });
+  } catch (error: unknown) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'debug_failed' });
   }
 });

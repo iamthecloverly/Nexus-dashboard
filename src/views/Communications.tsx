@@ -327,7 +327,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
           <div className={`flex flex-col overflow-hidden transition-[width,flex] duration-300 ${detail ? 'w-80 flex-none border-r border-white/10' : 'flex-1'}`}>
             <div
               className="flex-1 overflow-y-auto overflow-x-hidden p-2 relative"
-              style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '900px 700px' as any }}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '900px 700px' }}
             >
               {!gmailConnected ? (
                 <div className="flex flex-col items-center justify-center h-full text-text-muted gap-4">

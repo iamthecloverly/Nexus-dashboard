@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
@@ -45,13 +45,13 @@ function AppAuthed({
   handlePaletteRefreshCalendar,
 }: {
   currentView: ViewId;
-  setCurrentView: React.Dispatch<React.SetStateAction<ViewId>>;
+  setCurrentView: Dispatch<SetStateAction<ViewId>>;
   isLg: boolean;
   quickAddTrigger: number;
   composeTrigger: number;
   calendarRefreshTrigger: number;
   commandPaletteOpen: boolean;
-  setCommandPaletteOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   handlePaletteOpenQuickAdd: () => void;
   handlePaletteComposeEmail: () => void;
   handlePaletteRefreshCalendar: () => void;
@@ -282,7 +282,7 @@ function AppContent() {
   );
 }
 
-function ViewportGate({ children }: { children: React.ReactNode }) {
+function ViewportGate({ children }: { children: ReactNode }) {
   const needsDesktop = useViewportDesktopGate();
   if (needsDesktop) return <DesktopOnlyNotice />;
   return <>{children}</>;

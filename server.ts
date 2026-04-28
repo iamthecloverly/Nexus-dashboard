@@ -57,19 +57,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const emailSendLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const discordSendLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 attachCsrf(app);
 

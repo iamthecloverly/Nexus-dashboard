@@ -2,9 +2,60 @@ import { useEffect, useMemo, useState } from 'react';
 
 type ApiStatus = 'idle' | 'loading_api' | 'ready' | 'error';
 
+export interface YTPlayer {
+  loadVideoById(videoId: string): void;
+  playVideo(): void;
+  pauseVideo(): void;
+  stopVideo(): void;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  setVolume(volume: number): void;
+  getVolume(): number;
+  getDuration(): number;
+  getCurrentTime(): number;
+  getPlayerState(): number;
+  destroy(): void;
+}
+
+export interface YTPlayerEvent { target: YTPlayer; }
+export interface YTStateChangeEvent { target: YTPlayer; data: number; }
+export interface YTErrorEvent { target: YTPlayer; data: number; }
+
+interface YTPlayerVars {
+  autoplay?: number;
+  controls?: number;
+  rel?: number;
+  modestbranding?: number;
+  enablejsapi?: number;
+  origin?: string;
+}
+
+interface YTPlayerConfig {
+  height?: string | number;
+  width?: string | number;
+  videoId?: string;
+  playerVars?: YTPlayerVars;
+  events?: {
+    onReady?: (event: YTPlayerEvent) => void;
+    onStateChange?: (event: YTStateChangeEvent) => void;
+    onError?: (event: YTErrorEvent) => void;
+  };
+}
+
+interface YTNamespace {
+  Player: new (el: HTMLElement, config: YTPlayerConfig) => YTPlayer;
+  PlayerState?: {
+    UNSTARTED: number;
+    ENDED: number;
+    PLAYING: number;
+    PAUSED: number;
+    BUFFERING: number;
+    CUED: number;
+  };
+}
+
 declare global {
   interface Window {
-    YT?: { Player: new (el: HTMLElement, config: any) => any; PlayerState?: any };
+    YT?: YTNamespace;
     onYouTubeIframeAPIReady?: () => void;
   }
 }
@@ -62,9 +113,9 @@ export function useYouTubeIFrameApi() {
         if (cancelled) return;
         setStatus('ready');
       })
-      .catch((e: any) => {
+      .catch((e: unknown) => {
         if (cancelled) return;
-        setError(e?.message ?? 'Failed to load YouTube API');
+        setError(e instanceof Error ? e.message : 'Failed to load YouTube API');
         setStatus('error');
       });
     return () => { cancelled = true; };

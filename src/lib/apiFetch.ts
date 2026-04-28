@@ -15,7 +15,7 @@ export async function apiFetchJson<T>(
     const data = (await res.json().catch(() => ({}))) as T;
     return { ok: true as const, data };
   }
-  const body = (await res.json().catch(() => ({} as any))) as any;
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   return {
     ok: false as const,
     error: {
