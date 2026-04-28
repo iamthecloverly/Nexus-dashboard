@@ -39,13 +39,13 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
         body: JSON.stringify({ passcode }),
       });
       if (!res.ok) {
-        const msg = ((await res.json().catch(() => null)) as any)?.error;
-        throw new Error(msg || 'Login failed');
+        const msg = ((await res.json().catch(() => null)) as Record<string, unknown> | null)?.error;
+        throw new Error(typeof msg === 'string' ? msg : 'Login failed');
       }
       await refresh();
       onAuthed();
-    } catch (e: any) {
-      setError(e?.message ?? 'Login failed');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
       setSubmitting(false);
     }

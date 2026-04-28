@@ -55,7 +55,7 @@ export function CommandPalette({
   onClose,
   setCurrentView,
   onToggleMusic,
-  onOpenQuickAdd,
+  onOpenQuickAdd: _onOpenQuickAdd,
   onComposeEmail,
   onMarkAllRead,
   onRefreshCalendar,

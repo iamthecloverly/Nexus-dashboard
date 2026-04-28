@@ -1,5 +1,5 @@
 import express from 'express';
-import { google } from 'googleapis';
+import { google, type gmail_v1 } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 
 import { parseJsonCookie } from '../lib/cookies.ts';
@@ -20,6 +20,11 @@ const threadLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: tr
 const emailSendLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 export const gmailRouter = express.Router();
 
+/** Narrow an unknown caught error to access common googleapis error fields. */
+type GaxiosErrorLike = { response?: { status?: number }; code?: string; message?: string };
+function asApiError(e: unknown): GaxiosErrorLike {
+  return e as GaxiosErrorLike;
+}
 
 /** Derive the cache key for a given google_tokens cookie value. */
 function gmailKey(tokensCookie: string) {
@@ -51,28 +56,26 @@ gmailRouter.get('/messages', async (req, res) => {
       const threadList = threadsRes.data.threads || [];
 
       const emails = (await Promise.all(threadList.map(async (t) => {
-        let thread: any;
-        try {
-          thread = await gmail.users.threads.get({
+        const threadRes = await gmail.users.threads.get({
             userId: 'me',
             id: t.id!,
             format: 'metadata',
             metadataHeaders: ['From', 'Subject', 'Date'],
+          }).catch((err: unknown) => {
+            logger.warn({ error: err instanceof Error ? err.message : String(err), threadId: t.id }, 'Failed to fetch gmail thread metadata');
+            return null;
           });
-        } catch (err: any) {
-          logger.warn({ error: err?.message, threadId: t.id }, 'Failed to fetch gmail thread metadata');
-          return null;
-        }
+          if (!threadRes) return null;
 
-        const messages = thread.data.messages ?? [];
+          const messages = threadRes.data.messages ?? [];
         const messageCount = messages.length;
         const latestMsg = messages[messages.length - 1];
         if (!latestMsg) return null;
 
         const headers = latestMsg.payload?.headers || [];
-        const fromHeader = headers.find((h: any) => h.name === 'From')?.value ?? '';
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value ?? '(no subject)';
-        const dateHeader = headers.find((h: any) => h.name === 'Date')?.value ?? '';
+        const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
+        const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
+        const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
 
         // Parse "Name <email>" or just "email"
         const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
@@ -102,7 +105,7 @@ gmailRouter.get('/messages', async (req, res) => {
           initials,
           time: timeDisplay,
           subject,
-          preview: thread.data.snippet ?? latestMsg.snippet ?? '',
+          preview: threadRes.data.snippet ?? latestMsg.snippet ?? '',
           unread: isUnread,
           urgent: isUrgent,
           archived: false,
@@ -114,10 +117,11 @@ gmailRouter.get('/messages', async (req, res) => {
     });
 
     res.json(result);
-  } catch (error: any) {
-    logger.error({ error: error?.message }, 'Error fetching gmail messages');
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    logger.error({ error: err?.message }, 'Error fetching gmail messages');
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to fetch emails' });
@@ -153,9 +157,10 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
 
     cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
-  } catch (error: any) {
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to update message' });
@@ -179,9 +184,10 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
     });
     cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
-  } catch (error: any) {
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to archive message' });
@@ -204,9 +210,10 @@ gmailRouter.post('/messages/:id/trash', async (req, res) => {
     });
     cacheBust(gmailKey(tokensCookie));
     res.json({ success: true });
-  } catch (error: any) {
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to trash message' });
@@ -239,7 +246,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
     });
 
     // Recursively extract plain-text body from MIME tree (same logic as /message/:id)
-    const extractBody = (payload: any): string => {
+    const extractBody = (payload: gmail_v1.Schema$MessagePart | null | undefined): string => {
       if (!payload) return '';
       if (payload.mimeType === 'text/plain' && payload.body?.data) {
         return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
@@ -267,8 +274,8 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
 
     const messages = (thread.data.messages ?? []).map((msg) => {
       const headers = msg.payload?.headers ?? [];
-      const fromHeader = headers.find((h: any) => h.name === 'From')?.value ?? '';
-      const dateHeader = headers.find((h: any) => h.name === 'Date')?.value ?? '';
+      const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
+      const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
 
       const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
       const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
@@ -299,10 +306,11 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
     });
 
     res.json({ messages });
-  } catch (error: any) {
-    logger.error({ error: error?.message }, 'Error fetching gmail thread');
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    logger.error({ error: err?.message }, 'Error fetching gmail thread');
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to fetch thread' });
@@ -325,7 +333,7 @@ gmailRouter.get('/message/:id', async (req, res) => {
     });
 
     // Recursively extract plain-text body from MIME tree
-    const extractBody = (payload: any): string => {
+    const extractBody = (payload: gmail_v1.Schema$MessagePart | null | undefined): string => {
       if (!payload) return '';
       // Prefer plain text
       if (payload.mimeType === 'text/plain' && payload.body?.data) {
@@ -355,10 +363,11 @@ gmailRouter.get('/message/:id', async (req, res) => {
     };
 
     res.json({ body: extractBody(detail.data.payload) });
-  } catch (error: any) {
-    logger.error({ error: error?.message }, 'Error fetching gmail message');
-    const status = error?.response?.status ?? error?.code;
-    if (status === 401 || status === 403 || error?.message?.includes('invalid_grant')) {
+  } catch (error: unknown) {
+    const err = asApiError(error);
+    logger.error({ error: err?.message }, 'Error fetching gmail message');
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || status === 403 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
     res.status(500).json({ error: 'Failed to fetch message' });

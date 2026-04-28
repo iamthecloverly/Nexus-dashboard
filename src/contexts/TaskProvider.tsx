@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Task } from '../types/task';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { TaskContext } from './taskContext';
@@ -17,7 +17,7 @@ function isValidTask(t: unknown): t is Task {
   );
 }
 
-export function TaskProvider({ children }: { children: React.ReactNode }) {
+export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.tasks);

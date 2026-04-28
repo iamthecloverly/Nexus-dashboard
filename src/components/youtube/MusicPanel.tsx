@@ -10,7 +10,7 @@ function loadRecent(): string[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ytRecent);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((v: any) => typeof v === 'string') : [];
+    return Array.isArray(parsed) ? parsed.filter((v: unknown): v is string => typeof v === 'string') : [];
   } catch {
     return [];
   }

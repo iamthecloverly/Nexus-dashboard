@@ -5,6 +5,7 @@ import { ALLOWED_GOOGLE_EMAILS, COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl,
 import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { logger } from '../lib/logger.ts';
 
 export const authRouter = express.Router();
 
@@ -114,7 +115,7 @@ authRouter.get('/google/callback', async (req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error('Error exchanging code for tokens:', error);
+    logger.error({ error }, 'Error exchanging code for tokens');
     res.status(500).send('Authentication failed');
   }
 });

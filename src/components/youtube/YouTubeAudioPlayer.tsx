@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../Toast';
-import { useYouTubeIFrameApi } from './useYouTubeIFrameApi';
+import { useYouTubeIFrameApi, type YTPlayer, type YTPlayerEvent, type YTStateChangeEvent, type YTErrorEvent } from './useYouTubeIFrameApi';
 import { formatTimeSeconds } from './youtube';
 import { useYouTubeVideoMeta } from './useYouTubeVideoMeta';
 
@@ -42,7 +42,7 @@ export function YouTubeAudioPlayer({
   const { status: apiStatus, error: apiError } = useYouTubeIFrameApi();
   const meta = useYouTubeVideoMeta(videoId);
 
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
   const playerDivRef = useRef<HTMLDivElement>(null);
   const autoplayProbeRef = useRef<number | null>(null);
   const retryRef = useRef<RetryState | null>(null);
@@ -149,7 +149,7 @@ export function YouTubeAudioPlayer({
       if (!active) return;
       if (!playerDivRef.current || !window.YT?.Player) return;
 
-      const ensureDuration = (p: any) => {
+      const ensureDuration = (p: YTPlayer) => {
         try {
           const d = p.getDuration?.() ?? 0;
           if (d > 0) setDuration(d);
@@ -174,9 +174,9 @@ export function YouTubeAudioPlayer({
               setPlayerStatus('autoplay_blocked');
             }
           }, 900);
-        } catch (e: any) {
+        } catch (e: unknown) {
           setPlayerStatus('error');
-          showToast(e?.message ?? 'Failed to load video', 'error');
+          showToast(e instanceof Error ? e.message : 'Failed to load video', 'error');
         }
         return;
       }
@@ -195,7 +195,7 @@ export function YouTubeAudioPlayer({
             origin: window.location.origin,
           },
           events: {
-            onReady: (e: any) => {
+            onReady: (e: YTPlayerEvent) => {
               if (!active) return;
               try { e.target.setVolume(volume); } catch { /* ignore */ }
               try { e.target.playVideo(); } catch { /* ignore */ }
@@ -211,7 +211,7 @@ export function YouTubeAudioPlayer({
                 }
               }, 900);
             },
-            onStateChange: (e: any) => {
+            onStateChange: (e: YTStateChangeEvent) => {
               if (!active) return;
               const isNowPlaying = e.data === 1; // PLAYING
               setPlaying(isNowPlaying);
@@ -223,7 +223,7 @@ export function YouTubeAudioPlayer({
                 if (e.data === 1) setPlayerStatus('ready');
               }
             },
-            onError: (e: any) => {
+            onError: (e: YTErrorEvent) => {
               if (!active) return;
               const code = typeof e?.data === 'number' ? e.data : undefined;
               setPlaying(false);
@@ -241,9 +241,9 @@ export function YouTubeAudioPlayer({
             },
           },
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         setPlayerStatus('error');
-        showToast(e?.message ?? 'Failed to initialize YouTube player', 'error');
+        showToast(e instanceof Error ? e.message : 'Failed to initialize YouTube player', 'error');
       }
     };
 

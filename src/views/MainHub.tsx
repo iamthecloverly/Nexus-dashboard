@@ -523,7 +523,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
       <main
         className="flex-1 overflow-y-auto pr-4 pb-12 custom-scrollbar"
-        style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '1100px 900px' as any }}
+        style={{ contentVisibility: 'auto', containIntrinsicSize: '1100px 900px' }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[minmax(200px,_auto)]">
 

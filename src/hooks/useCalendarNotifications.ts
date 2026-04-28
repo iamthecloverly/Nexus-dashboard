@@ -26,12 +26,13 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
     }
 
     const now = Date.now();
+    const scheduled = scheduledRef.current;
 
     events.forEach(event => {
       // Only handle timed (not all-day) events
       if (!event.start.dateTime) return;
       // Avoid scheduling the same event twice
-      if (scheduledRef.current.has(event.id)) return;
+      if (scheduled.has(event.id)) return;
 
       const startMs = parseISO(event.start.dateTime).getTime();
       const notifyAt = startMs - NOTIFY_BEFORE_SECONDS * 1000;
@@ -40,7 +41,7 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
       // Only schedule if the notification is still in the future (up to 24 h ahead)
       if (delayMs < 0 || delayMs > 24 * 60 * 60 * 1000) return;
 
-      scheduledRef.current.add(event.id);
+      scheduled.add(event.id);
 
       const id = window.setTimeout(() => {
         if (Notification.permission !== 'granted') return;
@@ -69,7 +70,7 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
       // Clear pending timeouts on unmount or when deps change
       timeoutIds.current.forEach(id => window.clearTimeout(id));
       timeoutIds.current = [];
-      scheduledRef.current.clear();
+      scheduled.clear();
     };
   }, [events, enabled]);
 }
