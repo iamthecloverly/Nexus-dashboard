@@ -25,8 +25,6 @@
   /* Brand */
   --color-primary: #38bdf8;
   --color-primary-subtle: rgba(56, 189, 248, 0.14);
-  --color-accent: #fb7185;
-  --color-accent-secondary: #a78bfa;
 
   /* Typography */
   --color-foreground: #eceef3;
@@ -152,7 +150,7 @@
     background: linear-gradient(
       180deg,
       color-mix(in oklab, var(--color-primary) 85%, transparent),
-      color-mix(in oklab, var(--color-accent-secondary) 70%, transparent)
+      color-mix(in oklab, var(--color-primary) 45%, transparent)
     );
     transform: scaleY(0);
     opacity: 0;

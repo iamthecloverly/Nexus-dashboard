@@ -92,8 +92,8 @@ export function NavigationRail({
             aria-label="Nexus — Main hub"
             className="relative outline-none rounded-2xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background-dark"
           >
-            <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/35 via-accent-secondary/25 to-transparent blur-md opacity-70" aria-hidden="true" />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-sky-400 to-accent-secondary text-background-dark shadow-[0_12px_28px_rgba(56,189,248,0.35)] ring-1 ring-white/15">
+            <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/35 via-sky-400/25 to-transparent blur-md opacity-70" aria-hidden="true" />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-sky-400 to-sky-300 text-background-dark shadow-[0_12px_28px_rgba(56,189,248,0.35)] ring-1 ring-white/15">
               <span className="material-symbols-outlined font-bold text-[26px] leading-none" aria-hidden="true">
                 hub
               </span>

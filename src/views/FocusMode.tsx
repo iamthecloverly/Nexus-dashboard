@@ -245,7 +245,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     if (calendarError === 'not_allowlisted') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-          <span className="material-symbols-outlined text-4xl text-accent">block</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400">block</span>
           <p className="text-sm text-white font-medium">Google account not allowlisted</p>
           <p className="text-xs text-text-muted max-w-[280px]">Add your Google email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
           <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
@@ -257,7 +257,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     if (calendarError === 'login_required') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-          <span className="material-symbols-outlined text-4xl text-accent">lock</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400">lock</span>
           <p className="text-sm text-white font-medium">Session expired</p>
           <p className="text-xs text-text-muted max-w-[280px]">Refresh the page and re-enter your dashboard passcode.</p>
           <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
@@ -269,7 +269,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     if (calendarError === 'google_profile_missing') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-          <span className="material-symbols-outlined text-4xl text-accent">account_circle</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400">account_circle</span>
           <p className="text-sm text-white font-medium">Google account not connected</p>
           <p className="text-xs text-text-muted max-w-[280px]">Go to Integrations and reconnect Google.</p>
           <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
@@ -292,7 +292,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     if (calendarError === 'api_disabled') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-          <span className="material-symbols-outlined text-4xl text-accent">warning</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400">warning</span>
           <p className="text-sm text-white font-medium">Google Calendar API not enabled</p>
           <p className="text-xs text-text-muted max-w-[280px]">Enable it in your Google Cloud project, then reconnect.</p>
           <a href="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview" target="_blank" rel="noreferrer" className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-medium text-primary transition-colors border border-primary/20">
@@ -482,7 +482,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
                         <button
                           onClick={() => deleteTask(task.id)}
                           aria-label={`Delete task: ${task.title}`}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-rose-400 hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
                           <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                         </button>
@@ -528,7 +528,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
                         <button
                           onClick={() => deleteTask(task.id)}
                           aria-label={`Delete task: ${task.title}`}
-                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-rose-400 hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                         >
                           <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                         </button>

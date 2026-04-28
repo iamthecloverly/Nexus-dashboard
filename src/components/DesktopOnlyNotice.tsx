@@ -32,7 +32,7 @@ export function DesktopOnlyNotice() {
           <span className="material-symbols-outlined text-4xl text-primary neon-text-glow">hub</span>
         </span>
         <span className="desktop-only-float panel-delay-2 inline-flex h-14 w-20 items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-          <span className="material-symbols-outlined text-2xl text-accent-secondary/90">calendar_month</span>
+          <span className="material-symbols-outlined text-2xl text-sky-400/90">calendar_month</span>
         </span>
       </div>
 
@@ -47,7 +47,7 @@ export function DesktopOnlyNotice() {
 
         <h1 id="desktop-only-title" className="font-heading text-3xl font-bold leading-tight sm:text-4xl">
           Your dashboard got{' '}
-          <span className="bg-gradient-to-r from-primary via-sky-300 to-accent-secondary bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-primary via-sky-300 to-sky-400 bg-clip-text text-transparent">
             stage fright
           </span>{' '}
           on this screen
@@ -69,7 +69,7 @@ export function DesktopOnlyNotice() {
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-secondary/15 text-[12px]" aria-hidden="true">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-[12px]" aria-hidden="true">
               📱
             </span>
             <span>
