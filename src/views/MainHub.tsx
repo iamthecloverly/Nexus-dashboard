@@ -390,7 +390,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (calendarError === 'login_required') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
-          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">lock</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400" aria-hidden="true">lock</span>
           <p className="text-sm text-foreground font-medium">Session expired</p>
           <p className="text-xs text-text-muted max-w-[260px]">Refresh the page and re-enter your dashboard passcode.</p>
           <button onClick={() => window.location.reload()} className={primaryBtnClass}>Refresh</button>
@@ -401,7 +401,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (calendarError === 'google_profile_missing') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
-          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">account_circle</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400" aria-hidden="true">account_circle</span>
           <p className="text-sm text-foreground font-medium">Google account not connected</p>
           <p className="text-xs text-text-muted max-w-[260px]">Go to Integrations and reconnect Google.</p>
           <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
@@ -412,7 +412,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (calendarError === 'not_allowlisted') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
-          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">block</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400" aria-hidden="true">block</span>
           <p className="text-sm text-foreground font-medium">Google account not allowlisted</p>
           <p className="text-xs text-text-muted max-w-[260px]">Add your email to <span className="font-mono">ALLOWED_GOOGLE_EMAILS</span>, then refresh.</p>
           <button onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
@@ -433,7 +433,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (calendarError === 'api_disabled') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
-          <span className="material-symbols-outlined text-4xl text-accent" aria-hidden="true">warning</span>
+          <span className="material-symbols-outlined text-4xl text-rose-400" aria-hidden="true">warning</span>
           <p className="text-sm text-foreground font-medium">Google Calendar API not enabled</p>
           <p className="text-xs text-text-muted max-w-[260px]">Enable it in your Google Cloud project, then reconnect.</p>
           <a
@@ -713,7 +713,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                   <button
                     onClick={() => deleteTask(task.id)}
                     aria-label={`Delete task: ${task.title}`}
-                    className="opacity-0 group-hover/task:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0 mt-0.5 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                    className="opacity-0 group-hover/task:opacity-100 transition-opacity text-text-muted hover:text-rose-400 flex-shrink-0 mt-0.5 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
                     <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                   </button>
@@ -734,7 +734,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         <span className="material-symbols-outlined !text-[14px] !font-bold" aria-hidden="true">check</span>
                       </button>
                       <span className="text-sm text-text-muted line-through flex-1">{task.title}</span>
-                      <button onClick={() => deleteTask(task.id)} aria-label={`Delete task: ${task.title}`} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-accent flex-shrink-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                      <button onClick={() => deleteTask(task.id)} aria-label={`Delete task: ${task.title}`} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-rose-400 flex-shrink-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
                         <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
                       </button>
                     </div>
@@ -754,8 +754,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/70 via-orange-400/20 to-transparent pointer-events-none"></div>
             {unreadCount > 0 && (
               <div className="absolute top-5 right-5 w-2 h-2">
-                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent shadow-[0_0_12px_rgba(251,113,133,0.55)]"></span>
+                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.55)]"></span>
               </div>
             )}
             <h2 className="font-heading text-lg text-foreground mb-auto flex items-center gap-3">

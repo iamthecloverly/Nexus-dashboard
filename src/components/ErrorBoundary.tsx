@@ -26,7 +26,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
-          <span className="material-symbols-outlined text-5xl text-accent">error</span>
+          <span className="material-symbols-outlined text-5xl text-rose-400">error</span>
           <p className="font-heading text-xl text-foreground">{this.props.label ?? 'View'} crashed</p>
           <p className="text-sm text-text-muted max-w-sm">{this.state.message}</p>
           <button

@@ -15,7 +15,7 @@ export function SystemMetricsDisplay({ cpuLoad, memUsed }: { cpuLoad: number; me
           <span className="font-mono text-text-muted">{memUsed}%</span>
         </div>
         <div className="h-1 rounded-full overflow-hidden bg-white/[0.06]">
-          <div className="h-full rounded-full transition-[width] duration-500 bg-gradient-to-r from-primary/45 to-accent-secondary/35" style={{ width: `${memUsed}%` }} />
+          <div className="h-full rounded-full transition-[width] duration-500 bg-gradient-to-r from-primary/45 to-primary/25" style={{ width: `${memUsed}%` }} />
         </div>
       </div>
     </div>

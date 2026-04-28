@@ -11,7 +11,7 @@ interface Props {
 const PRIORITY_CYCLE: TaskSuggestion['priority'][] = ['Normal', 'Priority', 'Critical'];
 
 const priorityStyle = (p: TaskSuggestion['priority']) => {
-  if (p === 'Critical') return 'text-accent border-accent/40 bg-accent/10';
+  if (p === 'Critical') return 'text-rose-400 border-rose-400/40 bg-rose-400/10';
   if (p === 'Priority') return 'text-primary border-primary/40 bg-primary/10';
   return 'text-text-muted border-white/10 bg-white/5';
 };
