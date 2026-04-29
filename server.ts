@@ -57,7 +57,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-
 attachCsrf(app);
 
 app.get('/api/health', async (_req, res) => {

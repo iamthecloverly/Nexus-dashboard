@@ -76,7 +76,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
       });
       const data = await res.json();
         if (!res.ok) {
-        if (data.code === 'NO_AI_KEY') showToast('AI not configured — add an OpenAI key in Settings (or set OPENAI_API_KEY).', 'error');
+        if (data.code === 'NO_AI_KEY') showToast('AI not configured — add your OpenAI key in Settings.', 'error');
         else showToast(data.error ?? 'Failed to analyze emails', 'error');
         return;
       }
