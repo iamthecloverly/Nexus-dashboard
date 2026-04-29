@@ -7,11 +7,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev      # Start dev server (Express + Vite HMR) — runs on http://localhost:5173
 npm run build    # Production Vite build → dist/
-npm run lint     # Type-check only (tsc --noEmit) — no ESLint configured
+npm run lint     # Type-check (tsc --noEmit) + ESLint
 npm run preview  # Serve the production build locally
+npm test         # Run Vitest in watch mode
+npx vitest --run # Single test run (CI / one-shot)
+npm run test:coverage  # Generate coverage report in coverage/
 ```
 
-No test suite exists yet (Vitest is a planned addition).
+## Testing
+
+The project uses [Vitest](https://vitest.dev/) with [React Testing Library](https://testing-library.com/) and [Supertest](https://github.com/ladjs/supertest).
+
+### Test file locations
+
+Each source directory has a co-located `__tests__/` sub-directory:
+
+| Location | What is tested |
+|---|---|
+| `server/lib/__tests__/` | Utility helpers: `apiCache`, `cookies`, `encryption`, `validation` |
+| `server/middleware/__tests__/` | CSRF middleware, `requireDashboardAccess` |
+| `server/routes/__tests__/` | Express route handlers: `ai`, `discord`, `github`, `session`, `system`, `weather` |
+| `src/lib/__tests__/` | Client-side utilities: `apiFetch`, `csrf`, `fetchWithTimeout`, `openMeteoWeather` |
+| `src/hooks/__tests__/` | React hooks: `useMediaQuery`, `usePollingWhenVisible` |
+| `src/contexts/__tests__/` | React context providers: `TaskProvider` |
+| `src/config/__tests__/` | Navigation config |
+
+### Conventions
+
+- Server route tests use Supertest + a minimal `makeApp()` factory (no CSRF middleware unless the test targets CSRF itself).
+- Client-side component/hook tests use `@testing-library/react` with the `happy-dom` environment.
+- Fake timers (`vi.useFakeTimers()`) are used for any code that relies on `setTimeout`/`setInterval`.
+- Async hooks that use `Promise.resolve().then(...)` internally need `await act(async () => { await Promise.resolve(); })` to flush microtasks in tests.
+- Functions that are internal helpers but need unit testing are exposed via an `export const __testOnly = { ... }` object (see `apiCache.ts`, `ai.ts`).
 
 ## Architecture
 

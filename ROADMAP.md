@@ -4,14 +4,25 @@
 
 ### Security & Infrastructure
 
-| Gap | Fix |
-|---|---|
-| No CSRF protection | Add `csurf` middleware or double-submit cookie pattern on all `POST` routes |
-| GitHub PAT stored as plaintext cookie | Encrypt with AES-256-GCM server-side before setting the cookie; decrypt in route handlers |
-| No rate limiting | `express-rate-limit` on all API routes; tighter limits on `/api/gmail/send` and `/api/discord/send` |
-| Token refresh only fires once | `once()` still expires after long sessions — add a background re-auth prompt or proactive refresh |
-| No input validation on email `to:` field | Validate email format with regex or `zod` before building MIME |
-| Secrets in `.env` | Use a secrets manager (Doppler, Infisicura, or a locked-down env service) in production |
+| Gap | Status | Fix |
+|---|---|---|
+| No CSRF protection | ✅ Done | Double-submit cookie CSRF middleware (`attachCsrf`) on all POST routes |
+| GitHub PAT stored as plaintext cookie | ✅ Done | AES-256-GCM encryption (`encrypt`/`decrypt`) applied to all PAT cookies |
+| No rate limiting | ✅ Done | `express-rate-limit` on all API routes; tighter limits on `/api/ai` and `/api/discord/send` |
+| Token refresh only fires once | Open | `once()` still expires after long sessions — add a background re-auth prompt or proactive refresh |
+| No input validation on email `to:` field | ✅ Done | Zod `sendEmailSchema` validates email format before building MIME |
+| Secrets in `.env` | Open | Use a secrets manager (Doppler, Infisicura, or a locked-down env service) in production |
+
+### Code Quality
+
+| Item | Status | Notes |
+|---|---|---|
+| Test suite | ✅ Done | Vitest + React Testing Library for contexts/hooks/lib; Supertest for Express routes (214 tests) |
+| Zod schemas | ✅ Done | All `req.body` inputs validated via Zod schemas in `server/lib/validation.ts` |
+| Structured logging | ✅ Done | `pino` + `pino-http` with JSON lines and log levels throughout server |
+| API response caching | ✅ Done | In-memory TTL cache with request coalescing in `server/lib/apiCache.ts` |
+| API versioning | Open | Prefix all routes with `/api/v1/` before the surface grows larger |
+| OpenAPI spec | Open | Generate from Zod schemas; enables client SDK generation and docs |
 
 ### Architecture — Single-user to Multi-user
 
@@ -22,17 +33,8 @@
 
 ### Observability & Reliability
 
-- **Structured logging** — replace `console.error` with `pino` or `winston` (JSON lines, log levels)
 - **Error tracking** — Sentry SDK in both server and client; surface stack traces in production
-- **API response caching** — cache calendar events for 5 min, inbox for 1 min; add server-side in-memory cache with `node-cache`
 - **Health check** — expand `/api/health` to probe each integration and return connection status (used by load balancers / uptime monitors)
-
-### Code Quality
-
-- **Test suite** — Vitest + React Testing Library for components; Supertest for Express routes
-- **API versioning** — prefix all routes with `/api/v1/` before the surface grows larger
-- **Zod schemas** — validate all incoming `req.body` shapes instead of manual `if (!to || !subject)` guards
-- **OpenAPI spec** — generate from schemas; enables client SDK generation and docs
 
 ---
 
@@ -89,10 +91,11 @@
 
 The fastest path to SaaS-quality without a full rewrite:
 
-1. Zod validation on all `req.body` inputs
-2. Rate limiting (`express-rate-limit`)
-3. Structured logging (`pino`)
+1. ~~Zod validation on all `req.body` inputs~~ ✅ Done
+2. ~~Rate limiting (`express-rate-limit`)~~ ✅ Done
+3. ~~Structured logging (`pino`)~~ ✅ Done
 4. Error tracking (Sentry)
 5. Postgres user model + session management
 
-These five changes move the project from personal tool to something shippable.
+These remaining changes move the project from personal tool to something shippable.
+
