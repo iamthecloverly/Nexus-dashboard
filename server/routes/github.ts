@@ -48,7 +48,7 @@ githubRouter.get('/notifications', async (req, res) => {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'PersonalDashboard/1.0',
+          'User-Agent': 'NexusDashboard/1.0',
         },
       });
       if (response.status === 401) throw Object.assign(new Error('Invalid GitHub token'), { status: 401 });

@@ -15,7 +15,6 @@ const GMAIL_TTL_MS = 60_000;
 // Rate limiter for thread-detail fetches — one full thread = N message bodies
 const threadLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 
-
 // Rate limiter for email sending - 10 emails per hour to prevent spam
 const emailSendLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 export const gmailRouter = express.Router();
@@ -24,6 +23,39 @@ export const gmailRouter = express.Router();
 type GaxiosErrorLike = { response?: { status?: number }; code?: string; message?: string };
 function asApiError(e: unknown): GaxiosErrorLike {
   return e as GaxiosErrorLike;
+}
+
+/** Recursively extract plain-text body from a Gmail MIME payload. */
+function extractBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const result = extractBody(part);
+      if (result) return result;
+    }
+  }
+  if (payload.mimeType === 'text/html' && payload.body?.data) {
+    let html = Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+    // Strip <style> blocks; loop until stable to catch nested/malformed tags
+    let prev: string;
+    do {
+      prev = html;
+      html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
+    } while (html !== prev);
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  return '';
 }
 
 /** Derive the cache key for a given google_tokens cookie value. */
@@ -245,33 +277,6 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
       format: 'full',
     });
 
-    // Recursively extract plain-text body from MIME tree (same logic as /message/:id)
-    const extractBody = (payload: gmail_v1.Schema$MessagePart | null | undefined): string => {
-      if (!payload) return '';
-      if (payload.mimeType === 'text/plain' && payload.body?.data) {
-        return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
-      }
-      if (payload.parts) {
-        for (const part of payload.parts) {
-          const result = extractBody(part);
-          if (result) return result;
-        }
-      }
-      if (payload.mimeType === 'text/html' && payload.body?.data) {
-        return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
-          .replace(/<style[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, '&')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
-      }
-      return '';
-    };
-
     const messages = (thread.data.messages ?? []).map((msg) => {
       const headers = msg.payload?.headers ?? [];
       const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
@@ -331,36 +336,6 @@ gmailRouter.get('/message/:id', async (req, res) => {
       id: req.params.id,
       format: 'full',
     });
-
-    // Recursively extract plain-text body from MIME tree
-    const extractBody = (payload: gmail_v1.Schema$MessagePart | null | undefined): string => {
-      if (!payload) return '';
-      // Prefer plain text
-      if (payload.mimeType === 'text/plain' && payload.body?.data) {
-        return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
-      }
-      // Recurse into multipart children first
-      if (payload.parts) {
-        for (const part of payload.parts) {
-          const result = extractBody(part);
-          if (result) return result;
-        }
-      }
-      // HTML fallback: strip tags
-      if (payload.mimeType === 'text/html' && payload.body?.data) {
-        return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
-          .replace(/<style[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, '&')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
-      }
-      return '';
-    };
 
     res.json({ body: extractBody(detail.data.payload) });
   } catch (error: unknown) {

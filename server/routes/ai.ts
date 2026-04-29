@@ -318,8 +318,7 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
 
-    const batches = emailIds;
-    const perEmail = await mapWithConcurrency(batches, 3, async (emailId) => {
+    const perEmail = await mapWithConcurrency(emailIds, 3, async (emailId) => {
       try {
         return await extractTasksFromEmail(gmail, openai, emailId, mode);
       } catch (err) {
