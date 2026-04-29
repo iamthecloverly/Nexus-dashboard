@@ -65,7 +65,7 @@ export default function Settings({
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ key: aiKeyDraft.trim() }),
       });
-      if (res.ok) { setAiConfigured(true); setAiKeyDraft(''); showToast('OpenAI key saved', 'success'); }
+      if (res.ok) { setAiConfigured(true); setAiSource('cookie'); setAiKeyDraft(''); showToast('OpenAI key saved', 'success'); }
       else showToast('Failed to save key', 'error');
     } catch { showToast('Failed to save key', 'error'); }
     finally { setAiKeySaving(false); }
@@ -73,14 +73,15 @@ export default function Settings({
 
   const disconnectAi = async () => {
     await fetch('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders() });
-    // If AI key is preconfigured at workspace level, the user cannot remove it here.
-    if (aiSource === 'env') {
-      showToast('AI is managed at the workspace level and cannot be removed from here', 'info');
-      return;
+    // Re-fetch status: clearing the cookie may fall back to the env key.
+    const statusData = await fetch('/api/ai/status').then(r => r.json()).catch(() => ({ configured: false, source: null }));
+    setAiConfigured(!!statusData.configured);
+    setAiSource(statusData.source ?? null);
+    if (statusData.source === 'env') {
+      showToast('Custom key removed — now using the OPENAI_API_KEY environment variable', 'info');
+    } else {
+      showToast('OpenAI key removed', 'info');
     }
-    setAiConfigured(false);
-    setAiSource(null);
-    showToast('OpenAI key removed', 'info');
   };
 
   const saveName = () => {
@@ -293,19 +294,24 @@ export default function Settings({
                   {aiConfigured ? 'Configured' : 'Not configured'}
                 </span>
               </div>
-              {aiConfigured && aiSource === 'env' ? (
+              {aiConfigured && aiSource === 'env' && (
                 <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                   <p className="text-sm text-foreground font-medium">AI is active</p>
-                  <p className="text-[10px] text-text-muted mt-1">Your AI key is managed at the workspace level. Contact your administrator to update it.</p>
+                  <p className="text-[10px] text-text-muted mt-1">
+                    Key loaded from the <code className="font-mono">OPENAI_API_KEY</code> environment variable.
+                    Enter a different key below to override it.
+                  </p>
                 </div>
-              ) : aiConfigured ? (
+              )}
+              {aiConfigured && aiSource === 'cookie' && (
                 <button
                   onClick={disconnectAi}
                   className="w-full py-2 rounded-lg border border-white/10 text-sm font-medium text-text-muted hover:bg-white/5 hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   Remove API key
                 </button>
-              ) : (
+              )}
+              {(!aiConfigured || aiSource === 'env') && (
                 <div className="flex gap-2">
                   <input
                     type="password"

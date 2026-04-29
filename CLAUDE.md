@@ -5,13 +5,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start dev server (Express + Vite HMR) — runs on http://localhost:5173
-npm run build    # Production Vite build → dist/
-npm run lint     # Type-check (tsc --noEmit) + ESLint
-npm run preview  # Serve the production build locally
-npm test         # Run Vitest in watch mode
-npx vitest --run # Single test run (CI / one-shot)
-npm run test:coverage  # Generate coverage report in coverage/
+npm run dev           # Start dev server (Express + Vite HMR) — app at http://localhost:5173
+npm run build         # Production Vite build → dist/
+npm run lint          # Type-check (tsc --noEmit) + ESLint (max 50 warnings)
+npm run preview       # Serve the production build locally
+npm run start         # Production server start (node --import tsx server.ts)
+npm test              # Run Vitest in watch mode
+npx vitest --run      # Single test run (CI / one-shot)
+npx vitest --run path/to/file  # Run a single test file
+npm run test:ui       # Vitest interactive browser UI
+npm run test:coverage # Generate coverage report in coverage/
+npm run clean         # Remove dist/
+npm run clean:vite    # Remove .vite-cache
 ```
 
 ## Testing
@@ -55,17 +60,23 @@ Browser → Express (port 3001 in code, proxied to 5173 by Vite)
 
 | File | Role |
 |------|------|
-| `server.ts` | All Express routes — OAuth, Calendar, Gmail, GitHub, Discord, AI extraction |
+| `server.ts` | Express app bootstrap — mounts middleware (helmet, pino-http, CSRF, rate-limiting) and all route modules; Vite dev server in dev mode |
+| `server/config.ts` | Central env/config — `isProduction`, `SESSION_SECRET`, `DASHBOARD_PASSCODE`, `ALLOWED_GOOGLE_EMAILS` |
+| `server/routes/` | Route modules: `auth`, `calendar`, `gmail`, `github`, `discord`, `ai`, `session`, `system`, `weather` |
+| `server/lib/` | Shared helpers: `apiCache`, `cookies`, `encryption`, `googleClient`, `googleOAuth`, `logger`, `validation` |
 | `src/App.tsx` | Root component: `ToastProvider` → `SystemMetricsProvider` → viewport gate → YouTube audio player, view routing via `currentView` (`ViewId`), `AppShell` |
 | `src/views/MainHub.tsx` | Primary view: clock, calendar, tasks, triage inbox, GitHub notifications, checklist |
 | `src/views/Communications.tsx` | Gmail inbox list + compose + message detail |
-| `src/views/FocusMode.tsx` | Distraction-free current-event view |
+| `src/views/FocusMode.tsx` | Distraction-free current-event view with Pomodoro timer |
+| `src/views/Login.tsx` | Passcode login gate (production only) |
 | `src/views/Integrations.tsx` | OAuth connect/disconnect UI for Google, GitHub, Discord |
 | `src/views/Settings.tsx` | Profile, CPU/memory snapshot, clear data (wipes all localStorage keys + reloads) |
-| `src/contexts/EmailContext.tsx` | Email state + Gmail API sync (auto-polls every 2 min) |
-| `src/contexts/TaskContext.tsx` | Task CRUD persisted to localStorage with `isValidTask` guard |
+| `src/contexts/emailContext.ts` + `EmailProvider.tsx` | Email types/exports + Gmail API sync (auto-polls every 2 min) |
+| `src/contexts/taskContext.ts` + `TaskProvider.tsx` | Task types/exports + CRUD persisted to localStorage with `isValidTask` guard |
+| `src/contexts/musicContext.ts` + `MusicProvider.tsx` | Music/YouTube player state |
 | `src/hooks/useCalendarEvents.ts` | Calendar fetch with 15s AbortController timeout |
 | `src/hooks/useAutoEmailTasks.ts` | Background hook: extracts tasks from new unread emails via AI |
+| `src/components/CommandPalette.tsx` | Global `⌘K` command palette |
 | `src/components/layout/AppShell.tsx` | App shell: `--app-nav-width` / `--app-bottom-nav-height` from `desktopNav` prop (`useMediaQuery` lg in parent); scrollable main, bottom nav |
 | `src/components/layout/NavigationRail.tsx` | lg+ icon rail: workspace routes, music, settings (no system metrics — see Main Hub tile) |
 | `src/components/dashboard/SystemMetricsTile.tsx` | Main Hub tile: CPU/memory from `useSystemMetrics()` |
@@ -127,6 +138,21 @@ No external state library. Core React Contexts:
 - Input validation regexes: `GMAIL_ID_RE`, `DISCORD_WEBHOOK_RE`, GitHub PAT format, OpenAI key format.
 - Discord webhook URL allowlist enforced before any outbound HTTP call (SSRF prevention).
 - `express.json({ limit: '50kb' })` on all routes.
+- Global rate limit: 100 req / 5 min per IP on all `/api/*`; tighter limits on `/api/ai` (20/min) and `/api/discord/send`.
+
+### Logging
+
+`pino` + `pino-http` write structured JSON logs. The `logger` singleton is in `server/lib/logger.ts`. In dev mode `pino-pretty` formats output for readability.
+
+## Docker
+
+```bash
+npm run build              # build dist/ first
+docker-compose up -d       # start container on port 3001
+docker logs nexus-dashboard
+```
+
+The `Dockerfile` expects a pre-built `dist/`. The container runs as non-root (`nodejs:nodejs`); health checks hit `/api/system`.
 
 ## Environment variables
 
@@ -134,8 +160,10 @@ No external state library. Core React Contexts:
 |----------|----------|-------------|
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 Client Secret |
-| `APP_URL` | Prod only | Base URL for OAuth redirect (e.g. `https://yourdomain.com`) |
 | `SESSION_SECRET` | Yes | Cookie signing secret |
+| `DASHBOARD_PASSCODE` | Prod only | Passcode required to unlock the dashboard |
+| `ALLOWED_GOOGLE_EMAILS` | Prod only | Comma-separated allowlist of Google account emails |
+| `APP_URL` | Prod only | Base URL for OAuth redirect (e.g. `https://yourdomain.com`) |
 | `GITHUB_TOKEN` | Optional | GitHub PAT for notifications API |
 | `GEMINI_API_KEY` | Optional | Gemini API key (injected into client bundle) |
 | `OPENAI_API_KEY` | Optional | OpenAI key for AI task extraction |
