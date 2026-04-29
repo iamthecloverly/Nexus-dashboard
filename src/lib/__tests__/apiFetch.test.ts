@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { apiFetchJson } from '../apiFetch';
+import { apiFetchJson, type ApiError } from '../apiFetch';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -21,11 +21,10 @@ describe('apiFetchJson', () => {
 
     const result = await apiFetchJson('/api/missing');
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.status).toBe(404);
-      expect(result.error.error).toBe('Not found');
-      expect(result.error.code).toBe('NOT_FOUND');
-    }
+    const { error } = result as { ok: false; error: ApiError };
+    expect(error.status).toBe(404);
+    expect(error.error).toBe('Not found');
+    expect(error.code).toBe('NOT_FOUND');
   });
 
   it('returns { ok: false } with status but no error/code when body is empty', async () => {
@@ -35,11 +34,10 @@ describe('apiFetchJson', () => {
 
     const result = await apiFetchJson('/api/server-error');
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.status).toBe(500);
-      expect(result.error.error).toBeUndefined();
-      expect(result.error.code).toBeUndefined();
-    }
+    const { error } = result as { ok: false; error: ApiError };
+    expect(error.status).toBe(500);
+    expect(error.error).toBeUndefined();
+    expect(error.code).toBeUndefined();
   });
 
   it('returns { ok: true, data: {} } when response body is not JSON', async () => {
@@ -65,11 +63,10 @@ describe('apiFetchJson', () => {
 
     const result = await apiFetchJson('/api/protected');
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.status).toBe(401);
-      expect(result.error.error).toBe('Unauthorized');
-      expect(result.error.code).toBeUndefined();
-    }
+    const { error } = result as { ok: false; error: ApiError };
+    expect(error.status).toBe(401);
+    expect(error.error).toBe('Unauthorized');
+    expect(error.code).toBeUndefined();
   });
 
   it('ignores non-string error/code fields in error body', async () => {
@@ -79,9 +76,8 @@ describe('apiFetchJson', () => {
 
     const result = await apiFetchJson('/api/bad');
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.error).toBeUndefined();
-      expect(result.error.code).toBeUndefined();
-    }
+    const { error } = result as { ok: false; error: ApiError };
+    expect(error.error).toBeUndefined();
+    expect(error.code).toBeUndefined();
   });
 });
