@@ -183,9 +183,10 @@ aiRouter.post('/key', (req, res) => {
 
 aiRouter.get('/status', (req, res) => {
   const cookieKey = getCookie(req, 'openai_key');
+  const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
   const envKey = process.env.OPENAI_API_KEY;
-  const source = cookieKey ? 'cookie' : (envKey ? 'env' : null);
-  res.json({ configured: !!(cookieKey ?? envKey), source });
+  const source = decryptedKey ? 'cookie' : (envKey ? 'env' : null);
+  res.json({ configured: !!(decryptedKey ?? envKey), source });
 });
 
 aiRouter.post('/disconnect', (req, res) => {
@@ -321,7 +322,12 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     const perEmail = await mapWithConcurrency(batches, 3, async (emailId) => {
       try {
         return await extractTasksFromEmail(gmail, openai, emailId, mode);
-      } catch {
+      } catch (err) {
+        // Re-throw auth errors so the outer handler can surface them to the client.
+        // An invalid OpenAI key (401) or expired Google token (invalid_grant) affects
+        // every email in the batch, so swallowing them would silently return no tasks.
+        const apiErr = err as { status?: number; message?: string };
+        if (apiErr?.status === 401 || apiErr?.message?.includes('invalid_grant')) throw err;
         return [];
       }
     });

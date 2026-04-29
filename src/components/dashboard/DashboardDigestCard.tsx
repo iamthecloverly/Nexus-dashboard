@@ -106,7 +106,9 @@ export function DashboardDigestCard({
       const data = await res.json();
       if (!res.ok) {
         const code = data.code;
-        if (code === 'INVALID_KEY' || code === 'NO_AI_KEY' || res.status === 401) {
+        if (code === 'NO_AI_KEY') {
+          setBriefError('key_missing');
+        } else if (code === 'INVALID_KEY' || res.status === 401) {
           setBriefError('key_invalid');
         } else {
           setBriefError(data.error ?? 'Failed to generate brief');
@@ -367,9 +369,9 @@ export function DashboardDigestCard({
             {brief ? (
               <p className="text-sm text-foreground/90 leading-relaxed">{brief}</p>
             ) : briefError ? (
-              briefError === 'key_invalid' ? (
+              briefError === 'key_missing' ? (
                 <p className="text-xs text-red-400">
-                  OpenAI API key is missing or invalid.{' '}
+                  OpenAI API key not configured.{' '}
                   <button
                     type="button"
                     onClick={() => setCurrentView('Settings')}
@@ -377,7 +379,19 @@ export function DashboardDigestCard({
                   >
                     Go to Settings
                   </button>{' '}
-                  to add or update your key.
+                  to add your key.
+                </p>
+              ) : briefError === 'key_invalid' ? (
+                <p className="text-xs text-red-400">
+                  OpenAI API key is invalid.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('Settings')}
+                    className="underline hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400 rounded"
+                  >
+                    Go to Settings
+                  </button>{' '}
+                  to update your key.
                 </p>
               ) : (
                 <p className="text-xs text-red-400">{briefError}</p>
