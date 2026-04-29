@@ -134,14 +134,14 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
                       onClick={() => cyclePriority(item.id)}
-                      title="Click to change priority"
+                      aria-label={`Priority: ${item.priority} — click to change`}
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${priorityStyle(item.priority)}`}
                     >
                       {item.priority}
                     </button>
                     <button
                       onClick={() => toggleGroup(item.id)}
-                      title="Click to toggle timing"
+                      aria-label={`Timing: ${item.group === 'now' ? 'Now' : 'Next'} — click to toggle`}
                       className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-text-muted hover:text-white hover:border-white/20 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {item.group === 'now' ? '⚡ Now' : '→ Next'}

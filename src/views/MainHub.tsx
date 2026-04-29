@@ -371,7 +371,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (isLoadingEvents) {
       return opts.compact ? (
         <div className="flex items-center justify-center h-full">
-          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true"></div>
         </div>
       ) : (
         <div className="flex items-center justify-center py-16">
@@ -567,14 +567,14 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         onClick={() => { fetchEvents(); setShowCalendarMenu(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined !text-sm">refresh</span>
+                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span>
                         Refresh
                       </button>
                       <button
                         onClick={() => { setShowSchedule(true); setShowCalendarMenu(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined !text-sm">open_in_full</span>
+                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">open_in_full</span>
                         Full schedule
                       </button>
                       <a
@@ -639,7 +639,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       onClick={() => { clearCompletedTasks(); setShowTaskMenu(false); showToast('Completed tasks cleared', 'info'); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
                     >
-                      <span className="material-symbols-outlined !text-sm">delete_sweep</span>
+                      <span className="material-symbols-outlined !text-sm" aria-hidden="true">delete_sweep</span>
                       Clear completed
                     </button>
                   </div>
@@ -757,7 +757,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/70 via-orange-400/20 to-transparent pointer-events-none"></div>
             {unreadCount > 0 && (
               <div className="absolute top-5 right-5 w-2 h-2">
-                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
+                <span className="animate-pulse motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75" aria-hidden="true"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.55)]"></span>
               </div>
             )}
@@ -842,11 +842,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
       {showQuickAdd && (
         <div className="fixed inset-0 z-50 flex items-end justify-end p-10 pointer-events-none">
-          <div className="glass-panel rounded-2xl p-4 w-80 pointer-events-auto shadow-2xl border border-primary/30">
+          <div className="glass-panel rounded-2xl p-4 w-80 pointer-events-auto shadow-2xl border border-primary/30" role="dialog" aria-modal="true" aria-label="Quick add task">
             <p className="text-xs text-primary font-bold uppercase tracking-widest mb-3">Quick Add Task</p>
             <input
               ref={quickAddRef}
               aria-label="Task title"
+              name="task-title"
               className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm text-foreground placeholder-text-muted/60 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 transition-colors"
               placeholder="Task title… (Enter to add)"
               value={quickAddTitle}
@@ -884,6 +885,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               <label htmlFor="quick-add-due-date" className="text-[10px] text-text-muted uppercase tracking-wide font-medium block mb-1">Due date (optional)</label>
               <input
                 id="quick-add-due-date"
+                name="due-date"
                 type="date"
                 value={quickAddDueDate}
                 onChange={e => setQuickAddDueDate(e.target.value)}
@@ -892,7 +894,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </div>
             {/* Tags */}
             <div className="mt-3">
-              <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium block mb-1">Tags (optional)</label>
+              <p className="text-[10px] text-text-muted uppercase tracking-wide font-medium block mb-1">Tags (optional)</p>
               <TagInput tags={quickAddTags} onChange={setQuickAddTags} placeholder="Add tags..." maxTags={5} />
             </div>
             <p className="text-[10px] text-text-muted mt-2">Press Esc to cancel</p>

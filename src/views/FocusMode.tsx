@@ -432,6 +432,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
                 </div>
                 <input
                   aria-label="Add a task"
+                  name="task-title"
                   className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder:text-white/20 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20 transition-colors"
                   placeholder="Add a quick task…"
                   type="text"
@@ -446,7 +447,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
               {/* Group: Now */}
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" aria-hidden="true"></span>
                   <h3 className="text-xs font-bold text-slate-100 uppercase tracking-widest">Now</h3>
                   <div className="flex-1 h-px bg-white/10 ml-2"></div>
                 </div>

@@ -307,7 +307,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                 aria-label="Search emails"
                 name="email-search"
                 autoComplete="off"
-                className="bg-transparent border-none focus:ring-0 text-[14px] text-foreground placeholder-text-muted w-full p-0"
+                className="bg-transparent border-none focus-visible:ring-1 focus-visible:ring-primary/40 text-[14px] text-foreground placeholder-text-muted w-full p-0 rounded"
                 placeholder="Search emails, people, or keywords…"
                 type="search"
                 value={searchQuery}
@@ -337,7 +337,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                       <p className="text-sm">Server unreachable. Make sure the app is running.</p>
                       <button
                         onClick={refreshEmails}
-                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10"
+                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                       >
                         Retry
                       </button>
@@ -595,6 +595,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                 <label htmlFor="compose-to" className="text-xs text-text-muted w-12 shrink-0">To</label>
                 <input
                   id="compose-to"
+                  name="to"
                   type="email"
                   autoComplete="email"
                   className="flex-1 bg-transparent text-sm text-white placeholder-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded"
@@ -617,6 +618,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
               </div>
               <textarea
                 id="compose-body"
+                name="body"
                 aria-label="Message body"
                 className="w-full bg-transparent text-sm text-white placeholder-text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded resize-none h-40 custom-scrollbar"
                 placeholder="Write your message…"
@@ -628,7 +630,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
               )}
             </div>
             <div className="px-6 py-4 border-t border-white/10 bg-background-elevated/55 flex items-center justify-between">
-              <button onClick={() => setCompose(null)} className="text-sm text-text-muted hover:text-white transition-colors">
+              <button onClick={() => setCompose(null)} className="text-sm text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
                 Discard
               </button>
               <button
@@ -637,7 +639,7 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
                 className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-background-dark text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_14px_rgba(56,189,248,0.28)]"
               >
                 {compose.sending ? (
-                  <span className="w-4 h-4 rounded-full border-2 border-background-dark border-t-transparent animate-spin"></span>
+                  <span className="w-4 h-4 rounded-full border-2 border-background-dark border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true"></span>
                 ) : (
                   <span className="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>
                 )}

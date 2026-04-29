@@ -64,6 +64,7 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
         <div className="mt-6 flex flex-col gap-3">
           <input
             type="password"
+            name="passcode"
             autoComplete="current-password"
             value={passcode}
             onChange={e => setPasscode(e.target.value)}

@@ -320,7 +320,8 @@ export function DashboardDigestCard({
                   <button
                     type="button"
                     onClick={useMyLocation}
-                    className="text-[10px] font-medium text-primary hover:underline text-right px-1"
+                    aria-label="Use my current location for weather"
+                    className="text-[10px] font-medium text-primary hover:underline text-right px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
                     My location
                   </button>
