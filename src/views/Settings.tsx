@@ -73,9 +73,9 @@ export default function Settings({
 
   const disconnectAi = async () => {
     await fetch('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders() });
-    // If OPENAI_API_KEY is set server-side, removing the cookie won't disable AI.
+    // If AI key is preconfigured at workspace level, the user cannot remove it here.
     if (aiSource === 'env') {
-      showToast('AI is configured via server environment and cannot be removed here', 'info');
+      showToast('AI is managed at the workspace level and cannot be removed from here', 'info');
       return;
     }
     setAiConfigured(false);
@@ -294,9 +294,9 @@ export default function Settings({
                 </span>
               </div>
               {aiConfigured && aiSource === 'env' ? (
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <p className="text-sm text-foreground">Configured by the server.</p>
-                  <p className="text-[10px] text-text-muted mt-1">To change this, update <span className="font-mono">OPENAI_API_KEY</span> and restart the server.</p>
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <p className="text-sm text-foreground font-medium">AI is active</p>
+                  <p className="text-[10px] text-text-muted mt-1">Your AI key is managed at the workspace level. Contact your administrator to update it.</p>
                 </div>
               ) : aiConfigured ? (
                 <button
@@ -327,7 +327,7 @@ export default function Settings({
                 </div>
               )}
               <p className="text-[10px] text-text-muted">
-                Used to extract tasks from emails. If you add a key here, it’s stored in an HTTP-only cookie. Email content is sent only to OpenAI for task extraction. Get a key at <span className="text-primary">platform.openai.com</span>.
+                Powers AI task extraction from your emails. Your key is stored securely and only used to communicate with OpenAI on your behalf. Get a key at <span className="text-primary">platform.openai.com</span>.
               </p>
             </div>
           </section>

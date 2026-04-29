@@ -178,7 +178,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
       const res = await fetch('/api/discord/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-        body: JSON.stringify({ content: '✅ Personal Dashboard is connected!' }),
+        body: JSON.stringify({ content: '✅ Nexus Dashboard is connected!' }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed');
       showToast('Test message sent!', 'success');
