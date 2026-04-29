@@ -80,8 +80,15 @@ export function DashboardDigestCard({
   /** Show tile while loading, when we have data, or after a failed fetch (compact retry — never blank placeholder). */
   const showWeatherTile = loading || !!data || !!error;
 
-  // AI daily brief
-  const [brief, setBrief] = useState<string | null>(null);
+  // AI daily brief — cached in localStorage per-day so tab switches don't waste tokens.
+  const [brief, setBrief] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.dailyBrief);
+      if (!stored) return null;
+      const { date, text } = JSON.parse(stored) as { date: string; text: string };
+      return date === new Date().toISOString().slice(0, 10) ? text : null;
+    } catch { return null; }
+  });
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
 
@@ -114,7 +121,14 @@ export function DashboardDigestCard({
           setBriefError(data.error ?? 'Failed to generate brief');
         }
       } else {
-        setBrief(data.brief ?? '');
+        const text = data.brief ?? '';
+        setBrief(text);
+        try {
+          localStorage.setItem(
+            STORAGE_KEYS.dailyBrief,
+            JSON.stringify({ date: new Date().toISOString().slice(0, 10), text }),
+          );
+        } catch { /* storage quota */ }
       }
     } catch {
       setBriefError('Network error — check your connection');

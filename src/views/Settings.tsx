@@ -103,9 +103,10 @@ export default function Settings({
       STORAGE_KEYS.ytRecent,
       STORAGE_KEYS.ytPositions,
       STORAGE_KEYS.ytResumeEnabled,
-      STORAGE_KEYS.autoProcessedEmailIds, // reset auto-task extraction state so new emails are processed fresh
+      STORAGE_KEYS.autoProcessedEmailIds,
       STORAGE_KEYS.weatherCoords,
       STORAGE_KEYS.notificationsEnabled,
+      STORAGE_KEYS.dailyBrief,
     ].forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);

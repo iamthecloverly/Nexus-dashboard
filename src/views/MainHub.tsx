@@ -8,6 +8,7 @@ import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
+import { useTaskNotifications } from '../hooks/useTaskNotifications';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
@@ -125,8 +126,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [currentTime, setCurrentTime] = useState(new Date());
   const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
 
-  // Browser notifications: 5 minutes before each calendar event
-  useCalendarNotifications(events, isCalendarConnected);
+  // Desktop notifications — gated on browser permission being granted.
+  const notificationsGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  useCalendarNotifications(events, isCalendarConnected && notificationsGranted);
+  useTaskNotifications(tasks, notificationsGranted);
 
   // Pre-sort events once per fetch (avoids re-sorting on every `currentTime` tick).
   const sortedEvents = useMemo(() => {

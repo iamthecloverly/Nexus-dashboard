@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   /** JSON `{ "lat": number, "lon": number }` for Open-Meteo `/api/weather` */
   weatherCoords: 'dashboard_weather_coords',
   notificationsEnabled: 'dashboard_notifications_enabled',
+  /** JSON `{ "date": "YYYY-MM-DD", "text": string }` — today's AI brief, cached to avoid regenerating on tab switch */
+  dailyBrief: 'dashboard_daily_brief',
 } as const;
 
 /** sessionStorage keys (tab-scoped); not cleared by Settings → Clear All Data */
