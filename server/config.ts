@@ -12,7 +12,7 @@ if (isProduction && !SESSION_SECRET) {
   throw new Error('SESSION_SECRET must be set in production');
 }
 
-export const DASHBOARD_PASSCODE = process.env.DASHBOARD_PASSCODE ?? '';
+export const DASHBOARD_PASSCODE = (process.env.DASHBOARD_PASSCODE ?? '').trim();
 export const ALLOWED_GOOGLE_EMAILS = (process.env.ALLOWED_GOOGLE_EMAILS ?? '')
   .split(',')
   .map(s => s.trim().toLowerCase())
@@ -66,7 +66,7 @@ export function ensureCsrfCookie(req: express.Request, res: express.Response) {
 export function getBaseUrl(req: express.Request): string {
   // Prefer explicit APP_URL for OAuth correctness and Host header hardening.
   // Otherwise, derive from the incoming request (supports http self-hosting and reverse proxies).
-  const appUrl = process.env.APP_URL;
+  const appUrl = process.env.APP_URL?.trim().replace(/\/+$/, '');
   if (appUrl) return appUrl;
 
   const host = req.get('host');

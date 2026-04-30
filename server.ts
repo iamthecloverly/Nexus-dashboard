@@ -39,23 +39,32 @@ app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite inje
 app.use(cookieParser(SESSION_SECRET));
 app.use(express.json({ limit: '50kb' }));
 
-// Global rate limiter: 100 requests per 5 minutes per IP
+/** High-frequency, read-only GETs — excluded so polling + login checks do not burn the global budget. */
+function skipGlobalRateLimit(req: express.Request): boolean {
+  const m = req.method.toUpperCase();
+  if (m !== 'GET' && m !== 'HEAD') return false;
+  switch (req.path) {
+    case '/api/system':
+    case '/api/session/status':
+    case '/api/health':
+    case '/api/calendar/events':
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Global rate limiter: 100 requests per 5 minutes per IP (state-changing + heavy GETs)
 const globalLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 100,
+  // Dev needs higher limits because the SPA polls + debug endpoints can fan out (calendar = N calendars).
+  max: isProduction ? 100 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
+  skip: skipGlobalRateLimit,
 });
 app.use('/api', globalLimiter);
-
-// Stricter rate limiters for sensitive endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 attachCsrf(app);
 
@@ -80,7 +89,7 @@ app.get('/api/health', async (_req, res) => {
   res.status(statusCode).json({ status: overallStatus, checks });
 });
 
-app.use('/api/session', authLimiter, sessionRouter);
+app.use('/api/session', sessionRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/calendar', requireDashboardAccess, calendarRouter);
 app.use('/api/gmail', requireDashboardAccess, gmailRouter);

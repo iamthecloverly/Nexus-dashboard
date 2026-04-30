@@ -61,5 +61,5 @@ export const discordSendSchema = z.object({
 
 // Session validation schemas
 export const loginSchema = z.object({
-  passcode: z.string().min(1, 'Passcode is required'),
+  passcode: z.string().trim().min(1, 'Passcode is required'),
 });

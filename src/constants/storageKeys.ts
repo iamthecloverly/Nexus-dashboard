@@ -13,6 +13,12 @@ export const STORAGE_KEYS = {
   notificationsEnabled: 'dashboard_notifications_enabled',
   /** JSON `{ "date": "YYYY-MM-DD", "text": string }` — today's AI brief, cached to avoid regenerating on tab switch */
   dailyBrief: 'dashboard_daily_brief',
+  /** 'primary' | 'secondary' */
+  calendarAccount: 'dashboard_calendar_account',
+  /** CalendarListItem.id */
+  calendarMainId: 'dashboard_calendar_main_id',
+  /** JSON string array of calendar IDs to include (optional). */
+  calendarIncludedIds: 'dashboard_calendar_included_ids',
 } as const;
 
 /** sessionStorage keys (tab-scoped); not cleared by Settings → Clear All Data */
