@@ -39,8 +39,18 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
         body: JSON.stringify({ passcode }),
       });
       if (!res.ok) {
-        const msg = ((await res.json().catch(() => null)) as Record<string, unknown> | null)?.error;
-        throw new Error(typeof msg === 'string' ? msg : 'Login failed');
+        const raw = await res.text();
+        let msg: string | undefined;
+        try {
+          const j = JSON.parse(raw) as Record<string, unknown>;
+          if (typeof j.error === 'string') msg = j.error;
+        } catch {
+          // non-JSON body (e.g. proxy HTML, rate-limit plaintext)
+        }
+        const trimmed = raw.trim();
+        throw new Error(
+          msg ?? (trimmed ? trimmed.slice(0, 160) : `Login failed (HTTP ${res.status})`),
+        );
       }
       await refresh();
       onAuthed();

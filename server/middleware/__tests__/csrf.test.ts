@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { SESSION_SECRET } from '../../config';
-import { attachCsrf } from '../csrf';
+import { attachCsrf, normalizeLoopbackOrigin } from '../csrf';
 
 function makeApp() {
   const app = express();
@@ -16,7 +16,38 @@ function makeApp() {
   return app;
 }
 
+describe('normalizeLoopbackOrigin', () => {
+  it('maps 127.0.0.1 to localhost preserving port', () => {
+    expect(normalizeLoopbackOrigin('http://127.0.0.1:3001')).toBe('http://localhost:3001');
+  });
+
+  it('leaves localhost unchanged', () => {
+    expect(normalizeLoopbackOrigin('http://localhost:3001')).toBe('http://localhost:3001');
+  });
+});
+
 describe('CSRF middleware', () => {
+  beforeEach(() => {
+    vi.stubEnv('APP_URL', 'http://localhost:3001');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('allows POST when Origin is 127.0.0.1 but APP_URL uses localhost', async () => {
+    const app = makeApp();
+    const token = 'loopback-token';
+    const res = await request(app)
+      .post('/api/test')
+      .set('Cookie', `csrf_token=${token}`)
+      .set('x-csrf-token', token)
+      .set('Origin', 'http://127.0.0.1:3001')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
   it('allows GET requests without CSRF token', async () => {
     const app = makeApp();
     const res = await request(app).get('/api/test');

@@ -1,13 +1,23 @@
 import express from 'express';
 import { google } from 'googleapis';
 
-import { ALLOWED_GOOGLE_EMAILS, COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
-import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { ALLOWED_GOOGLE_EMAILS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
+import { clearAppCookie, getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import {
+  createAuthedGoogleClient,
+  getGoogleTokensFromCookie,
+  setGoogleProfileCookie,
+  setGoogleTokensCookie,
+  type GoogleAccountId,
+} from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
 export const authRouter = express.Router();
+
+function parseAccountId(value: unknown): GoogleAccountId {
+  return value === 'secondary' ? 'secondary' : 'primary';
+}
 
 authRouter.get('/google/url', (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
@@ -15,6 +25,7 @@ authRouter.get('/google/url', (req, res) => {
   }
 
   const oauth2Client = getOAuth2Client(req);
+  const accountId = parseAccountId(req.query.accountId);
   const scopes = [
     // Needed to fetch/set google_profile (email/name) for allowlist checks.
     'https://www.googleapis.com/auth/userinfo.email',
@@ -30,6 +41,7 @@ authRouter.get('/google/url', (req, res) => {
     access_type: 'offline',
     scope: scopes,
     prompt: 'consent',
+    state: JSON.stringify({ accountId }),
   });
 
   res.json({ url });
@@ -38,25 +50,30 @@ authRouter.get('/google/url', (req, res) => {
 authRouter.get('/google/callback', async (req, res) => {
   const { code } = req.query;
   if (!code || typeof code !== 'string') return res.status(400).send('Missing code');
+  const accountId = (() => {
+    const { state } = req.query;
+    if (!state || typeof state !== 'string') return 'primary' as const;
+    try {
+      const parsed = JSON.parse(state) as { accountId?: unknown };
+      return parseAccountId(parsed?.accountId);
+    } catch {
+      return 'primary' as const;
+    }
+  })();
 
   try {
     const oauth2Client = getOAuth2Client(req);
     const { tokens } = await oauth2Client.getToken(code);
 
     // Store tokens in an HTTP-only cookie (signed)
-    setSignedCookie(res, 'google_tokens', JSON.stringify(tokens), COOKIE_OPTS);
+    setGoogleTokensCookie(res, tokens, accountId);
 
     // Also store the user profile (email/name) once for allowlist checks.
     try {
       oauth2Client.setCredentials(tokens);
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
       const me = await oauth2.userinfo.get();
-      setSignedCookie(
-        res,
-        'google_profile',
-        JSON.stringify({ email: me.data.email ?? null, name: me.data.name ?? null }),
-        COOKIE_OPTS,
-      );
+      setGoogleProfileCookie(res, { email: me.data.email ?? null, name: me.data.name ?? null }, accountId);
     } catch {
       // If profile fetch fails, token cookie is still set; client can retry via /api/auth/profile.
     }
@@ -121,8 +138,9 @@ authRouter.get('/google/callback', async (req, res) => {
 });
 
 authRouter.get('/status', (req, res) => {
-  const tokensCookie = getCookie(req, 'google_tokens');
-  const profileCookie = getCookie(req, 'google_profile');
+  const accountId = parseAccountId(req.query.accountId);
+  const tokensCookie = getCookie(req, accountId === 'primary' ? 'google_tokens' : 'google_tokens_secondary');
+  const profileCookie = getCookie(req, accountId === 'primary' ? 'google_profile' : 'google_profile_secondary');
   const profile = profileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(profileCookie) : null;
   const email = (profile?.email ?? null);
   const emailLc = email ? String(email).toLowerCase() : null;
@@ -141,28 +159,64 @@ authRouter.get('/status', (req, res) => {
 });
 
 authRouter.get('/profile', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
     const { tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const me = await oauth2.userinfo.get();
     // Heal sessions where the OAuth callback couldn't fetch/set google_profile.
     // requireDashboardAccess depends on this cookie for allowlist checks.
-    setSignedCookie(
-      res,
-      'google_profile',
-      JSON.stringify({ email: me.data.email ?? null, name: me.data.name ?? null }),
-      COOKIE_OPTS,
-    );
+    setGoogleProfileCookie(res, { email: me.data.email ?? null, name: me.data.name ?? null }, accountId);
     res.json({ email: me.data.email ?? null, name: me.data.name ?? null });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to fetch profile';
     res.status(500).json({ error: msg });
   }
+});
+
+authRouter.get('/google/accounts', (req, res) => {
+  const primaryProfileCookie = getCookie(req, 'google_profile');
+  const primaryTokensCookie = getCookie(req, 'google_tokens');
+  const secondaryProfileCookie = getCookie(req, 'google_profile_secondary');
+  const secondaryTokensCookie = getCookie(req, 'google_tokens_secondary');
+
+  const primaryProfile = primaryProfileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(primaryProfileCookie) : null;
+  const secondaryProfile = secondaryProfileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(secondaryProfileCookie) : null;
+
+  res.json({
+    accounts: [
+      {
+        accountId: 'primary',
+        connected: !!primaryTokensCookie,
+        email: (primaryProfile?.email ?? null),
+        name: (primaryProfile?.name ?? null),
+      },
+      {
+        accountId: 'secondary',
+        connected: !!secondaryTokensCookie,
+        email: (secondaryProfile?.email ?? null),
+        name: (secondaryProfile?.name ?? null),
+      },
+    ],
+  });
+});
+
+authRouter.post('/google/disconnect', (req, res) => {
+  const accountId = parseAccountId(req.query.accountId);
+  if (accountId === 'secondary') {
+    clearAppCookie(res, 'google_tokens_secondary', true);
+    clearAppCookie(res, 'google_profile_secondary', true);
+    return res.json({ success: true });
+  }
+  // default: primary disconnect (back-compat)
+  clearAppCookie(res, 'google_tokens', true);
+  clearAppCookie(res, 'google_profile', true);
+  res.json({ success: true });
 });
 
 authRouter.post('/disconnect', (req, res) => {

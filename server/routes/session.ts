@@ -1,5 +1,6 @@
 import express from 'express';
 import { timingSafeEqual } from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 import {
   ALLOWED_GOOGLE_EMAILS,
@@ -22,6 +23,16 @@ function safeEqual(a: string, b: string): boolean {
 
 export const sessionRouter = express.Router();
 
+/** Only POST /login; failed attempts count so typos are fine after a success. */
+const loginPostLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many failed login attempts, please try again in a few minutes.' },
+});
+
 sessionRouter.get('/status', (req, res) => {
   const hasSession = !!getCookie(req, DASHBOARD_SESSION_COOKIE);
   const profileCookie = getCookie(req, 'google_profile');
@@ -36,7 +47,7 @@ sessionRouter.get('/status', (req, res) => {
   });
 });
 
-sessionRouter.post('/login', (req, res) => {
+sessionRouter.post('/login', loginPostLimiter, (req, res) => {
   const validation = loginSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });

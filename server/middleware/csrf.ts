@@ -12,6 +12,18 @@ function originFromUrlish(value: string | undefined): string | null {
   }
 }
 
+/** Treat 127.0.0.1 and localhost as the same origin so CSRF passes when APP_URL and the browser disagree. */
+export function normalizeLoopbackOrigin(origin: string): string {
+  try {
+    const u = new URL(origin);
+    if (u.hostname !== '127.0.0.1') return u.origin;
+    const portPart = u.port ? `:${u.port}` : '';
+    return `${u.protocol}//localhost${portPart}`;
+  } catch {
+    return origin;
+  }
+}
+
 export function attachCsrf(app: express.Express) {
   // Ensure a CSRF token exists for the SPA before any POSTs happen.
   app.use((req, res, next) => {
@@ -31,7 +43,11 @@ export function attachCsrf(app: express.Express) {
     const reqOriginParsed = originFromUrlish(reqOrigin);
     const refererOriginParsed = originFromUrlish(req.get('referer') ?? undefined);
     const presentedOrigin = reqOriginParsed ?? refererOriginParsed;
-    if (allowedOrigin && presentedOrigin && presentedOrigin !== allowedOrigin) {
+    if (
+      allowedOrigin &&
+      presentedOrigin &&
+      normalizeLoopbackOrigin(presentedOrigin) !== normalizeLoopbackOrigin(allowedOrigin)
+    ) {
       return res.status(403).json({ error: 'CSRF origin validation failed' });
     }
 

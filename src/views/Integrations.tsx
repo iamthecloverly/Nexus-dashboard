@@ -4,16 +4,23 @@ import { csrfHeaders } from '../lib/csrf';
 import type { SetViewFn } from '../config/navigation';
 
 interface IntegrationStatus {
-  google: boolean;
+  googlePrimary: boolean;
+  googleSecondary: boolean;
   github: boolean;
   discord: boolean;
 }
 
 export default function Integrations({ setCurrentView }: { setCurrentView: SetViewFn }) {
   const { showToast } = useToast();
-  const [status, setStatus] = useState<IntegrationStatus>({ google: false, github: false, discord: false });
+  const [status, setStatus] = useState<IntegrationStatus>({
+    googlePrimary: false,
+    googleSecondary: false,
+    github: false,
+    discord: false,
+  });
   const [isLoading, setIsLoading] = useState(true);
-  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googlePrimaryEmail, setGooglePrimaryEmail] = useState<string | null>(null);
+  const [googleSecondaryEmail, setGoogleSecondaryEmail] = useState<string | null>(null);
 
   // GitHub PAT input
   const [githubPat, setGithubPat] = useState('');
@@ -59,39 +66,32 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
 
   const checkAllStatuses = async () => {
     setIsLoading(true);
-    const [googleRes, githubRes, discordRes] = await Promise.allSettled([
-      fetch('/api/auth/status').then(r => r.json()),
+    const [accountsRes, githubRes, discordRes] = await Promise.allSettled([
+      fetch('/api/auth/google/accounts').then(r => r.json()),
       fetch('/api/github/status').then(r => r.json()).catch(() => ({ connected: false })),
       fetch('/api/discord/status').then(r => r.json()).catch(() => ({ connected: false })),
     ]);
-    const googleConnected = googleRes.status === 'fulfilled' ? googleRes.value.connected : false;
+    type GoogleAccountsResponse = { accounts?: Array<{ accountId: 'primary' | 'secondary'; connected?: boolean; email?: string | null }> };
+    const accounts = accountsRes.status === 'fulfilled' ? ((accountsRes.value as GoogleAccountsResponse).accounts ?? []) : [];
+    const primary = accounts.find(a => a.accountId === 'primary');
+    const secondary = accounts.find(a => a.accountId === 'secondary');
+    const googlePrimaryConnected = !!primary?.connected;
+    const googleSecondaryConnected = !!secondary?.connected;
     setStatus({
-      google: googleConnected,
+      googlePrimary: googlePrimaryConnected,
+      googleSecondary: googleSecondaryConnected,
       github: githubRes.status === 'fulfilled' ? !!githubRes.value.connected : false,
       discord: discordRes.status === 'fulfilled' ? !!discordRes.value.connected : false,
     });
-    if (googleConnected) {
-      try {
-        const profileRes = await fetch('/api/auth/profile');
-        if (profileRes.ok) {
-          const profile = await profileRes.json();
-          setGoogleEmail(profile.email ?? null);
-        } else {
-          setGoogleEmail(null);
-        }
-      } catch {
-        setGoogleEmail(null);
-      }
-    } else {
-      setGoogleEmail(null);
-    }
+    setGooglePrimaryEmail(primary?.email ?? null);
+    setGoogleSecondaryEmail(secondary?.email ?? null);
     setIsLoading(false);
   };
 
   // Google Calendar
-  const handleConnectGoogle = async () => {
+  const handleConnectGoogle = async (accountId: 'primary' | 'secondary') => {
     try {
-      const response = await fetch('/api/auth/google/url');
+      const response = await fetch(`/api/auth/google/url?accountId=${encodeURIComponent(accountId)}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.error || 'Failed to get auth URL');
@@ -105,10 +105,18 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
     }
   };
 
-  const handleDisconnectGoogle = async () => {
+  const handleDisconnectGoogle = async (accountId: 'primary' | 'secondary') => {
+    if (accountId === 'secondary') {
+      await fetch('/api/auth/google/disconnect?accountId=secondary', { method: 'POST', headers: csrfHeaders() });
+      setStatus(s => ({ ...s, googleSecondary: false }));
+      setGoogleSecondaryEmail(null);
+      showToast('Secondary Google account disconnected', 'info');
+      return;
+    }
+    // Primary (existing behavior)
     await fetch('/api/auth/disconnect', { method: 'POST', headers: csrfHeaders() });
-    setStatus(s => ({ ...s, google: false }));
-    setGoogleEmail(null);
+    setStatus(s => ({ ...s, googlePrimary: false }));
+    setGooglePrimaryEmail(null);
     showToast('Google disconnected', 'info');
   };
 
@@ -236,18 +244,46 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
                 </div>
                 {isLoading ? (
                   <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true"></div>
-                ) : status.google ? <ConnectedBadge /> : <ConnectButton onClick={handleConnectGoogle} service="Google" />}
+                ) : status.googlePrimary ? <ConnectedBadge /> : <ConnectButton onClick={() => handleConnectGoogle('primary')} service="Google" />}
               </div>
-              <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google</h3>
-              <p className="text-sm text-text-muted mb-2 relative z-10">Sync your Calendar and Gmail inbox into the dashboard.</p>
-              {status.google && googleEmail && (
+              <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google (Primary)</h3>
+              <p className="text-sm text-text-muted mb-2 relative z-10">Primary allowlisted account. Syncs Calendar + Gmail.</p>
+              {status.googlePrimary && googlePrimaryEmail && (
                 <p className="text-xs text-text-muted font-mono mb-4 relative z-10">
-                  Connected as <span className="text-white/90">{googleEmail}</span>
+                  Connected as <span className="text-white/90">{googlePrimaryEmail}</span>
                 </p>
               )}
-              {status.google && (
+              {status.googlePrimary && (
                 <button
-                  onClick={handleDisconnectGoogle}
+                  onClick={() => handleDisconnectGoogle('primary')}
+                  className="w-full py-2 rounded-lg border border-red-500/30 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors relative z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+
+            {/* Google (Secondary) */}
+            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-colors"></div>
+              <div className="flex items-start justify-between mb-4 relative z-10">
+                <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-lg">
+                  <span className="material-symbols-outlined text-blue-500 text-3xl" aria-hidden="true">inbox</span>
+                </div>
+                {isLoading ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true"></div>
+                ) : status.googleSecondary ? <ConnectedBadge /> : <ConnectButton onClick={() => handleConnectGoogle('secondary')} service="Google" />}
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-1 relative z-10">Google (Secondary)</h3>
+              <p className="text-sm text-text-muted mb-2 relative z-10">Optional second Gmail inbox for monitoring.</p>
+              {status.googleSecondary && googleSecondaryEmail && (
+                <p className="text-xs text-text-muted font-mono mb-4 relative z-10">
+                  Connected as <span className="text-white/90">{googleSecondaryEmail}</span>
+                </p>
+              )}
+              {status.googleSecondary && (
+                <button
+                  onClick={() => handleDisconnectGoogle('secondary')}
                   className="w-full py-2 rounded-lg border border-red-500/30 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors relative z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
                 >
                   Disconnect
