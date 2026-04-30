@@ -260,25 +260,27 @@ function AppContent() {
   }
 
   return (
-    <TaskProvider>
-      <EmailProvider>
-        <MusicProvider>
-          <AppAuthed
-            currentView={currentView}
-            setCurrentView={setCurrentView}
-            isLg={isLg}
-            quickAddTrigger={quickAddTrigger}
-            composeTrigger={composeTrigger}
-            calendarRefreshTrigger={calendarRefreshTrigger}
-            commandPaletteOpen={commandPaletteOpen}
-            setCommandPaletteOpen={setCommandPaletteOpen}
-            handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
-            handlePaletteComposeEmail={handlePaletteComposeEmail}
-            handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
-          />
-        </MusicProvider>
-      </EmailProvider>
-    </TaskProvider>
+    <SystemMetricsProvider>
+      <TaskProvider>
+        <EmailProvider>
+          <MusicProvider>
+            <AppAuthed
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              isLg={isLg}
+              quickAddTrigger={quickAddTrigger}
+              composeTrigger={composeTrigger}
+              calendarRefreshTrigger={calendarRefreshTrigger}
+              commandPaletteOpen={commandPaletteOpen}
+              setCommandPaletteOpen={setCommandPaletteOpen}
+              handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
+              handlePaletteComposeEmail={handlePaletteComposeEmail}
+              handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
+            />
+          </MusicProvider>
+        </EmailProvider>
+      </TaskProvider>
+    </SystemMetricsProvider>
   );
 }
 
@@ -291,11 +293,9 @@ function ViewportGate({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <ToastProvider>
-      <SystemMetricsProvider>
-        <ViewportGate>
-          <AppContent />
-        </ViewportGate>
-      </SystemMetricsProvider>
+      <ViewportGate>
+        <AppContent />
+      </ViewportGate>
     </ToastProvider>
   );
 }

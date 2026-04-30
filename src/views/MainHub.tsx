@@ -121,10 +121,68 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     hour12: false,
   }), []);
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
-  const { state: { emails, gmailConnected, serverError: gmailServerError } } = useEmailContext();
+  const { state: { emailsByAccount, connectedByAccount, serverErrorByAccount } } = useEmailContext();
+  const emails = emailsByAccount.primary;
+  const gmailConnected = connectedByAccount.primary;
+  const gmailServerError = serverErrorByAccount.primary;
   const { showToast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError, refetch: fetchEvents } = useCalendarEvents();
+  const {
+    events,
+    mode: calendarMode,
+    isLoading: isLoadingEvents,
+    isConnected: isCalendarConnected,
+    error: calendarError,
+    accountId: calendarAccount,
+    setAccountId: setCalendarAccount,
+    mainCalendarId,
+    setMainCalendarId,
+    includedCalendarIds,
+    setIncludedCalendarIds,
+    refetch: fetchEvents,
+  } = useCalendarEvents();
+
+  const [googleAccounts, setGoogleAccounts] = useState<{ primary: boolean; secondary: boolean }>({ primary: true, secondary: false });
+  const [calendarList, setCalendarList] = useState<Array<{ id: string; summary: string | null; primary: boolean; selected: boolean; hidden: boolean }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/google/accounts')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: unknown) => {
+        const data = d as { accounts?: Array<{ accountId: 'primary' | 'secondary'; connected?: boolean }> } | null;
+        if (cancelled || !data?.accounts) return;
+        const accs = Array.isArray(data.accounts) ? data.accounts : [];
+        const primary = !!accs.find(a => a.accountId === 'primary')?.connected;
+        const secondary = !!accs.find(a => a.accountId === 'secondary')?.connected;
+        setGoogleAccounts({ primary, secondary });
+        if (!secondary && calendarAccount === 'secondary') setCalendarAccount('primary');
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [calendarAccount, setCalendarAccount]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/calendar/calendars?accountId=${encodeURIComponent(calendarAccount)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: unknown) => {
+        const data = d as { calendars?: Array<{ id: string; summary: string | null; primary: boolean; selected: boolean; hidden: boolean }> } | null;
+        if (cancelled || !data?.calendars) return;
+        const list = Array.isArray(data.calendars) ? data.calendars : [];
+        setCalendarList(list);
+        // If mainCalendarId was from another account, clear it.
+        if (mainCalendarId && !list.some(c => c.id === mainCalendarId)) {
+          setMainCalendarId(null);
+        }
+        // Remove any included IDs that no longer exist.
+        if (includedCalendarIds && includedCalendarIds.length) {
+          const next = includedCalendarIds.filter(id => list.some(c => c.id === id));
+          if (next.length !== includedCalendarIds.length) setIncludedCalendarIds(next.length ? next : null);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [calendarAccount, mainCalendarId, includedCalendarIds, setIncludedCalendarIds, setMainCalendarId]);
 
   // Desktop notifications — gated on browser permission being granted.
   const notificationsGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
@@ -164,6 +222,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   // Calendar context menu & full-screen schedule
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
 
   // Task inline edit
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -367,6 +426,26 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     );
   }, [currentTime, fmtTime]);
 
+  const renderDateHeader = useCallback((dateKey: string) => {
+    // dateKey is YYYY-MM-DD in local time; render as "Wed · Apr 29"
+    const d = parseISO(dateKey);
+    const label = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+    return (
+      <div key={`hdr:${dateKey}`} className="pt-2">
+        <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-text-muted/80">
+          {label}
+        </div>
+      </div>
+    );
+  }, []);
+
+  const eventDateKey = useCallback((event: CalendarEvent): string => {
+    // Use start date in local time for grouping.
+    if (event.start.date) return event.start.date;
+    if (event.start.dateTime) return format(parseISO(event.start.dateTime), 'yyyy-MM-dd');
+    return format(new Date(), 'yyyy-MM-dd');
+  }, []);
+
   const renderCalendarBody = useCallback((opts: { compact: boolean }) => {
     if (isLoadingEvents) {
       return opts.compact ? (
@@ -451,6 +530,19 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
+    if (calendarError === 'calendar_access_denied') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-4xl text-amber-400" aria-hidden="true">event_busy</span>
+          <p className="text-sm text-foreground font-medium">Calendar access denied</p>
+          <p className="text-xs text-text-muted max-w-[260px]">
+            Google rejected calendar reads (scopes or account). Open Integrations and reconnect Google.
+          </p>
+          <button type="button" onClick={goIntegrations} className={primaryBtnClass}>Go to Integrations</button>
+        </div>
+      );
+    }
+
     if (calendarError === 'fetch_error' || calendarError === 'network_error' || calendarError === 'forbidden') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
@@ -462,6 +554,22 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     }
 
     if (sortedEvents.length === 0) {
+      const debugHref = (() => {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const dtf = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+          const parts = dtf.formatToParts(new Date());
+          const y = parts.find(p => p.type === 'year')?.value ?? '';
+          const m = parts.find(p => p.type === 'month')?.value ?? '';
+          const d = parts.find(p => p.type === 'day')?.value ?? '';
+          if (!tz || !y || !m || !d) return null;
+          const day = `${y}-${m}-${d}`;
+          const q = new URLSearchParams({ day, tz, debug: '1' });
+          return `/api/calendar/events?${q.toString()}`;
+        } catch {
+          return null;
+        }
+      })();
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-2 ${wrapClass}`}>
           <p className="text-sm text-text-muted">No events today.</p>
@@ -471,18 +579,44 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           >
             If you expect events, reconnect Google →
           </button>
+          {debugHref && (
+            <a
+              href={debugHref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-text-muted hover:text-foreground/80 underline underline-offset-2 decoration-white/15 hover:decoration-white/35 transition-colors"
+            >
+              Diagnose (dev) →
+            </a>
+          )}
         </div>
       );
     }
 
-    return sortedEvents.map(renderEvent);
+    if (calendarMode !== 'upcoming') return sortedEvents.map(renderEvent);
+
+    // Upcoming mode: group with date headers so it’s obvious which day each event belongs to.
+    const out: React.ReactNode[] = [];
+    let lastKey: string | null = null;
+    for (const ev of sortedEvents) {
+      const key = eventDateKey(ev);
+      if (key !== lastKey) {
+        out.push(renderDateHeader(key));
+        lastKey = key;
+      }
+      out.push(renderEvent(ev));
+    }
+    return out;
   }, [
     isLoadingEvents,
     sortedEvents,
+    calendarMode,
     isCalendarConnected,
     calendarError,
     fetchEvents,
     renderEvent,
+    eventDateKey,
+    renderDateHeader,
     setCurrentView,
     setShowSchedule,
   ]);
@@ -556,8 +690,53 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               >
                 <span className="material-symbols-outlined text-primary text-[24px]" aria-hidden="true">event_note</span>
                 Schedule
+                {isCalendarConnected && !calendarError && calendarMode === 'upcoming' && (
+                  <span className="ml-1 text-[10px] font-mono uppercase tracking-[0.22em] text-text-muted bg-white/5 border border-white/10 px-2 py-1 rounded-full">
+                    Upcoming
+                  </span>
+                )}
               </button>
               <div className="flex items-center gap-1">
+                {googleAccounts.secondary && (
+                  <div className="mr-2 flex items-center rounded-full border border-white/10 bg-white/5 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarAccount('primary')}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.18em] transition-colors ${calendarAccount === 'primary' ? 'bg-white/10 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
+                      aria-pressed={calendarAccount === 'primary'}
+                    >
+                      Primary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarAccount('secondary')}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.18em] transition-colors ${calendarAccount === 'secondary' ? 'bg-white/10 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
+                      aria-pressed={calendarAccount === 'secondary'}
+                    >
+                      Secondary
+                    </button>
+                  </div>
+                )}
+                {calendarList.length > 0 && (
+                  <div className="mr-2">
+                    <select
+                      value={mainCalendarId ?? ''}
+                      onChange={(e) => setMainCalendarId(e.target.value || null)}
+                      className="h-7 max-w-[220px] bg-white/5 border border-white/10 rounded-full px-3 text-[11px] text-foreground/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      aria-label="Select main calendar"
+                      title="Select main calendar"
+                    >
+                      <option value="">All selected calendars</option>
+                      {calendarList
+                        .filter(c => !c.hidden && c.selected)
+                        .map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.primary ? '★ ' : ''}{(c.summary ?? c.id).slice(0, 60)}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
                 <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
                 <div className="relative" ref={calendarMenuRef}>
                   <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
@@ -570,6 +749,69 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         <span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span>
                         Refresh
                       </button>
+                      <button
+                        onClick={() => { setShowCalendarPicker(v => !v); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
+                        aria-expanded={showCalendarPicker}
+                      >
+                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">tune</span>
+                        Choose calendars
+                      </button>
+                      {showCalendarPicker && calendarList.length > 0 && (
+                        <div className="px-4 pb-3 pt-1 border-t border-white/10">
+                          <p className="text-[10px] text-text-muted font-mono uppercase tracking-[0.22em] mb-2">
+                            Showing
+                          </p>
+                          <div className="flex flex-col gap-2 max-h-[220px] overflow-auto pr-1 custom-scrollbar">
+                            {calendarList
+                              .filter(c => !c.hidden && c.selected)
+                              .slice(0, 20)
+                              .map(c => {
+                                const checked = (includedCalendarIds ?? []).includes(c.id);
+                                const effectiveChecked = includedCalendarIds == null ? true : checked;
+                                return (
+                                  <label key={c.id} className="flex items-center gap-2 text-xs text-foreground/85 select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={effectiveChecked}
+                                      onChange={(e) => {
+                                        const nextChecked = e.target.checked;
+                                        const base = includedCalendarIds == null
+                                          ? calendarList.filter(x => !x.hidden && x.selected).map(x => x.id)
+                                          : includedCalendarIds;
+                                        const next = nextChecked
+                                          ? Array.from(new Set([...(base ?? []), c.id]))
+                                          : (base ?? []).filter(id => id !== c.id);
+                                        setMainCalendarId(null);
+                                        setIncludedCalendarIds(next.length ? next : null);
+                                      }}
+                                      className="accent-primary"
+                                    />
+                                    <span className="truncate">
+                                      {c.primary ? '★ ' : ''}{(c.summary ?? c.id)}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                          <div className="flex items-center justify-between mt-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setIncludedCalendarIds(null); setMainCalendarId(null); }}
+                              className="text-[11px] text-text-muted hover:text-foreground/80 underline underline-offset-2 decoration-white/15 hover:decoration-white/35 transition-colors"
+                            >
+                              Reset
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setShowCalendarPicker(false); setShowCalendarMenu(false); fetchEvents(); }}
+                              className="text-[11px] text-primary hover:underline font-medium"
+                            >
+                              Apply
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <button
                         onClick={() => { setShowSchedule(true); setShowCalendarMenu(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
