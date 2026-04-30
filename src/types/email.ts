@@ -1,4 +1,7 @@
+export type GmailAccountId = 'primary' | 'secondary';
+
 export interface Email {
+  accountId: GmailAccountId;
   id: string;
   /** Gmail thread ID this message belongs to */
   threadId?: string;
@@ -18,12 +21,15 @@ export interface Email {
 
 /** A single message within a thread, returned by GET /api/gmail/thread/:threadId */
 export interface ThreadMessage {
+  accountId: GmailAccountId;
   id: string;
   sender: string;
   senderEmail: string;
   initials: string;
   time: string;
   body: string;
+  /** Server-sanitized HTML when the MIME tree included text/html (safe for `dangerouslySetInnerHTML`). */
+  bodyHtml?: string | null;
   unread: boolean;
 }
 

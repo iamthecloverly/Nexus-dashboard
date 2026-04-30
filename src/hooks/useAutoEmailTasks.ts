@@ -23,7 +23,7 @@ function saveProcessedIds(ids: Set<string>) {
 }
 
 export function useAutoEmailTasks() {
-  const { state: { emails } } = useEmailContext();
+  const { state: { emailsByAccount } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();
 
@@ -35,62 +35,75 @@ export function useAutoEmailTasks() {
   const isFirstLoadRef = useRef(true);
 
   useEffect(() => {
-    if (emails.length === 0) return;
+    const allEmails = [...emailsByAccount.primary, ...emailsByAccount.secondary];
+    if (allEmails.length === 0) return;
 
     // On first load, mark all currently visible emails as already seen
     // so we only process genuinely new emails arriving after this point
     if (isFirstLoadRef.current) {
       isFirstLoadRef.current = false;
-      emails.forEach(e => processedRef.current.add(e.id));
+      allEmails.forEach(e => processedRef.current.add(`${e.accountId}:${e.id}`));
       saveProcessedIds(processedRef.current);
       return;
     }
 
     if (isProcessingRef.current) return;
 
-    const newIds = emails
-      .filter(e => !e.archived && !e.deleted && e.unread && !processedRef.current.has(e.id))
-      .map(e => e.id);
+    const newEmails = allEmails.filter(e => {
+      const key = `${e.accountId}:${e.id}`;
+      return !e.archived && !e.deleted && e.unread && !processedRef.current.has(key);
+    });
 
-    if (newIds.length === 0) return;
+    if (newEmails.length === 0) return;
 
     // Mark as processed immediately — prevents re-processing on rapid re-renders
-    newIds.forEach(id => processedRef.current.add(id));
+    newEmails.forEach(e => processedRef.current.add(`${e.accountId}:${e.id}`));
     saveProcessedIds(processedRef.current);
 
     isProcessingRef.current = true;
 
     (async () => {
       try {
-        const res = await fetch('/api/ai/extract-tasks-bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-          body: JSON.stringify({ emailIds: newIds, mode: 'auto' }),
-        });
+        const byAccount = newEmails.reduce<Record<string, string[]>>((acc, e) => {
+          (acc[e.accountId] ??= []).push(e.id);
+          return acc;
+        }, {});
 
-        // Silently skip if AI key not configured or any server error
-        if (!res.ok) return;
-
-        const data = await res.json();
-        if (!data.suggestions?.length) return;
-
-        for (const s of data.suggestions) {
-          addTask({
-            id: s.id,
-            title: s.title,
-            priority: s.priority === 'Normal' ? undefined : s.priority,
-            completed: false,
-            group: s.group,
+        let totalAdded = 0;
+        await Object.entries(byAccount).reduce(async (p, [accountId, emailIds]) => {
+          await p;
+          const res = await fetch(`/api/ai/extract-tasks-bulk?accountId=${encodeURIComponent(accountId)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+            body: JSON.stringify({ emailIds, mode: 'auto' }),
           });
-        }
 
-        const n = data.suggestions.length;
-        showToast(`${n} task${n !== 1 ? 's' : ''} added from new email${newIds.length !== 1 ? 's' : ''}`, 'success');
+          // Silently skip if AI key not configured or any server error
+          if (!res.ok) return;
+
+          const data = await res.json();
+          if (!data.suggestions?.length) return;
+
+          for (const s of data.suggestions) {
+            addTask({
+              id: s.id,
+              title: s.title,
+              priority: s.priority === 'Normal' ? undefined : s.priority,
+              completed: false,
+              group: s.group,
+            });
+          }
+          totalAdded += data.suggestions.length;
+        }, Promise.resolve());
+
+        if (totalAdded > 0) {
+          showToast(`${totalAdded} task${totalAdded !== 1 ? 's' : ''} added from new email${newEmails.length !== 1 ? 's' : ''}`, 'success');
+        }
       } catch {
         // Auto mode fails silently — never interrupt the user
       } finally {
         isProcessingRef.current = false;
       }
     })();
-  }, [emails, addTask, showToast]);
+  }, [emailsByAccount, addTask, showToast]);
 }

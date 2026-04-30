@@ -1,10 +1,11 @@
 import express from 'express';
-import { google, type gmail_v1 } from 'googleapis';
+import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 
 import { parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, type GoogleAccountId } from '../lib/googleClient.ts';
+import { extractEmailContent } from '../lib/gmailMime.ts';
 import { logger } from '../lib/logger.ts';
 import { gmailIdSchema, markReadSchema, sendEmailSchema } from '../lib/validation.ts';
 
@@ -25,56 +26,28 @@ function asApiError(e: unknown): GaxiosErrorLike {
   return e as GaxiosErrorLike;
 }
 
-/** Recursively extract plain-text body from a Gmail MIME payload. */
-function extractBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
-  if (!payload) return '';
-  if (payload.mimeType === 'text/plain' && payload.body?.data) {
-    return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
-  }
-  if (payload.parts) {
-    for (const part of payload.parts) {
-      const result = extractBody(part);
-      if (result) return result;
-    }
-  }
-  if (payload.mimeType === 'text/html' && payload.body?.data) {
-    let html = Buffer.from(payload.body.data, 'base64url').toString('utf-8');
-    // Strip <style> blocks; loop until stable to catch nested/malformed tags
-    let prev: string;
-    do {
-      prev = html;
-      html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
-    } while (html !== prev);
-    return html
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-  }
-  return '';
+/** Derive the cache key for a given google_tokens cookie value. */
+function gmailKey(tokensCookie: string, accountId: GoogleAccountId) {
+  const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
+  return tokenKey(`${accountId}:${tokens?.refresh_token ?? tokensCookie}`, 'gmail:messages');
 }
 
-/** Derive the cache key for a given google_tokens cookie value. */
-function gmailKey(tokensCookie: string) {
-  const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
-  return tokenKey(tokens?.refresh_token ?? tokensCookie, 'gmail:messages');
+function parseAccountId(value: unknown): GoogleAccountId {
+  return value === 'secondary' ? 'secondary' : 'primary';
 }
 
 gmailRouter.get('/messages', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
     const { tokensCookie, tokens } = auth;
 
-    const cacheKey = gmailKey(tokensCookie);
+    const cacheKey = gmailKey(tokensCookie, accountId);
 
     const result = await cacheGet(cacheKey, GMAIL_TTL_MS, async () => {
-      const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -129,6 +102,7 @@ gmailRouter.get('/messages', async (req, res) => {
             : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
         return {
+          accountId,
           id: latestMsg.id!,
           threadId: t.id!,
           messageCount,
@@ -161,7 +135,8 @@ gmailRouter.get('/messages', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   const idValidation = gmailIdSchema.safeParse(req.params.id);
@@ -176,7 +151,7 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
 
   try {
     const { tokensCookie, tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.modify({
@@ -187,7 +162,7 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
         : { addLabelIds: ['UNREAD'] },     // marking as unread
     });
 
-    cacheBust(gmailKey(tokensCookie));
+    cacheBust(gmailKey(tokensCookie, accountId));
     res.json({ success: true });
   } catch (error: unknown) {
     const err = asApiError(error);
@@ -200,13 +175,14 @@ gmailRouter.post('/messages/:id/mark-read', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/archive', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
   if (!gmailIdSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
     const { tokensCookie, tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.modify({
@@ -214,7 +190,7 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
       id: req.params.id,
       requestBody: { removeLabelIds: ['INBOX'] },
     });
-    cacheBust(gmailKey(tokensCookie));
+    cacheBust(gmailKey(tokensCookie, accountId));
     res.json({ success: true });
   } catch (error: unknown) {
     const err = asApiError(error);
@@ -227,20 +203,21 @@ gmailRouter.post('/messages/:id/archive', async (req, res) => {
 });
 
 gmailRouter.post('/messages/:id/trash', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
   if (!gmailIdSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
     const { tokensCookie, tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     await gmail.users.messages.trash({
       userId: 'me',
       id: req.params.id,
     });
-    cacheBust(gmailKey(tokensCookie));
+    cacheBust(gmailKey(tokensCookie, accountId));
     res.json({ success: true });
   } catch (error: unknown) {
     const err = asApiError(error);
@@ -258,7 +235,8 @@ gmailRouter.post('/messages/:id/trash', async (req, res) => {
  * Used by the thread detail view to show the full conversation.
  */
 gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   if (!gmailIdSchema.safeParse(req.params.threadId).success) {
@@ -267,7 +245,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
 
   try {
     const { tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -277,7 +255,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
       format: 'full',
     });
 
-    const messages = (thread.data.messages ?? []).map((msg) => {
+    const messages = await Promise.all((thread.data.messages ?? []).map(async (msg) => {
       const headers = msg.payload?.headers ?? [];
       const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
       const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
@@ -299,16 +277,20 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
       const labelIds = msg.labelIds ?? [];
       const isUnread = labelIds.includes('UNREAD');
 
+      const { plain, html } = await extractEmailContent(gmail, msg.id!, msg.payload);
+
       return {
+        accountId,
         id: msg.id!,
         sender: senderName,
         senderEmail,
         initials,
         time: timeDisplay,
-        body: extractBody(msg.payload),
+        body: plain,
+        bodyHtml: html,
         unread: isUnread,
       };
-    });
+    }));
 
     res.json({ messages });
   } catch (error: unknown) {
@@ -323,12 +305,13 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
 });
 
 gmailRouter.get('/message/:id', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
     const { tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const detail = await gmail.users.messages.get({
@@ -337,7 +320,8 @@ gmailRouter.get('/message/:id', async (req, res) => {
       format: 'full',
     });
 
-    res.json({ body: extractBody(detail.data.payload) });
+    const { plain, html } = await extractEmailContent(gmail, req.params.id, detail.data.payload);
+    res.json({ body: plain, bodyHtml: html });
   } catch (error: unknown) {
     const err = asApiError(error);
     logger.error({ error: err?.message }, 'Error fetching gmail message');
@@ -350,7 +334,8 @@ gmailRouter.get('/message/:id', async (req, res) => {
 });
 
 gmailRouter.post('/send', emailSendLimiter, async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
 
   const validation = sendEmailSchema.safeParse(req.body);
@@ -367,7 +352,7 @@ gmailRouter.post('/send', emailSendLimiter, async (req, res) => {
 
   try {
     const { tokensCookie, tokens } = auth;
-    const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -387,7 +372,7 @@ gmailRouter.post('/send', emailSendLimiter, async (req, res) => {
       requestBody: { raw: encoded },
     });
 
-    cacheBust(gmailKey(tokensCookie));
+    cacheBust(gmailKey(tokensCookie, accountId));
     logger.info({ to: safeTO }, 'Email sent successfully');
     res.json({ success: true });
   } catch (error) {

@@ -1,24 +1,24 @@
 import { createContext, useContext } from 'react';
 import type React from 'react';
-import type { Email, ThreadMessage } from '../types/email';
+import type { Email, GmailAccountId, ThreadMessage } from '../types/email';
 
 export interface EmailState {
-  emails: Email[];
-  gmailConnected: boolean;
-  emailsLoading: boolean;
+  emailsByAccount: Record<GmailAccountId, Email[]>;
+  connectedByAccount: Record<GmailAccountId, boolean>;
+  emailsLoadingByAccount: Record<GmailAccountId, boolean>;
   /** true when a network/server error prevented the last fetch (distinct from "not authenticated") */
-  serverError: boolean;
+  serverErrorByAccount: Record<GmailAccountId, boolean>;
 }
 
 export interface EmailActions {
   /** e is optional so all actions can be called programmatically without a fake MouseEvent */
-  toggleRead: (id: string, e?: React.MouseEvent) => void;
-  archiveEmail: (id: string, e?: React.MouseEvent) => void;
-  deleteEmail: (id: string, e?: React.MouseEvent) => void;
-  refreshEmails: () => void;
-  markAllRead: () => void;
+  toggleRead: (accountId: GmailAccountId, id: string, e?: React.MouseEvent) => void;
+  archiveEmail: (accountId: GmailAccountId, id: string, e?: React.MouseEvent) => void;
+  deleteEmail: (accountId: GmailAccountId, id: string, e?: React.MouseEvent) => void;
+  refreshEmails: (accountId: GmailAccountId) => void;
+  markAllRead: (accountId: GmailAccountId) => void;
   /** Fetches all messages in a thread by threadId. Returns empty array on error. */
-  fetchThread: (threadId: string) => Promise<ThreadMessage[]>;
+  fetchThread: (accountId: GmailAccountId, threadId: string) => Promise<ThreadMessage[]>;
 }
 
 export interface EmailContextValue {
