@@ -502,6 +502,17 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
+    if (calendarError === 'network_error') {
+      return (
+        <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
+          <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">wifi_off</span>
+          <p className="text-sm text-foreground font-medium">Connection failed</p>
+          <p className="text-xs text-text-muted max-w-[220px]">Could not reach the server. Check your connection and try again.</p>
+          <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+        </div>
+      );
+    }
+
     if (!isCalendarConnected) {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-4 ${wrapClass}`}>
@@ -543,12 +554,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    if (calendarError === 'fetch_error' || calendarError === 'network_error' || calendarError === 'forbidden') {
+    if (calendarError === 'fetch_error' || calendarError === 'forbidden') {
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-3 ${wrapClass}`}>
-          <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">sync_problem</span>
-          <p className="text-sm text-text-muted">Failed to load events.</p>
-          <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+          <span className="material-symbols-outlined text-3xl text-rose-400/60" aria-hidden="true">sync_problem</span>
+          <p className="text-sm text-foreground font-medium">Failed to load events</p>
+          <p className="text-xs text-text-muted max-w-[240px]">Google Calendar returned an error. Retry or reconnect your account.</p>
+          <div className="flex gap-2 flex-wrap justify-center">
+            <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+            <button onClick={goIntegrations} className={primaryBtnClass}>Reconnect</button>
+          </div>
         </div>
       );
     }
@@ -737,9 +752,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                     </select>
                   </div>
                 )}
-                <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
+                <div className="flex items-center gap-0.5 bg-white/5 border border-white/8 rounded-full p-0.5">
+                  <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
                 <div className="relative" ref={calendarMenuRef}>
-                  <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
+                  <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
                   {showCalendarMenu && (
                     <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[180px]">
                       <button
@@ -832,10 +848,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                     </div>
                   )}
                 </div>
-                <div className="w-px h-4 bg-white/10 mx-1"></div>
+                </div>
                 <button
                   onClick={() => setCurrentView('FocusMode')}
-                  className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary-subtle px-4 py-1.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 btn-interact"
+                  className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   Focus Mode
                 </button>
