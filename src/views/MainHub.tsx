@@ -161,6 +161,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     return () => { cancelled = true; };
   }, [calendarAccount, setCalendarAccount]);
 
+  const mainCalendarIdRef = useRef(mainCalendarId);
+  mainCalendarIdRef.current = mainCalendarId;
+  const includedCalendarIdsRef = useRef(includedCalendarIds);
+  includedCalendarIdsRef.current = includedCalendarIds;
+
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/calendar/calendars?accountId=${encodeURIComponent(calendarAccount)}`)
@@ -170,19 +175,18 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         if (cancelled || !data?.calendars) return;
         const list = Array.isArray(data.calendars) ? data.calendars : [];
         setCalendarList(list);
-        // If mainCalendarId was from another account, clear it.
-        if (mainCalendarId && !list.some(c => c.id === mainCalendarId)) {
-          setMainCalendarId(null);
-        }
-        // Remove any included IDs that no longer exist.
-        if (includedCalendarIds && includedCalendarIds.length) {
-          const next = includedCalendarIds.filter(id => list.some(c => c.id === id));
-          if (next.length !== includedCalendarIds.length) setIncludedCalendarIds(next.length ? next : null);
+        // Cleanup stale IDs using refs to avoid re-triggering this effect on every calendar selection.
+        const curMain = mainCalendarIdRef.current;
+        if (curMain && !list.some(c => c.id === curMain)) setMainCalendarId(null);
+        const curIncluded = includedCalendarIdsRef.current;
+        if (curIncluded && curIncluded.length) {
+          const next = curIncluded.filter(id => list.some(c => c.id === id));
+          if (next.length !== curIncluded.length) setIncludedCalendarIds(next.length ? next : null);
         }
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [calendarAccount, mainCalendarId, includedCalendarIds, setIncludedCalendarIds, setMainCalendarId]);
+  }, [calendarAccount, setMainCalendarId, setIncludedCalendarIds]);
 
   // Desktop notifications — gated on browser permission being granted.
   const notificationsGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
@@ -594,7 +598,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           >
             If you expect events, reconnect Google →
           </button>
-          {debugHref && (
+          {import.meta.env.DEV && debugHref && (
             <a
               href={debugHref}
               target="_blank"

@@ -48,6 +48,13 @@ function skipGlobalRateLimit(req: express.Request): boolean {
     case '/api/session/status':
     case '/api/health':
     case '/api/calendar/events':
+    // Cached read-only endpoints — server-side cache prevents upstream fan-out regardless of call frequency.
+    case '/api/calendar/calendars':
+    case '/api/auth/google/accounts':
+    case '/api/auth/status':
+    case '/api/github/status':
+    case '/api/discord/status':
+    case '/api/ai/status':
       return true;
     default:
       return false;

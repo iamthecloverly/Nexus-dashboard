@@ -92,6 +92,13 @@ function readJsonArray(key: string): string[] | null {
   }
 }
 
+function mainIdKey(id: 'primary' | 'secondary') {
+  return `${STORAGE_KEYS.calendarMainId}_${id}`;
+}
+function includedIdsKey(id: 'primary' | 'secondary') {
+  return `${STORAGE_KEYS.calendarIncludedIds}_${id}`;
+}
+
 export function useCalendarEvents(): CalendarState {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,25 +106,34 @@ export function useCalendarEvents(): CalendarState {
   const [error, setError] = useState<CalendarError | null>(null);
   const [mode, setMode] = useState<'today' | 'upcoming'>('today');
 
-  const [accountId, setAccountId] = useState<'primary' | 'secondary'>(() => {
+  const initAccountId: 'primary' | 'secondary' = (() => {
     const v = localStorage.getItem(STORAGE_KEYS.calendarAccount);
     return v === 'secondary' ? 'secondary' : 'primary';
-  });
+  })();
+
+  const [accountId, setAccountIdState] = useState<'primary' | 'secondary'>(initAccountId);
   const [mainCalendarId, setMainCalendarId] = useState<string | null>(() => {
-    const v = localStorage.getItem(STORAGE_KEYS.calendarMainId);
+    const v = localStorage.getItem(mainIdKey(initAccountId));
     return v && v.trim() ? v : null;
   });
-  const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(() => readJsonArray(STORAGE_KEYS.calendarIncludedIds));
+  const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(() => readJsonArray(includedIdsKey(initAccountId)));
+
+  const setAccountId = useCallback((id: 'primary' | 'secondary') => {
+    setAccountIdState(id);
+    const v = localStorage.getItem(mainIdKey(id));
+    setMainCalendarId(v && v.trim() ? v : null);
+    setIncludedCalendarIds(readJsonArray(includedIdsKey(id)));
+  }, []);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.calendarAccount, accountId); }, [accountId]);
   useEffect(() => {
-    if (mainCalendarId) localStorage.setItem(STORAGE_KEYS.calendarMainId, mainCalendarId);
-    else localStorage.removeItem(STORAGE_KEYS.calendarMainId);
-  }, [mainCalendarId]);
+    if (mainCalendarId) localStorage.setItem(mainIdKey(accountId), mainCalendarId);
+    else localStorage.removeItem(mainIdKey(accountId));
+  }, [mainCalendarId, accountId]);
   useEffect(() => {
-    if (includedCalendarIds && includedCalendarIds.length) localStorage.setItem(STORAGE_KEYS.calendarIncludedIds, JSON.stringify(includedCalendarIds));
-    else localStorage.removeItem(STORAGE_KEYS.calendarIncludedIds);
-  }, [includedCalendarIds]);
+    if (includedCalendarIds && includedCalendarIds.length) localStorage.setItem(includedIdsKey(accountId), JSON.stringify(includedCalendarIds));
+    else localStorage.removeItem(includedIdsKey(accountId));
+  }, [includedCalendarIds, accountId]);
 
   const refetch = useCallback(async () => {
     setIsLoading(true);
