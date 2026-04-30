@@ -732,32 +732,32 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                     </button>
                   </div>
                 )}
-                {calendarList.length > 0 && (
-                  <div className="mr-2">
-                    <select
-                      value={mainCalendarId ?? ''}
-                      onChange={(e) => setMainCalendarId(e.target.value || null)}
-                      className="h-7 max-w-[220px] bg-white/5 border border-white/10 rounded-full px-3 text-[11px] text-foreground/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                      aria-label="Select main calendar"
-                      title="Select main calendar"
-                    >
-                      <option value="">All selected calendars</option>
-                      {calendarList
-                        .filter(c => !c.hidden && c.selected)
-                        .map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.primary ? '★ ' : ''}{(c.summary ?? c.id).slice(0, 60)}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
                 <div className="flex items-center gap-0.5 bg-white/5 border border-white/8 rounded-full p-0.5">
                   <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
                 <div className="relative" ref={calendarMenuRef}>
                   <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
                   {showCalendarMenu && (
-                    <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[180px]">
+                    <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[200px]">
+                      {calendarList.length > 0 && (
+                        <div className="px-3 pt-3 pb-2 border-b border-white/10">
+                          <p className="text-[10px] text-text-muted font-mono uppercase tracking-[0.22em] mb-1.5">View</p>
+                          <select
+                            value={mainCalendarId ?? ''}
+                            onChange={(e) => { setMainCalendarId(e.target.value || null); setShowCalendarMenu(false); fetchEvents(); }}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-foreground/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                            aria-label="Select calendar to view"
+                          >
+                            <option value="">All selected calendars</option>
+                            {calendarList
+                              .filter(c => !c.hidden && c.selected)
+                              .map(c => (
+                                <option key={c.id} value={c.id}>
+                                  {c.primary ? '★ ' : ''}{(c.summary ?? c.id).slice(0, 40)}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
                       <button
                         onClick={() => { fetchEvents(); setShowCalendarMenu(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
