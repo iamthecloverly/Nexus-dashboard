@@ -35,7 +35,7 @@ app.use(pinoHttp({ logger }));
 // Compression middleware - gzip/deflate responses
 app.use(compression());
 
-app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled — Vite injects inline scripts in dev
+app.use(helmet({ contentSecurityPolicy: isProduction ? undefined : false })); // CSP disabled in dev — Vite injects inline scripts
 app.use(cookieParser(SESSION_SECRET));
 app.use(express.json({ limit: '50kb' }));
 

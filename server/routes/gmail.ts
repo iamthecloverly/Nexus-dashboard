@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 
 import { parseJsonCookie } from '../lib/cookies.ts';
 import { cacheGet, cacheBust, tokenKey } from '../lib/apiCache.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie, type GoogleAccountId } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId, type GoogleAccountId } from '../lib/googleClient.ts';
 import { extractEmailContent } from '../lib/gmailMime.ts';
 import { logger } from '../lib/logger.ts';
 import { gmailIdSchema, markReadSchema, sendEmailSchema } from '../lib/validation.ts';
@@ -30,10 +30,6 @@ function asApiError(e: unknown): GaxiosErrorLike {
 function gmailKey(tokensCookie: string, accountId: GoogleAccountId) {
   const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
   return tokenKey(`${accountId}:${tokens?.refresh_token ?? tokensCookie}`, 'gmail:messages');
-}
-
-function parseAccountId(value: unknown): GoogleAccountId {
-  return value === 'secondary' ? 'secondary' : 'primary';
 }
 
 gmailRouter.get('/messages', async (req, res) => {
@@ -308,6 +304,7 @@ gmailRouter.get('/message/:id', async (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
   const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+  if (!gmailIdSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid message id' });
 
   try {
     const { tokens } = auth;

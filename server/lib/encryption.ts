@@ -7,27 +7,22 @@ const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
-// Use SESSION_SECRET directly as the salt (it's already environment-specific and secret)
-// PBKDF2 iterations follow OWASP recommendations (100k minimum for 2023+)
+// Fixed, public, app-specific salt for domain separation (not secret).
+// PBKDF2 iterations follow OWASP recommendations (100k minimum for 2023+).
+const APP_SALT = 'nexus-dashboard-v1-encryption-salt';
 const PBKDF2_ITERATIONS = 100000;
 
-/**
- * Derive encryption key from SESSION_SECRET using PBKDF2
- * Uses SESSION_SECRET itself as salt to ensure deployment-specific keys
- */
-function deriveKey(): Buffer {
-  return pbkdf2Sync(SESSION_SECRET, SESSION_SECRET, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
-}
+// Derive once at module load — the key is deterministic given SESSION_SECRET.
+const encryptionKey = pbkdf2Sync(SESSION_SECRET, APP_SALT, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
 
 /**
  * Encrypt a string value using AES-256-GCM
  * Returns base64-encoded string with format: iv:authTag:ciphertext
  */
 export function encrypt(plaintext: string): string {
-  const key = deriveKey();
   const iv = randomBytes(IV_LENGTH);
 
-  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const cipher = createCipheriv(ALGORITHM, encryptionKey, iv);
   let encrypted = cipher.update(plaintext, 'utf8', 'base64');
   encrypted += cipher.final('base64');
 
@@ -42,7 +37,6 @@ export function encrypt(plaintext: string): string {
  * Expects format: iv:authTag:ciphertext (all base64)
  */
 export function decrypt(ciphertext: string): string {
-  const key = deriveKey();
   const parts = ciphertext.split(':');
 
   if (parts.length !== 3) {
@@ -58,7 +52,7 @@ export function decrypt(ciphertext: string): string {
     throw new Error('Invalid auth tag length');
   }
 
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const decipher = createDecipheriv(ALGORITHM, encryptionKey, iv);
   decipher.setAuthTag(authTag);
 
   let decrypted = decipher.update(encrypted, 'base64', 'utf8');

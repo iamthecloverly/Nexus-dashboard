@@ -6,16 +6,12 @@ import OpenAI from 'openai';
 
 import { COOKIE_OPTS } from '../config.ts';
 import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie, type GoogleAccountId } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId, type GoogleAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
 import { aiKeySchema, extractTasksSchema, extractTasksBulkSchema, dailyBriefSchema } from '../lib/validation.ts';
 
 export const aiRouter = express.Router();
-
-function parseAccountId(value: unknown): GoogleAccountId {
-  return value === 'secondary' ? 'secondary' : 'primary';
-}
 
 // Rate limiter for AI endpoints (max 20 req/min — each call loops up to 10 OpenAI requests)
 const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false });

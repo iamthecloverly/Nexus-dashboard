@@ -7,6 +7,7 @@ import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import {
   createAuthedGoogleClient,
   getGoogleTokensFromCookie,
+  parseAccountId,
   setGoogleProfileCookie,
   setGoogleTokensCookie,
   type GoogleAccountId,
@@ -14,10 +15,6 @@ import {
 import { logger } from '../lib/logger.ts';
 
 export const authRouter = express.Router();
-
-function parseAccountId(value: unknown): GoogleAccountId {
-  return value === 'secondary' ? 'secondary' : 'primary';
-}
 
 authRouter.get('/google/url', (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {

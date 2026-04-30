@@ -5,7 +5,7 @@ import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
 import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie, type GoogleAccountId } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId, type GoogleAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
 // Cache calendar events for 45 s — short enough to feel live, long enough to
@@ -91,10 +91,6 @@ function queryStringParam(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
   return undefined;
-}
-
-function parseAccountId(value: unknown): GoogleAccountId {
-  return value === 'secondary' ? 'secondary' : 'primary';
 }
 
 function addDaysKey(day: string, deltaDays: number): string {

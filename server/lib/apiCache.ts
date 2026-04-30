@@ -64,6 +64,9 @@ export async function cacheGet<T>(key: string, ttlMs: number, fetcher: () => Pro
     inflight.delete(key);
     return data;
   }).catch(err => {
+    // Errors are intentionally not cached: the next caller should retry
+    // rather than receiving a stale error. The inflight entry is removed
+    // so concurrent waiters also get a fresh attempt.
     inflight.delete(key);
     throw err;
   });

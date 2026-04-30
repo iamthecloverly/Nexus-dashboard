@@ -5,6 +5,10 @@ import { getOAuth2Client } from './googleOAuth.ts';
 
 export type GoogleAccountId = 'primary' | 'secondary';
 
+export function parseAccountId(value: unknown): GoogleAccountId {
+  return value === 'secondary' ? 'secondary' : 'primary';
+}
+
 export type GoogleTokens = {
   access_token?: string;
   refresh_token?: string;
