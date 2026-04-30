@@ -1,6 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
+import { STORAGE_KEYS } from '../constants/storageKeys';
+
+/** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
+function calendarDayInTimeZone(timeZone: string): string {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = dtf.formatToParts(new Date());
+  let y = '';
+  let m = '';
+  let d = '';
+  for (const p of parts) {
+    if (p.type === 'year') y = p.value;
+    if (p.type === 'month') m = p.value;
+    if (p.type === 'day') d = p.value;
+  }
+  if (!y || !m || !d) return '';
+  return `${y}-${m}-${d}`;
+}
+
+function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!tz) return '/api/calendar/events';
+    const day = calendarDayInTimeZone(tz);
+    if (!day) return '/api/calendar/events';
+    const q = new URLSearchParams({ day, tz });
+    if (opts.accountId) q.set('accountId', opts.accountId);
+    if (opts.calendarIds && opts.calendarIds.length) q.set('calendarIds', opts.calendarIds.join(','));
+    return `/api/calendar/events?${q.toString()}`;
+  } catch {
+    return '/api/calendar/events';
+  }
+}
+
+function calendarUpcomingUrl(days: number, opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const d = Number(days);
+    if (!tz || !Number.isFinite(d) || d <= 0) return '/api/calendar/events';
+    const q = new URLSearchParams({ tz, upcomingDays: String(Math.min(Math.max(d, 1), 14)) });
+    if (opts.accountId) q.set('accountId', opts.accountId);
+    if (opts.calendarIds && opts.calendarIds.length) q.set('calendarIds', opts.calendarIds.join(','));
+    return `/api/calendar/events?${q.toString()}`;
+  } catch {
+    return '/api/calendar/events';
+  }
+}
 
 export type CalendarError =
   | 'login_required'
@@ -8,6 +59,7 @@ export type CalendarError =
   | 'not_allowlisted'
   | 'google_profile_missing'
   | 'forbidden'
+  | 'calendar_access_denied'
   | 'api_disabled'
   | 'fetch_error'
   | 'network_error';
@@ -17,7 +69,27 @@ interface CalendarState {
   isLoading: boolean;
   isConnected: boolean;
   error: CalendarError | null;
+  mode: 'today' | 'upcoming';
+  accountId: 'primary' | 'secondary';
+  mainCalendarId: string | null;
+  includedCalendarIds: string[] | null;
+  setAccountId: (id: 'primary' | 'secondary') => void;
+  setMainCalendarId: (id: string | null) => void;
+  setIncludedCalendarIds: (ids: string[] | null) => void;
   refetch: () => void;
+}
+
+function readJsonArray(key: string): string[] | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (!Array.isArray(v)) return null;
+    const out = v.filter(x => typeof x === 'string').map(s => s.trim()).filter(Boolean).slice(0, 20);
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 export function useCalendarEvents(): CalendarState {
@@ -25,14 +97,40 @@ export function useCalendarEvents(): CalendarState {
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<CalendarError | null>(null);
+  const [mode, setMode] = useState<'today' | 'upcoming'>('today');
+
+  const [accountId, setAccountId] = useState<'primary' | 'secondary'>(() => {
+    const v = localStorage.getItem(STORAGE_KEYS.calendarAccount);
+    return v === 'secondary' ? 'secondary' : 'primary';
+  });
+  const [mainCalendarId, setMainCalendarId] = useState<string | null>(() => {
+    const v = localStorage.getItem(STORAGE_KEYS.calendarMainId);
+    return v && v.trim() ? v : null;
+  });
+  const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(() => readJsonArray(STORAGE_KEYS.calendarIncludedIds));
+
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.calendarAccount, accountId); }, [accountId]);
+  useEffect(() => {
+    if (mainCalendarId) localStorage.setItem(STORAGE_KEYS.calendarMainId, mainCalendarId);
+    else localStorage.removeItem(STORAGE_KEYS.calendarMainId);
+  }, [mainCalendarId]);
+  useEffect(() => {
+    if (includedCalendarIds && includedCalendarIds.length) localStorage.setItem(STORAGE_KEYS.calendarIncludedIds, JSON.stringify(includedCalendarIds));
+    else localStorage.removeItem(STORAGE_KEYS.calendarIncludedIds);
+  }, [includedCalendarIds]);
 
   const refetch = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await apiFetchJson<{ events?: CalendarEvent[] }>('/api/calendar/events', { timeoutMs: 15_000 });
+      const opts = {
+        accountId,
+        calendarIds: includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined),
+      };
+      const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts), { timeoutMs: 15_000 });
       if ('error' in result) {
         const err = result.error;
+        setMode('today');
         if (err.status === 401) {
           const code = err.code ?? '';
           const msg = err.error ?? '';
@@ -42,10 +140,15 @@ export function useCalendarEvents(): CalendarState {
         } else if (err.status === 403) {
           const code = err.code ?? '';
           const msg = err.error ?? '';
-          setIsConnected(false);
-          if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) setError('not_allowlisted');
-          else if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) setError('google_profile_missing');
-          else setError('forbidden');
+          if (code === 'CALENDAR_FORBIDDEN') {
+            setIsConnected(true);
+            setError('calendar_access_denied');
+          } else {
+            setIsConnected(false);
+            if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) setError('not_allowlisted');
+            else if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) setError('google_profile_missing');
+            else setError('forbidden');
+          }
         } else if (err.status === 503) {
           setIsConnected(true);
           setError(err.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
@@ -54,18 +157,46 @@ export function useCalendarEvents(): CalendarState {
           setError('fetch_error');
         }
       } else {
-        setEvents(result.data.events ?? []);
+        const todays = result.data.events ?? [];
+        if (todays.length === 0) {
+          // UX: if there's nothing today, show upcoming events so the tile isn't blank.
+          const upcoming = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarUpcomingUrl(7, opts), { timeoutMs: 15_000 });
+          if (!('error' in upcoming)) {
+            setEvents(upcoming.data.events ?? []);
+            setMode('upcoming');
+          } else {
+            setEvents([]);
+            setMode('today');
+          }
+        } else {
+          setEvents(todays);
+          setMode('today');
+        }
         setIsConnected(true);
       }
     } catch {
       setIsConnected(false);
       setError('network_error');
+      setMode('today');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [accountId, includedCalendarIds, mainCalendarId]);
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  return { events, isLoading, isConnected, error, refetch };
+  return {
+    events,
+    isLoading,
+    isConnected,
+    error,
+    mode,
+    accountId,
+    mainCalendarId,
+    includedCalendarIds,
+    setAccountId,
+    setMainCalendarId,
+    setIncludedCalendarIds,
+    refetch,
+  };
 }

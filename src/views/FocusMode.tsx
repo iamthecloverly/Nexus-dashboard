@@ -234,6 +234,11 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
   };
 
   // Insert current-time indicator between past and upcoming events
+  const sortedEvents = useMemo(() => {
+    if (!events || events.length === 0) return [];
+    return [...events].sort((a, b) => (a.start.dateTime ?? a.start.date ?? '').localeCompare(b.start.dateTime ?? b.start.date ?? ''));
+  }, [events]);
+
   const renderTimeline = () => {
     if (isLoadingEvents) {
       return (
@@ -301,10 +306,24 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         </div>
       );
     }
+    if (calendarError === 'calendar_access_denied') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-amber-400">event_busy</span>
+          <p className="text-sm text-white font-medium">Calendar access denied</p>
+          <p className="text-xs text-text-muted max-w-[280px]">
+            Reconnect Google under Integrations so Calendar scope is granted again.
+          </p>
+          <button onClick={() => setCurrentView('Integrations')} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-white transition-colors border border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            Go to Integrations
+          </button>
+        </div>
+      );
+    }
 
     const pastEvents: CalendarEvent[] = [];
     const upcomingEvents: CalendarEvent[] = [];
-    for (const e of [...events].sort((a, b) => (a.start.dateTime ?? a.start.date ?? '').localeCompare(b.start.dateTime ?? b.start.date ?? ''))) {
+    for (const e of sortedEvents) {
       const isPast = !!e.start.dateTime && isBefore(getEventTimes(e).endTime, currentTime);
       (isPast ? pastEvents : upcomingEvents).push(e);
     }

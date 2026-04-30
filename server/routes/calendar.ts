@@ -5,7 +5,7 @@ import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
 import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, type GoogleAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
 // Cache calendar events for 45 s — short enough to feel live, long enough to
@@ -15,6 +15,16 @@ const CALENDAR_TTL_MS = 45_000;
 const CALENDAR_LIST_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export const calendarRouter = express.Router();
+
+type CalendarListItem = {
+  id: string;
+  summary: string | null;
+  primary: boolean;
+  selected: boolean;
+  hidden: boolean;
+  accessRole: string | null;
+  timeZone: string | null;
+};
 
 function isValidDay(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -77,80 +87,292 @@ function utcMsForZonedMidnight(day: string, timeZone: string): number {
   return guess;
 }
 
+function queryStringParam(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  return undefined;
+}
+
+function parseAccountId(value: unknown): GoogleAccountId {
+  return value === 'secondary' ? 'secondary' : 'primary';
+}
+
+function addDaysKey(day: string, deltaDays: number): string {
+  const [yS, mS, dS] = day.split('-');
+  const y = Number(yS), m = Number(mS), d = Number(dS);
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 0, 0, 0, 0));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** RFC3339 bounds for one calendar day (client tz when provided). */
+function resolveCalendarBounds(req: express.Request): {
+  timeMin: string;
+  timeMax: string;
+  timeZone: string;
+  dayStartUtcMs: number;
+  dayEndUtcMs: number;
+  mode: 'day' | 'upcoming';
+} {
+  const upcomingDaysRaw = queryStringParam(req.query.upcomingDays);
+  const upcomingDays = upcomingDaysRaw ? Number(upcomingDaysRaw) : null;
+  const qDay = queryStringParam(req.query.day);
+  const qTz = queryStringParam(req.query.tz)?.trim() ?? '';
+
+  if (Number.isFinite(upcomingDays) && upcomingDays != null && upcomingDays > 0 && upcomingDays <= 14) {
+    const timeZone = isValidTimeZone(qTz) ? qTz : Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = Date.now();
+    const max = now + upcomingDays * 24 * 60 * 60 * 1000;
+    return {
+      timeMin: new Date(now).toISOString(),
+      timeMax: new Date(max).toISOString(),
+      timeZone,
+      dayStartUtcMs: now,
+      dayEndUtcMs: max,
+      mode: 'upcoming',
+    };
+  }
+
+  if (isValidDay(qDay) && isValidTimeZone(qTz)) {
+    const timeZone = qTz;
+    const startUtc = utcMsForZonedMidnight(qDay, timeZone);
+    const nextKey = addDaysKey(qDay, 1);
+    const nextStartUtc = utcMsForZonedMidnight(nextKey, timeZone);
+    // Google Calendar timeMax is exclusive (events with start < timeMax are returned).
+    return {
+      timeMin: new Date(startUtc).toISOString(),
+      timeMax: new Date(nextStartUtc).toISOString(),
+      timeZone,
+      dayStartUtcMs: startUtc,
+      dayEndUtcMs: nextStartUtc,
+      mode: 'day',
+    };
+  }
+
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfDay);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const dayStartUtcMs = startOfDay.getTime();
+  const dayEndUtcMs = startOfTomorrow.getTime();
+  return {
+    timeMin: startOfDay.toISOString(),
+    timeMax: startOfTomorrow.toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    dayStartUtcMs,
+    dayEndUtcMs,
+    mode: 'day',
+  };
+}
+
+function eventInRangeOrOverlaps(
+  e: { start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } },
+  bounds: ReturnType<typeof resolveCalendarBounds>,
+): boolean {
+  if (bounds.mode === 'upcoming') return true;
+  const { dayStartUtcMs, dayEndUtcMs, timeZone } = bounds;
+  const s = e.start?.dateTime ?? e.start?.date ?? null;
+  const en = e.end?.dateTime ?? e.end?.date ?? null;
+  if (!s || !en) return false;
+
+  const startMs = (() => {
+    if (e.start?.dateTime) return Date.parse(s);
+    // all-day start date in tz
+    return utcMsForZonedMidnight(s, timeZone);
+  })();
+  const endMs = (() => {
+    if (e.end?.dateTime) return Date.parse(en);
+    // all-day end.date is exclusive
+    return utcMsForZonedMidnight(en, timeZone);
+  })();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
+  return endMs > dayStartUtcMs && startMs < dayEndUtcMs;
+}
+
 calendarRouter.get('/events', async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+
+  const bounds = resolveCalendarBounds(req);
+  const debug = !isProduction && queryStringParam(req.query.debug) === '1';
+  const calendarIdsParam = queryStringParam(req.query.calendarIds);
+  const calendarIdsRequested = calendarIdsParam
+    ? calendarIdsParam.split(',').map(s => s.trim()).filter(Boolean).slice(0, 20)
+    : null;
 
   try {
     const { tokensCookie, tokens } = auth;
 
-    // Use refresh_token as the stable identity key (doesn't rotate on refresh).
-    const cacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:events');
+    // Cache must include the query window — previously a single key reused wrong/stale days and hid API failures as empty lists.
+    const cacheKey = tokenKey(
+      `${accountId}:${tokens.refresh_token ?? tokensCookie}`,
+      `calendar:events:${bounds.timeMin}|${bounds.timeMax}|${bounds.timeZone}|${calendarIdsRequested?.join('|') ?? 'auto'}`,
+    );
+    const debugCacheKey = debug ? `${cacheKey}:debug` : cacheKey;
 
-    const result = await cacheGet(cacheKey, CALENDAR_TTL_MS, async () => {
-      const oauth2Client = createAuthedGoogleClient(req, res, tokens);
+    const result = debug
+      ? await (async () => {
+          // Skip caching for debug so the output always reflects current upstream responses.
+          const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          const { timeZone } = bounds;
+          const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
+          const items = calListRes.data.items ?? [];
+          const autoIds = (items ?? [])
+            .filter(c => c.hidden !== true)
+            .filter(c => c.selected !== false)
+            .map(c => c.id!)
+            .filter(Boolean);
+          const ids = Array.from(new Set(calendarIdsRequested?.length ? calendarIdsRequested : ['primary', ...(autoIds.length ? autoIds : ['primary'])]));
+
+          // Fetch wider window so we still capture events that overlap today but start before timeMin.
+          const debugFetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
+          const debugFetchMax = new Date(bounds.dayEndUtcMs + 24 * 60 * 60 * 1000).toISOString();
+
+          const settled = await Promise.allSettled(
+            ids.map(calendarId =>
+              calendar.events.list({
+                calendarId,
+                timeMin: debugFetchMin,
+                timeMax: debugFetchMax,
+                timeZone,
+                maxResults: 50,
+                singleEvents: true,
+                orderBy: 'startTime',
+              }),
+            ),
+          );
+          const eventArrays = settled.flatMap(s => (s.status === 'fulfilled' ? (s.value.data.items ?? []) : []));
+          const seen = new Set<string>();
+          const events = eventArrays
+            .filter(e => e != null)
+            .filter(e => eventInRangeOrOverlaps(e, bounds))
+            .filter(e => {
+              const key = e.iCalUID ?? e.id;
+              if (!key) return true;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            })
+            .sort((a, b) => {
+              const aTime = a.start?.dateTime ?? a.start?.date ?? '';
+              const bTime = b.start?.dateTime ?? b.start?.date ?? '';
+              return aTime.localeCompare(bTime);
+            });
+
+          const perCalendar = settled.map((s, idx) => {
+            const calendarId = ids[idx]!;
+            const metaItem = items.find(i => i.id === calendarId);
+            const meta = metaItem
+              ? {
+                  summary: metaItem.summary,
+                  primary: !!metaItem.primary,
+                  selected: !!metaItem.selected,
+                  hidden: !!metaItem.hidden,
+                  accessRole: metaItem.accessRole,
+                  timeZone: metaItem.timeZone,
+                }
+              : undefined;
+            if (s.status === 'rejected') {
+              const e = s.reason as { message?: string; response?: { status?: number } };
+              return { calendarId, meta, error: e?.message ?? String(s.reason), status: e?.response?.status };
+            }
+            const evs = (s.value.data.items ?? []).filter(e => eventInRangeOrOverlaps(e, bounds));
+            return {
+              calendarId,
+              meta,
+              count: evs.length,
+              sample: evs.slice(0, 5).map(e => ({ id: e.id, iCalUID: e.iCalUID, summary: e.summary, start: e.start, end: e.end })),
+            };
+          });
+
+          return {
+            events,
+            __debug: {
+              accountId,
+              bounds,
+              queriedCalendars: ids.length,
+              totalEventsReturned: events.length,
+              calendarIdsRequested,
+              calendars: items.slice(0, 50).map(i => ({
+                id: i.id,
+                summary: i.summary,
+                primary: !!i.primary,
+                selected: i.selected !== false,
+                hidden: i.hidden === true,
+                accessRole: i.accessRole ?? null,
+                timeZone: i.timeZone ?? null,
+              })),
+              perCalendar,
+            },
+          };
+        })()
+      : await cacheGet(debugCacheKey, CALENDAR_TTL_MS, async () => {
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-      // Prefer client-supplied "day" + "tz" so "today" aligns with the user's timezone.
-      // Falls back to server-local behavior if missing/invalid.
-      let timeMin: string;
-      let timeMax: string;
-      let timeZone: string;
-
-      const qDay = req.query.day;
-      const qTz = req.query.tz;
-      if (isValidDay(qDay) && isValidTimeZone(qTz)) {
-        timeZone = qTz;
-        const startUtc = utcMsForZonedMidnight(qDay, timeZone);
-        // Compute end as next day's midnight minus 1ms (handles DST days not equal to 24h)
-        const [yS, mS, dS] = qDay.split('-');
-        const y = Number(yS), m = Number(mS), d = Number(dS);
-        const nextDay = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
-        const nextKey = `${nextDay.getUTCFullYear()}-${String(nextDay.getUTCMonth() + 1).padStart(2, '0')}-${String(nextDay.getUTCDate()).padStart(2, '0')}`;
-        const nextStartUtc = utcMsForZonedMidnight(nextKey, timeZone);
-        timeMin = new Date(startUtc).toISOString();
-        timeMax = new Date(nextStartUtc - 1).toISOString();
-      } else {
-        // Fallback: server-local day boundaries (may be incorrect when server TZ != user TZ)
-        const now = new Date();
-        const startOfDay = new Date(now);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(now);
-        endOfDay.setHours(23, 59, 59, 999);
-        timeMin = startOfDay.toISOString();
-        timeMax = endOfDay.toISOString();
-        timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      }
+      const { timeZone } = bounds;
+      const fetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
+      const fetchMax = new Date(bounds.dayEndUtcMs + 24 * 60 * 60 * 1000).toISOString();
 
       // Fetch all accessible calendars (cached), then query each in parallel
       const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
       const calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
         const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-        const ids = (calListRes.data.items ?? []).map(c => c.id!).filter(Boolean);
-        return ids.length ? ids : ['primary'];
+        const items = (calListRes.data.items ?? []);
+        const ids = items
+          .filter(c => c.hidden !== true)
+          .filter(c => c.selected !== false)
+          .map(c => c.id!)
+          .filter(Boolean);
+        // Always include primary, even if not in the list for some reason.
+        const uniq = Array.from(new Set(['primary', ...ids]));
+        return uniq.length ? uniq : ['primary'];
       });
 
-      const eventArrays = await Promise.all(
-        calendarIds.map(calId =>
+      const idsToQuery = Array.from(new Set(calendarIdsRequested?.length ? calendarIdsRequested : calendarIds));
+
+      const settled = await Promise.allSettled(
+        idsToQuery.map(calId =>
           calendar.events.list({
             calendarId: calId,
-            timeMin,
-            timeMax,
+            timeMin: fetchMin,
+            timeMax: fetchMax,
             timeZone,
             maxResults: 50,
             singleEvents: true,
             orderBy: 'startTime',
-          }).then(r => r.data.items ?? []).catch(() => [])
-        )
+          }),
+        ),
       );
 
-      // Flatten, deduplicate by iCalUID, sort by start time
+      for (let i = 0; i < settled.length; i++) {
+        const s = settled[i]!;
+        if (s.status === 'rejected') {
+          logger.warn({ calId: idsToQuery[i], reason: s.reason }, 'calendar.events.list failed');
+        }
+      }
+
+      const allRejected =
+        settled.length > 0 && settled.every((x): x is PromiseRejectedResult => x.status === 'rejected');
+      if (allRejected) throw (settled[0] as PromiseRejectedResult).reason;
+
+      const eventArrays = settled.flatMap(s =>
+        s.status === 'fulfilled' ? (s.value.data.items ?? []) : [],
+      );
+
+      // Dedupe when Google gives stable ids; don't drop events missing both id and iCalUID.
       const seen = new Set<string>();
-      const allEvents = eventArrays.flat()
+      const allEvents = eventArrays
+        .filter(e => e != null)
+        .filter(e => eventInRangeOrOverlaps(e, bounds))
         .filter(e => {
           const key = e.iCalUID ?? e.id;
-          if (!key || seen.has(key)) return false;
+          if (!key) return true;
+          if (seen.has(key)) return false;
           seen.add(key);
           return true;
         })
@@ -174,8 +396,56 @@ calendarRouter.get('/events', async (req, res) => {
     if (status === 401 || err?.message?.includes('invalid_grant')) {
       return res.status(401).json({ error: 'Token expired or invalid' });
     }
+    if (status === 403) {
+      return res.status(403).json({
+        error: 'Google Calendar access denied — reconnect Google in Integrations',
+        code: 'CALENDAR_FORBIDDEN',
+      });
+    }
     logger.error({ error }, 'Error fetching calendar events');
     res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+calendarRouter.get('/calendars', async (req, res) => {
+  const accountId = parseAccountId(req.query.accountId);
+  const auth = getGoogleTokensFromCookie(req, accountId);
+  if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const { tokensCookie, tokens } = auth;
+    const cacheKey = tokenKey(`${accountId}:${tokens.refresh_token ?? tokensCookie}`, 'calendar:calendars');
+    const result = await cacheGet(cacheKey, 10 * 60_000, async () => {
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+      const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
+      const items = calListRes.data.items ?? [];
+      const calendars: CalendarListItem[] = items
+        .map(i => ({
+          id: i.id!,
+          summary: i.summary ?? null,
+          primary: !!i.primary,
+          selected: i.selected !== false,
+          hidden: i.hidden === true,
+          accessRole: i.accessRole ?? null,
+          timeZone: i.timeZone ?? null,
+        }))
+        .filter(i => !!i.id)
+        .sort((a, b) => Number(b.primary) - Number(a.primary) || String(a.summary ?? '').localeCompare(String(b.summary ?? '')));
+      return { accountId, calendars };
+    });
+    res.json(result);
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number }; code?: string; message?: string };
+    const status = err?.response?.status ?? err?.code;
+    if (status === 401 || err?.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Token expired or invalid' });
+    }
+    if (status === 403) {
+      return res.status(403).json({ error: 'Google Calendar access denied — reconnect Google in Integrations', code: 'CALENDAR_FORBIDDEN' });
+    }
+    logger.error({ error }, 'Error fetching calendar list');
+    res.status(500).json({ error: 'Failed to fetch calendars' });
   }
 });
 
@@ -198,10 +468,10 @@ calendarRouter.get('/debug', async (req, res) => {
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfTomorrow = new Date(startOfDay);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
     const timeMin = startOfDay.toISOString();
-    const timeMax = endOfDay.toISOString();
+    const timeMax = startOfTomorrow.toISOString();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
