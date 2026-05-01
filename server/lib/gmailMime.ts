@@ -181,7 +181,8 @@ const SANITIZE_OPTS: sanitizeHtml.IOptions = {
   },
   allowedSchemes: ['http', 'https', 'mailto', 'tel', 'data'],
   allowedSchemesByTag: {
-    img: ['http', 'https', 'data'],
+    // Keep inline CID images after conversion, but block remote tracking pixels.
+    img: ['data'],
   },
   transformTags: {
     a: sanitizeHtml.simpleTransform('a', {

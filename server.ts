@@ -44,16 +44,17 @@ function skipGlobalRateLimit(req: express.Request): boolean {
   const m = req.method.toUpperCase();
   if (m !== 'GET' && m !== 'HEAD') return false;
   switch (req.path) {
-    case '/api/system':
-    case '/api/session/status':
-    case '/api/health':
-    case '/api/calendar/events':
-    case '/api/calendar/calendars':
-    case '/api/auth/google/accounts':
-    case '/api/auth/status':
-    case '/api/github/status':
-    case '/api/discord/status':
-    case '/api/ai/status':
+    // Mounted at /api, so req.path is relative to that mount point.
+    case '/system':
+    case '/session/status':
+    case '/health':
+    case '/calendar/events':
+    case '/calendar/calendars':
+    case '/auth/google/accounts':
+    case '/auth/status':
+    case '/github/status':
+    case '/discord/status':
+    case '/ai/status':
       return true;
     default:
       return false;
@@ -80,7 +81,7 @@ app.get('/api/health', async (_req, res) => {
 
   // Check if environment variables are set
   checks.google_oauth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? 'ok' : 'error';
-  checks.session = process.env.SESSION_SECRET ? 'ok' : 'error';
+  checks.session = SESSION_SECRET ? 'ok' : 'error';
   checks.openai_api = process.env.OPENAI_API_KEY ? 'ok' : 'not_configured';
   checks.github_api = process.env.GITHUB_TOKEN ? 'ok' : 'not_configured';
 

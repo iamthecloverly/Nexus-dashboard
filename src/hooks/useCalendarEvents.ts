@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
@@ -105,6 +105,7 @@ export function useCalendarEvents(): CalendarState {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<CalendarError | null>(null);
   const [mode, setMode] = useState<'today' | 'upcoming'>('today');
+  const requestSeqRef = useRef(0);
 
   const initAccountId: 'primary' | 'secondary' = (() => {
     const v = localStorage.getItem(STORAGE_KEYS.calendarAccount);
@@ -136,6 +137,8 @@ export function useCalendarEvents(): CalendarState {
   }, [includedCalendarIds, accountId]);
 
   const refetch = useCallback(async () => {
+    const requestId = ++requestSeqRef.current;
+    const isStale = () => requestId !== requestSeqRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -144,6 +147,7 @@ export function useCalendarEvents(): CalendarState {
         calendarIds: includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined),
       };
       const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts), { timeoutMs: 15_000 });
+      if (isStale()) return;
       if ('error' in result) {
         const err = result.error;
         setMode('today');
@@ -177,6 +181,7 @@ export function useCalendarEvents(): CalendarState {
         if (todays.length === 0) {
           // UX: if there's nothing today, show upcoming events so the tile isn't blank.
           const upcoming = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarUpcomingUrl(7, opts), { timeoutMs: 15_000 });
+          if (isStale()) return;
           if (!('error' in upcoming)) {
             setEvents(upcoming.data.events ?? []);
             setMode('upcoming');
@@ -191,11 +196,12 @@ export function useCalendarEvents(): CalendarState {
         setIsConnected(true);
       }
     } catch {
+      if (isStale()) return;
       setIsConnected(false);
       setError('network_error');
       setMode('today');
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
   }, [accountId, includedCalendarIds, mainCalendarId]);
 

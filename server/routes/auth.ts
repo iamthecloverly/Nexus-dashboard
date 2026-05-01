@@ -2,7 +2,7 @@ import express from 'express';
 import { google } from 'googleapis';
 
 import { ALLOWED_GOOGLE_EMAILS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
-import { clearAppCookie, getCookie, parseJsonCookie } from '../lib/cookies.ts';
+import { clearAppCookie, getSignedCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import {
   createAuthedGoogleClient,
@@ -10,7 +10,6 @@ import {
   parseAccountId,
   setGoogleProfileCookie,
   setGoogleTokensCookie,
-  type GoogleAccountId,
 } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
@@ -136,8 +135,8 @@ authRouter.get('/google/callback', async (req, res) => {
 
 authRouter.get('/status', (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
-  const tokensCookie = getCookie(req, accountId === 'primary' ? 'google_tokens' : 'google_tokens_secondary');
-  const profileCookie = getCookie(req, accountId === 'primary' ? 'google_profile' : 'google_profile_secondary');
+  const tokensCookie = getSignedCookie(req, accountId === 'primary' ? 'google_tokens' : 'google_tokens_secondary');
+  const profileCookie = getSignedCookie(req, accountId === 'primary' ? 'google_profile' : 'google_profile_secondary');
   const profile = profileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(profileCookie) : null;
   const email = (profile?.email ?? null);
   const emailLc = email ? String(email).toLowerCase() : null;
@@ -177,10 +176,10 @@ authRouter.get('/profile', async (req, res) => {
 });
 
 authRouter.get('/google/accounts', (req, res) => {
-  const primaryProfileCookie = getCookie(req, 'google_profile');
-  const primaryTokensCookie = getCookie(req, 'google_tokens');
-  const secondaryProfileCookie = getCookie(req, 'google_profile_secondary');
-  const secondaryTokensCookie = getCookie(req, 'google_tokens_secondary');
+  const primaryProfileCookie = getSignedCookie(req, 'google_profile');
+  const primaryTokensCookie = getSignedCookie(req, 'google_tokens');
+  const secondaryProfileCookie = getSignedCookie(req, 'google_profile_secondary');
+  const secondaryTokensCookie = getSignedCookie(req, 'google_tokens_secondary');
 
   const primaryProfile = primaryProfileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(primaryProfileCookie) : null;
   const secondaryProfile = secondaryProfileCookie ? parseJsonCookie<{ email?: string | null; name?: string | null }>(secondaryProfileCookie) : null;

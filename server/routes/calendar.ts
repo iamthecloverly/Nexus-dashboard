@@ -2,10 +2,10 @@ import express from 'express';
 import { google } from 'googleapis';
 
 import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
-import { getCookie, parseJsonCookie } from '../lib/cookies.ts';
+import { getSignedCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId, type GoogleAccountId } from '../lib/googleClient.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
 // Cache calendar events for 45 s — short enough to feel live, long enough to
@@ -450,7 +450,7 @@ calendarRouter.get('/calendars', async (req, res) => {
 calendarRouter.get('/debug', async (req, res) => {
   if (isProduction || !ENABLE_DEBUG_ENDPOINTS) return res.status(404).json({ error: 'Not found' });
 
-  const tokensCookie = getCookie(req, 'google_tokens');
+  const tokensCookie = getSignedCookie(req, 'google_tokens');
   if (!tokensCookie) return res.status(401).json({ error: 'Not authenticated' });
 
   try {

@@ -10,6 +10,7 @@ type SessionStatus = {
 export function Login({ onAuthed }: { onAuthed: () => void }) {
   const [passcode, setPasscode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<SessionStatus | null>(null);
 
@@ -27,6 +28,32 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') void refresh();
+    };
+    window.addEventListener('message', handleMessage);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'oauth_auth_success') void refresh();
+    };
+    window.addEventListener('storage', handleStorage);
+
+    let bc: BroadcastChannel | null = null;
+    if ('BroadcastChannel' in window) {
+      bc = new BroadcastChannel('oauth');
+      bc.onmessage = (ev) => {
+        if ((ev as MessageEvent).data?.type === 'OAUTH_AUTH_SUCCESS') void refresh();
+      };
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      bc?.close();
+    };
   }, [refresh]);
 
   const submit = async () => {
@@ -58,6 +85,25 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
       setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const connectGoogle = async () => {
+    setError(null);
+    setConnectingGoogle(true);
+    try {
+      const response = await fetch('/api/auth/google/url?accountId=primary');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to get Google auth URL');
+      }
+      const { url } = await response.json();
+      const popup = window.open(url, 'oauth_popup', 'width=600,height=700');
+      if (!popup) throw new Error('Please allow popups to connect your Google account.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to connect Google');
+    } finally {
+      setConnectingGoogle(false);
     }
   };
 
@@ -96,20 +142,41 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
           </button>
         </div>
 
-        {status?.loggedIn && !status.allowlisted && (
+        {status?.loggedIn && !status.googleEmail && (
+          <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-xs text-text-muted">
+              Passcode accepted. Connect your allowlisted Google account to finish unlocking the dashboard.
+            </p>
+            <button
+              type="button"
+              onClick={connectGoogle}
+              disabled={connectingGoogle}
+              className="mt-3 w-full py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/15 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {connectingGoogle ? 'Opening Google…' : 'Connect Google'}
+            </button>
+          </div>
+        )}
+
+        {status?.loggedIn && status.googleEmail && !status.allowlisted && (
           <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <p className="text-xs text-text-muted">
               You’re unlocked, but this Google account doesn’t have access to the dashboard.
             </p>
-            {status.googleEmail && (
-              <p className="text-xs text-text-muted font-mono mt-1">
-                Connected as <span className="text-foreground/90">{status.googleEmail}</span>
-              </p>
-            )}
+            <p className="text-xs text-text-muted font-mono mt-1">
+              Connected as <span className="text-foreground/90">{status.googleEmail}</span>
+            </p>
+            <button
+              type="button"
+              onClick={connectGoogle}
+              disabled={connectingGoogle}
+              className="mt-3 w-full py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/15 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {connectingGoogle ? 'Opening Google…' : 'Connect a different Google account'}
+            </button>
           </div>
         )}
       </div>
     </div>
   );
 }
-

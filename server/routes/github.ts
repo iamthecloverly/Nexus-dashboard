@@ -1,7 +1,7 @@
 import express from 'express';
 
 import { COOKIE_OPTS } from '../config.ts';
-import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
+import { clearAppCookie, getSignedCookie, setSignedCookie } from '../lib/cookies.ts';
 import { cacheGet, tokenKey } from '../lib/apiCache.ts';
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
@@ -12,6 +12,13 @@ import { githubTokenSchema } from '../lib/validation.ts';
 const GITHUB_TTL_MS = 90_000;
 
 export const githubRouter = express.Router();
+
+function getConfiguredGithubToken(req: express.Request): string | null {
+  const cookieToken = getSignedCookie(req, 'github_token');
+  const decrypted = cookieToken ? safeDecrypt(cookieToken) : null;
+  const envToken = process.env.GITHUB_TOKEN?.trim() || null;
+  return decrypted ?? envToken;
+}
 
 githubRouter.post('/token', (req, res) => {
   const validation = githubTokenSchema.safeParse(req.body);
@@ -27,7 +34,7 @@ githubRouter.post('/token', (req, res) => {
 });
 
 githubRouter.get('/status', (req, res) => {
-  res.json({ connected: !!getCookie(req, 'github_token') });
+  res.json({ connected: !!getConfiguredGithubToken(req) });
 });
 
 githubRouter.post('/disconnect', (req, res) => {
@@ -36,8 +43,7 @@ githubRouter.post('/disconnect', (req, res) => {
 });
 
 githubRouter.get('/notifications', async (req, res) => {
-  const cookieToken = getCookie(req, 'github_token');
-  const token = cookieToken ? safeDecrypt(cookieToken) : null;
+  const token = getConfiguredGithubToken(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
   try {

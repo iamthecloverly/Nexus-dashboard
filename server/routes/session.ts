@@ -8,7 +8,7 @@ import {
   DASHBOARD_SESSION_COOKIE,
   DASHBOARD_SESSION_COOKIE_OPTS,
 } from '../config.ts';
-import { clearAppCookie, getCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
+import { clearAppCookie, getSignedCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { logger } from '../lib/logger.ts';
 import { loginSchema } from '../lib/validation.ts';
 
@@ -34,8 +34,8 @@ const loginPostLimiter = rateLimit({
 });
 
 sessionRouter.get('/status', (req, res) => {
-  const hasSession = !!getCookie(req, DASHBOARD_SESSION_COOKIE);
-  const profileCookie = getCookie(req, 'google_profile');
+  const hasSession = !!getSignedCookie(req, DASHBOARD_SESSION_COOKIE);
+  const profileCookie = getSignedCookie(req, 'google_profile');
   const profile = profileCookie ? parseJsonCookie<GoogleProfileCookie>(profileCookie) : null;
   const email = (profile?.email ?? null);
   const emailLc = email ? String(email).toLowerCase() : null;
@@ -68,7 +68,8 @@ sessionRouter.post('/logout', (_req, res) => {
   clearAppCookie(res, DASHBOARD_SESSION_COOKIE, true);
   clearAppCookie(res, 'google_tokens', true);
   clearAppCookie(res, 'google_profile', true);
+  clearAppCookie(res, 'google_tokens_secondary', true);
+  clearAppCookie(res, 'google_profile_secondary', true);
   logger.info('User logged out');
   res.json({ success: true });
 });
-

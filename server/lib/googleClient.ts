@@ -1,6 +1,6 @@
 import type express from 'express';
 import { COOKIE_OPTS } from '../config.ts';
-import { getCookie, parseJsonCookie, setSignedCookie } from './cookies.ts';
+import { getSignedCookie, parseJsonCookie, setSignedCookie } from './cookies.ts';
 import { getOAuth2Client } from './googleOAuth.ts';
 
 export type GoogleAccountId = 'primary' | 'secondary';
@@ -29,7 +29,7 @@ export function getGoogleTokensFromCookie(
   req: express.Request,
   accountId: GoogleAccountId = 'primary',
 ): { tokensCookie: string; tokens: GoogleTokens } | null {
-  const tokensCookie = getCookie(req, tokensCookieName(accountId));
+  const tokensCookie = getSignedCookie(req, tokensCookieName(accountId));
   if (!tokensCookie) return null;
   const tokens = parseJsonCookie<GoogleTokens>(tokensCookie);
   if (!tokens) return null;

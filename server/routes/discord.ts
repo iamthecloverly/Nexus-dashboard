@@ -2,7 +2,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { COOKIE_OPTS } from '../config.ts';
-import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
+import { clearAppCookie, getSignedCookie, setSignedCookie } from '../lib/cookies.ts';
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
 import { discordWebhookSchema, discordSendSchema } from '../lib/validation.ts';
@@ -28,7 +28,7 @@ discordRouter.post('/webhook', (req, res) => {
 });
 
 discordRouter.get('/status', (req, res) => {
-  res.json({ connected: !!getCookie(req, 'discord_webhook') });
+  res.json({ connected: !!getSignedCookie(req, 'discord_webhook') });
 });
 
 discordRouter.post('/disconnect', (req, res) => {
@@ -37,7 +37,7 @@ discordRouter.post('/disconnect', (req, res) => {
 });
 
 discordRouter.post('/send', discordSendLimiter, async (req, res) => {
-  const cookieWebhook = getCookie(req, 'discord_webhook');
+  const cookieWebhook = getSignedCookie(req, 'discord_webhook');
   const webhook = cookieWebhook ? safeDecrypt(cookieWebhook) : null;
   if (!webhook) return res.status(401).json({ error: 'No webhook configured' });
 

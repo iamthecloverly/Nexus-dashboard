@@ -94,20 +94,7 @@ export default function Settings({
   };
 
   const clearAllData = () => {
-    [
-      STORAGE_KEYS.tasks,
-      STORAGE_KEYS.profileName,
-      STORAGE_KEYS.onboardingDismissed,
-      STORAGE_KEYS.ytVideoId,
-      STORAGE_KEYS.ytVolume,
-      STORAGE_KEYS.ytRecent,
-      STORAGE_KEYS.ytPositions,
-      STORAGE_KEYS.ytResumeEnabled,
-      STORAGE_KEYS.autoProcessedEmailIds,
-      STORAGE_KEYS.weatherCoords,
-      STORAGE_KEYS.notificationsEnabled,
-      STORAGE_KEYS.dailyBrief,
-    ].forEach(k => localStorage.removeItem(k));
+    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
     setCleared(true);
     setTimeout(() => window.location.reload(), 600);
   };

@@ -20,10 +20,10 @@ services:
       # Required in production: Your public URL
       - APP_URL=${APP_URL:-http://localhost:3001}
 
-      # Optional: Dashboard access passcode
+      # Required in production: Dashboard access passcode
       - DASHBOARD_PASSCODE=${DASHBOARD_PASSCODE}
 
-      # Optional: Google email allowlist (comma-separated)
+      # Required in production: Google email allowlist (comma-separated)
       - ALLOWED_GOOGLE_EMAILS=${ALLOWED_GOOGLE_EMAILS}
 
       # Optional: GitHub personal access token

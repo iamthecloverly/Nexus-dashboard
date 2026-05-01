@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev           # Start dev server (Express + Vite HMR) — app at http://localhost:5173
+npm run dev           # Start dev server (Express + Vite HMR) — app at http://localhost:3001
 npm run build         # Production Vite build → dist/
 npm run lint          # Type-check (tsc --noEmit) + ESLint (max 50 warnings)
 npm run preview       # Serve the production build locally
@@ -51,7 +51,7 @@ This is a **single-binary full-stack app**: `server.ts` is one Express file that
 
 ### Request flow
 ```
-Browser → Express (port 3001 in code, proxied to 5173 by Vite)
+Browser → Express (port 3001 in code, with Vite mounted as middleware)
          ├── /api/*          → Express route handlers (Google APIs, GitHub, AI, Discord)
          └── everything else → Vite middleware (dev) / static dist/ (prod)
 ```

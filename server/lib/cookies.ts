@@ -3,10 +3,13 @@ import type { CookieOptions } from 'express';
 
 import { COOKIE_OPTS } from '../config.ts';
 
-export function getCookie(req: express.Request, name: string): string | undefined {
+export function getSignedCookie(req: express.Request, name: string): string | undefined {
   const signed = req.signedCookies[name];
   if (typeof signed === 'string') return signed;
-  // cookie-parser sets invalid signatures to boolean false; treat that as missing.
+  return undefined;
+}
+
+export function getUnsignedCookie(req: express.Request, name: string): string | undefined {
   const plain = req.cookies[name];
   if (typeof plain === 'string') return plain;
   return undefined;

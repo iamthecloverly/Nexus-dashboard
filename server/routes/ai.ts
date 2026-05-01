@@ -5,8 +5,8 @@ import { google, type gmail_v1 } from 'googleapis';
 import OpenAI from 'openai';
 
 import { COOKIE_OPTS } from '../config.ts';
-import { clearAppCookie, getCookie, setSignedCookie } from '../lib/cookies.ts';
-import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId, type GoogleAccountId } from '../lib/googleClient.ts';
+import { clearAppCookie, getSignedCookie, setSignedCookie } from '../lib/cookies.ts';
+import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
 import { aiKeySchema, extractTasksSchema, extractTasksBulkSchema, dailyBriefSchema } from '../lib/validation.ts';
@@ -182,7 +182,7 @@ aiRouter.post('/key', (req, res) => {
 });
 
 aiRouter.get('/status', (req, res) => {
-  const cookieKey = getCookie(req, 'openai_key');
+  const cookieKey = getSignedCookie(req, 'openai_key');
   const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
   const envKey = process.env.OPENAI_API_KEY;
   const source = decryptedKey ? 'cookie' : (envKey ? 'env' : null);
@@ -204,7 +204,7 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
     return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
 
-  const cookieKey = getCookie(req, 'openai_key');
+  const cookieKey = getSignedCookie(req, 'openai_key');
   const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
   const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
@@ -239,7 +239,7 @@ aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
     return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
 
-  const cookieKey = getCookie(req, 'openai_key');
+  const cookieKey = getSignedCookie(req, 'openai_key');
   const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
   const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
@@ -306,7 +306,7 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });
   }
 
-  const cookieKey = getCookie(req, 'openai_key');
+  const cookieKey = getSignedCookie(req, 'openai_key');
   const decryptedKey = cookieKey ? safeDecrypt(cookieKey) : null;
   const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });

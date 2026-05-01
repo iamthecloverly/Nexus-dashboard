@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { getCookie, parseJsonCookie } from '../cookies';
+import { getSignedCookie, getUnsignedCookie, parseJsonCookie } from '../cookies';
 import { SESSION_SECRET } from '../../config';
 
 // ── parseJsonCookie ────────────────────────────────────────────────────────
@@ -31,21 +31,25 @@ describe('parseJsonCookie', () => {
   });
 });
 
-// ── getCookie via a minimal Express app ────────────────────────────────────
+// ── cookie helpers via a minimal Express app ───────────────────────────────
 
-describe('getCookie', () => {
+describe('cookie helpers', () => {
   afterEach(() => vi.restoreAllMocks());
 
   function makeApp(handler: express.RequestHandler) {
     const app = express();
     app.use(cookieParser(SESSION_SECRET));
+    app.get('/set-signed', (_req, res) => {
+      res.cookie('my_cookie', 'signed-value', { signed: true });
+      res.json({ ok: true });
+    });
     app.get('/test', handler);
     return app;
   }
 
-  it('returns plain cookie value when no signed cookie present', async () => {
+  it('returns plain cookie value from getUnsignedCookie', async () => {
     const app = makeApp((req, res) => {
-      res.json({ value: getCookie(req, 'my_cookie') });
+      res.json({ value: getUnsignedCookie(req, 'my_cookie') });
     });
 
     const res = await request(app)
@@ -56,9 +60,22 @@ describe('getCookie', () => {
     expect(res.body.value).toBe('hello');
   });
 
-  it('returns undefined when cookie is absent', async () => {
+  it('returns signed cookie value from getSignedCookie', async () => {
     const app = makeApp((req, res) => {
-      res.json({ value: getCookie(req, 'missing_cookie') ?? null });
+      res.json({ value: getSignedCookie(req, 'my_cookie') });
+    });
+
+    const agent = request.agent(app);
+    await agent.get('/set-signed').expect(200);
+    const res = await agent.get('/test');
+
+    expect(res.status).toBe(200);
+    expect(res.body.value).toBe('signed-value');
+  });
+
+  it('returns undefined when signed cookie is absent', async () => {
+    const app = makeApp((req, res) => {
+      res.json({ value: getSignedCookie(req, 'missing_cookie') ?? null });
     });
 
     const res = await request(app).get('/test');
@@ -66,19 +83,16 @@ describe('getCookie', () => {
     expect(res.body.value).toBeNull();
   });
 
-  it('treats a cookie with an invalid signature as plain (falls back)', async () => {
-    // cookie-parser sets signedCookies[name] = false when signature is wrong
-    // getCookie should fall back to plain cookies in that case
+  it('does not treat an unsigned cookie as signed', async () => {
     const app = makeApp((req, res) => {
-      res.json({ value: getCookie(req, 'my_cookie') ?? null });
+      res.json({ value: getSignedCookie(req, 'my_cookie') ?? null });
     });
 
-    // Send a raw cookie (no valid HMAC signature) — cookie-parser parses it as plain
     const res = await request(app)
       .get('/test')
       .set('Cookie', 'my_cookie=plainvalue');
 
     expect(res.status).toBe(200);
-    expect(res.body.value).toBe('plainvalue');
+    expect(res.body.value).toBeNull();
   });
 });

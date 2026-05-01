@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -14,6 +14,10 @@ function makeApp() {
 }
 
 describe('GitHub Routes', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   describe('POST /api/github/token', () => {
     it('rejects request with no body', async () => {
       const res = await request(makeApp())
@@ -55,6 +59,13 @@ describe('GitHub Routes', () => {
       const res = await request(makeApp()).get('/api/github/status');
       expect(res.status).toBe(200);
       expect(res.body.connected).toBe(false);
+    });
+
+    it('returns connected when GITHUB_TOKEN is configured in the environment', async () => {
+      vi.stubEnv('GITHUB_TOKEN', 'ghp_envTokenABCDEF123456');
+      const res = await request(makeApp()).get('/api/github/status');
+      expect(res.status).toBe(200);
+      expect(res.body.connected).toBe(true);
     });
   });
 

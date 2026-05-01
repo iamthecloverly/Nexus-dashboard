@@ -29,6 +29,26 @@ describe('parseOpenMeteoPayload', () => {
     expect(result!.unit).toBe('°C');
   });
 
+  it('parses the normalized /api/weather proxy payload', () => {
+    const result = parseOpenMeteoPayload({
+      temperatureC: 21,
+      apparentC: 19,
+      humidity: 52,
+      weatherCode: 2,
+      unit: '°C',
+    }, lat, lon);
+
+    expect(result).toEqual({
+      lat,
+      lon,
+      temperatureC: 21,
+      apparentC: 19,
+      humidity: 52,
+      weatherCode: 2,
+      unit: '°C',
+    });
+  });
+
   it('returns null for null input', () => {
     expect(parseOpenMeteoPayload(null, lat, lon)).toBeNull();
   });

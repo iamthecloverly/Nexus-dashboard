@@ -2,9 +2,15 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import { createHmac } from 'crypto';
 
 import { SESSION_SECRET } from '../../config';
 import { authRouter } from '../auth';
+
+function signedCookie(name: string, value: string): string {
+  const sig = createHmac('sha256', SESSION_SECRET).update(value).digest('base64').replace(/=+$/, '');
+  return `${name}=${encodeURIComponent(`s:${value}.${sig}`)}`;
+}
 
 function makeApp() {
   const app = express();
@@ -26,15 +32,15 @@ describe('Auth Routes (Google multi-account)', () => {
     });
 
     it('surfaces emails from cookies for both accounts', async () => {
-      const primaryProfile = encodeURIComponent(JSON.stringify({ email: 'a@example.com', name: 'A' }));
-      const secondaryProfile = encodeURIComponent(JSON.stringify({ email: 'b@example.com', name: 'B' }));
+      const primaryProfileRaw = JSON.stringify({ email: 'a@example.com', name: 'A' });
+      const secondaryProfileRaw = JSON.stringify({ email: 'b@example.com', name: 'B' });
       const res = await request(makeApp())
         .get('/api/auth/google/accounts')
         .set('Cookie', [
-          `google_tokens=${encodeURIComponent('{"access_token":"x"}')}`,
-          `google_profile=${primaryProfile}`,
-          `google_tokens_secondary=${encodeURIComponent('{"access_token":"y"}')}`,
-          `google_profile_secondary=${secondaryProfile}`,
+          signedCookie('google_tokens', '{"access_token":"x"}'),
+          signedCookie('google_profile', primaryProfileRaw),
+          signedCookie('google_tokens_secondary', '{"access_token":"y"}'),
+          signedCookie('google_profile_secondary', secondaryProfileRaw),
         ]);
       expect(res.status).toBe(200);
       expect(res.body.accounts).toEqual([
@@ -49,10 +55,10 @@ describe('Auth Routes (Google multi-account)', () => {
       const res = await request(makeApp())
         .post('/api/auth/google/disconnect?accountId=secondary')
         .set('Cookie', [
-          `google_tokens=${encodeURIComponent('{"access_token":"x"}')}`,
-          `google_profile=${encodeURIComponent(JSON.stringify({ email: 'a@example.com', name: 'A' }))}`,
-          `google_tokens_secondary=${encodeURIComponent('{"access_token":"y"}')}`,
-          `google_profile_secondary=${encodeURIComponent(JSON.stringify({ email: 'b@example.com', name: 'B' }))}`,
+          signedCookie('google_tokens', '{"access_token":"x"}'),
+          signedCookie('google_profile', JSON.stringify({ email: 'a@example.com', name: 'A' })),
+          signedCookie('google_tokens_secondary', '{"access_token":"y"}'),
+          signedCookie('google_profile_secondary', JSON.stringify({ email: 'b@example.com', name: 'B' })),
         ]);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -66,4 +72,3 @@ describe('Auth Routes (Google multi-account)', () => {
     });
   });
 });
-

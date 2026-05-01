@@ -18,6 +18,24 @@ export function parseOpenMeteoPayload(
 ): WeatherPayload | null {
   if (typeof data !== 'object' || data === null) return null;
   const d = data as Record<string, unknown>;
+
+  const normalizedTemp = d.temperatureC;
+  if (typeof normalizedTemp === 'number' && Number.isFinite(normalizedTemp)) {
+    const apparent = d.apparentC;
+    const humidity = d.humidity;
+    const weatherCode = d.weatherCode;
+    const unit = d.unit;
+    return {
+      lat,
+      lon,
+      temperatureC: normalizedTemp,
+      apparentC: typeof apparent === 'number' && Number.isFinite(apparent) ? apparent : normalizedTemp,
+      humidity: typeof humidity === 'number' && Number.isFinite(humidity) ? humidity : null,
+      weatherCode: typeof weatherCode === 'number' && Number.isFinite(weatherCode) ? weatherCode : null,
+      unit: typeof unit === 'string' && unit.trim() ? unit : '°C',
+    };
+  }
+
   const cur = d.current;
   if (typeof cur !== 'object' || cur === null) return null;
   const c = cur as Record<string, unknown>;

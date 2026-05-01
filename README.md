@@ -55,14 +55,14 @@
    npm run dev
    ```
 
-   The app runs at `http://localhost:5173`.
+   The app runs at `http://localhost:3001`.
 
 ## OAuth Setup
 
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
 2. Enable **Google Calendar API** and **Gmail API**
 3. Create OAuth 2.0 credentials (Web Application)
-4. Add `http://localhost:5173/api/auth/google/callback` as an authorized redirect URI
+4. Add `http://localhost:3001/api/auth/google/callback` as an authorized redirect URI
 5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
 
 ## Self-hosting notes (reverse proxy / APP_URL)

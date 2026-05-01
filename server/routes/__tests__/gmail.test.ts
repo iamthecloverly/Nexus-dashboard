@@ -2,9 +2,15 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import { createHmac } from 'crypto';
 
 import { SESSION_SECRET } from '../../config';
 import { gmailRouter } from '../gmail';
+
+function signedCookie(name: string, value: string): string {
+  const sig = createHmac('sha256', SESSION_SECRET).update(value).digest('base64').replace(/=+$/, '');
+  return `${name}=${encodeURIComponent(`s:${value}.${sig}`)}`;
+}
 
 function makeApp() {
   const app = express();
@@ -26,7 +32,7 @@ describe('Gmail routes', () => {
       // Use an ID with invalid characters (spaces, dots) that fail the gmailIdSchema regex
       const res = await request(makeApp())
         .get('/api/gmail/message/invalid..id')
-        .set('Cookie', `google_tokens=${fakeTokens}`);
+        .set('Cookie', signedCookie('google_tokens', fakeTokens));
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Invalid message id');
     });
@@ -35,7 +41,7 @@ describe('Gmail routes', () => {
       const fakeTokens = JSON.stringify({ access_token: 'fake', refresh_token: 'fake' });
       const res = await request(makeApp())
         .get('/api/gmail/message/!!invalid!!')
-        .set('Cookie', `google_tokens=${fakeTokens}`);
+        .set('Cookie', signedCookie('google_tokens', fakeTokens));
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Invalid message id');
     });
