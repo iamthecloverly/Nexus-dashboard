@@ -89,7 +89,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     return count;
   }, [sessionsData]);
 
-  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
+  const { events, mode: calendarMode, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
   useCalendarNotifications(events, isCalendarConnected);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -193,7 +193,11 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     const isAllDay = !event.start.dateTime;
     const isPast = !isAllDay && isBefore(endTime, currentTime);
     const isCurrent = !isAllDay && isBefore(startTime, currentTime) && isAfter(endTime, currentTime);
-    const timeLabel = isAllDay ? 'All Day' : `${format(startTime, 'h:mm a')} — ${format(endTime, 'h:mm a')}`;
+    const timeLabel = isAllDay
+      ? (calendarMode === 'upcoming' ? `All Day · ${format(startTime, 'MMM d')}` : 'All Day')
+      : calendarMode === 'upcoming'
+        ? `${format(startTime, 'MMM d · h:mm a')} — ${format(endTime, 'h:mm a')}`
+        : `${format(startTime, 'h:mm a')} — ${format(endTime, 'h:mm a')}`;
 
     if (isCurrent) {
       return (
@@ -346,7 +350,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
 
         {upcomingEvents.length === 0 && pastEvents.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2">
-            <p className="text-sm text-text-muted">No events today.</p>
+            <p className="text-sm text-text-muted">No events scheduled.</p>
             <button
               onClick={() => setCurrentView('Integrations')}
               className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
@@ -360,7 +364,9 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
 
         <div className="relative pl-12 mt-4 mb-8 opacity-40">
           <div className="absolute left-[16px] top-1 w-4 h-4 rounded-full border-2 border-dashed border-white/40 bg-transparent z-10"></div>
-          <div className="text-xs text-text-muted italic font-medium">End of scheduled day</div>
+          <div className="text-xs text-text-muted italic font-medium">
+            {calendarMode === 'upcoming' ? 'End of upcoming window' : 'End of scheduled day'}
+          </div>
         </div>
       </>
     );
@@ -425,7 +431,9 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-background-dark/85 to-transparent z-20 pointer-events-none rounded-t-xl"></div>
           <div className="p-6 pb-2 z-30 bg-background-elevated/50 backdrop-blur-md border-b border-white/5">
             <h2 className="font-heading text-2xl font-semibold text-slate-100">Timeline</h2>
-            <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">Today</p>
+            <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">
+              {calendarMode === 'upcoming' ? 'Upcoming' : 'Today'}
+            </p>
           </div>
           <div className="flex-1 overflow-y-auto relative px-6 py-12">
             <div className="timeline-line"></div>
