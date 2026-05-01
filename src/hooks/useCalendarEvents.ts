@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import { splitCalendarEvents } from '../lib/calendarDisplay';
 
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
 function calendarDayInTimeZone(timeZone: string, date = new Date()): string {
@@ -56,20 +55,6 @@ function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendar
   }
 }
 
-function calendarUpcomingUrl(days: number, opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}): string {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const d = Number(days);
-    if (!tz || !Number.isFinite(d) || d <= 0) return '/api/calendar/events';
-    const q = new URLSearchParams({ tz, upcomingDays: String(Math.min(Math.max(d, 1), 14)) });
-    if (opts.accountId) q.set('accountId', opts.accountId);
-    if (opts.calendarIds && opts.calendarIds.length) q.set('calendarIds', opts.calendarIds.join(','));
-    return `/api/calendar/events?${q.toString()}`;
-  } catch {
-    return '/api/calendar/events';
-  }
-}
-
 export type CalendarError =
   | 'login_required'
   | 'not_connected'
@@ -86,7 +71,7 @@ interface CalendarState {
   isLoading: boolean;
   isConnected: boolean;
   error: CalendarError | null;
-  mode: 'today' | 'upcoming';
+  mode: 'today';
   accountId: 'primary' | 'secondary';
   mainCalendarId: string | null;
   includedCalendarIds: string[] | null;
@@ -121,7 +106,6 @@ export function useCalendarEvents(): CalendarState {
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<CalendarError | null>(null);
-  const [mode, setMode] = useState<'today' | 'upcoming'>('today');
   const requestSeqRef = useRef(0);
   const lastFetchedDayRef = useRef<string | null>(null);
 
@@ -170,7 +154,6 @@ export function useCalendarEvents(): CalendarState {
       lastFetchedDayRef.current = requestDayStamp;
       if ('error' in result) {
         const err = result.error;
-        setMode('today');
         if (err.status === 401) {
           const code = err.code ?? '';
           const msg = err.error ?? '';
@@ -198,24 +181,7 @@ export function useCalendarEvents(): CalendarState {
         }
       } else {
         const todays = result.data.events ?? [];
-        const todaySplit = splitCalendarEvents(todays, new Date());
-        if (!todaySplit.hasRemainingToday) {
-          // UX: once today is done, show the next useful events without hiding earlier-today history when fallback is empty.
-          const upcoming = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarUpcomingUrl(7, opts), { timeoutMs: 15_000 });
-          if (isStale()) return;
-          if (!('error' in upcoming)) {
-            const upcomingEvents = upcoming.data.events ?? [];
-            const upcomingSplit = splitCalendarEvents(upcomingEvents, new Date());
-            setEvents(upcomingSplit.displayable.length > 0 ? upcomingEvents : todays);
-            setMode(upcomingSplit.displayable.length > 0 ? 'upcoming' : 'today');
-          } else {
-            setEvents(todays);
-            setMode('today');
-          }
-        } else {
-          setEvents(todays);
-          setMode('today');
-        }
+        setEvents(todays);
         setIsConnected(true);
       }
     } catch {
@@ -223,7 +189,6 @@ export function useCalendarEvents(): CalendarState {
       lastFetchedDayRef.current = requestDayStamp;
       setIsConnected(false);
       setError('network_error');
-      setMode('today');
     } finally {
       if (!isStale()) setIsLoading(false);
     }
@@ -266,7 +231,7 @@ export function useCalendarEvents(): CalendarState {
     isLoading,
     isConnected,
     error,
-    mode,
+    mode: 'today',
     accountId,
     mainCalendarId,
     includedCalendarIds,

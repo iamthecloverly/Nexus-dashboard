@@ -155,7 +155,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [currentTime, setCurrentTime] = useState(new Date());
   const {
     events,
-    mode: calendarMode,
     isLoading: isLoadingEvents,
     isConnected: isCalendarConnected,
     error: calendarError,
@@ -286,13 +285,13 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
     if (item.state === 'current') return `${item.title} · Now`;
     if (item.state === 'allDay') {
-      return `${item.title} · ${formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today')}`;
+      return `${item.title} · ${formatCalendarEventTime(item, 'today')}`;
     }
 
     const mins = differenceInMinutes(item.start, currentTime);
     if (mins >= 0 && mins < 90) return `${item.title} · in ${mins} min`;
-    return `${item.title} · ${formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today')}`;
-  }, [scheduleGroups, currentTime, isCalendarConnected, calendarError, calendarMode]);
+    return `${item.title} · ${formatCalendarEventTime(item, 'today')}`;
+  }, [scheduleGroups, currentTime, isCalendarConnected, calendarError]);
 
   // currentTime used only for event isCurrent/isPast — 10s is sufficient precision
   useEffect(() => {
@@ -408,7 +407,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   useEffect(() => {
     setShowEarlierEvents(false);
-  }, [events, calendarMode]);
+  }, [events]);
 
   const renderScheduleItem = useCallback((
     item: CalendarDisplayItem,
@@ -442,18 +441,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         <p className={`mt-1 text-sm font-semibold leading-snug ${isPast ? 'text-foreground/55' : 'text-foreground'}`}>
           {item.title}
         </p>
-      </div>
-    );
-  }, []);
-
-  const renderDateHeader = useCallback((dateKey: string) => {
-    const d = parseISO(dateKey);
-    const label = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
-    return (
-      <div key={`hdr:${dateKey}`} className="pt-1">
-        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/90">
-          {label}
-        </div>
       </div>
     );
   }, []);
@@ -513,20 +500,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       </section>
     );
   }, [renderScheduleItem, scheduleGroups.earlier, showEarlierEvents]);
-
-  const renderGroupedUpcoming = useCallback((items: CalendarDisplayItem[], opts: { compact: boolean }) => {
-    if (items.length === 0) return null;
-    const out: React.ReactNode[] = [];
-    let lastKey: string | null = null;
-    for (const item of items) {
-      if (item.dateKey !== lastKey) {
-        out.push(renderDateHeader(item.dateKey));
-        lastKey = item.dateKey;
-      }
-      out.push(renderScheduleItem(item, { compact: opts.compact, timeMode: 'today' }));
-    }
-    return out;
-  }, [renderDateHeader, renderScheduleItem]);
 
   const renderCalendarBody = useCallback((opts: { compact: boolean }) => {
     if (isLoadingEvents) {
@@ -691,21 +664,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    if (calendarMode === 'upcoming') {
-      return (
-        <>
-          {opts.compact && (
-            <div className="rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2 text-[11px] text-primary/90">
-              Today is clear. Showing the next 7 days.
-            </div>
-          )}
-          <div className={opts.compact ? 'space-y-5' : 'space-y-6'}>
-            {renderGroupedUpcoming(scheduleGroups.primary, opts)}
-          </div>
-        </>
-      );
-    }
-
     const nowItems = [
       ...[...scheduleGroups.current].sort((a, b) => a.sortMs - b.sortMs),
       ...[...scheduleGroups.allDay].sort((a, b) => a.sortMs - b.sortMs),
@@ -738,12 +696,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   }, [
     isLoadingEvents,
     scheduleGroups,
-    calendarMode,
     isCalendarConnected,
     calendarError,
     fetchEvents,
     renderScheduleSection,
-    renderGroupedUpcoming,
     renderEarlierSection,
     setCurrentView,
     setShowSchedule,
@@ -820,7 +776,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <span>Schedule</span>
                 {isCalendarConnected && !calendarError && (
                   <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted bg-white/[0.04] border border-white/10 px-2 py-1 rounded-full">
-                    {calendarMode === 'upcoming' ? 'Upcoming' : `${scheduleGroups.primary.length} open`}
+                    {scheduleGroups.primary.length} open
                   </span>
                 )}
               </button>

@@ -21,6 +21,16 @@ function futureEvent(start: string, end: string): CalendarEvent {
   };
 }
 
+function pastEvent(): CalendarEvent {
+  return {
+    id: 'past',
+    summary: 'Past',
+    start: { dateTime: '2026-05-01T08:00:00' },
+    end: { dateTime: '2026-05-01T09:00:00' },
+    htmlLink: 'https://calendar.test/past',
+  };
+}
+
 async function flushPromises() {
   await act(async () => {
     await Promise.resolve();
@@ -83,5 +93,20 @@ describe('useCalendarEvents', () => {
     });
 
     expect(mockedApiFetchJson).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the schedule scoped to today even when today only has past events', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 17, 0, 0));
+    mockedApiFetchJson.mockResolvedValue({
+      ok: true,
+      data: { events: [pastEvent()] },
+    });
+
+    const { result } = renderHook(() => useCalendarEvents());
+    await flushPromises();
+
+    expect(mockedApiFetchJson).toHaveBeenCalledTimes(1);
+    expect(result.current.mode).toBe('today');
+    expect(result.current.events.map(event => event.id)).toEqual(['past']);
   });
 });

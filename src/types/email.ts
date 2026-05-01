@@ -10,6 +10,8 @@ export interface Email {
   sender: string;
   senderEmail?: string;
   initials: string;
+  /** Absolute Gmail receive timestamp; formatted in the browser's local timezone. */
+  receivedAt?: string | null;
   time: string;
   subject: string;
   preview: string;
@@ -26,10 +28,11 @@ export interface ThreadMessage {
   sender: string;
   senderEmail: string;
   initials: string;
+  /** Absolute Gmail receive timestamp; formatted in the browser's local timezone. */
+  receivedAt?: string | null;
   time: string;
   body: string;
   /** Server-sanitized HTML when the MIME tree included text/html (safe for `dangerouslySetInnerHTML`). */
   bodyHtml?: string | null;
   unread: boolean;
 }
-

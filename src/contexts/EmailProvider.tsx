@@ -5,6 +5,7 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 import type { Email, GmailAccountId, ThreadMessage } from '../types/email';
 import { EmailContext } from './emailContext';
+import { formatEmailTime } from '../lib/emailTime';
 
 const ACCOUNTS: GmailAccountId[] = ['primary', 'secondary'];
 
@@ -53,7 +54,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       const res = await fetchWithTimeout(`/api/gmail/messages?${accountParam(accountId)}`, { timeoutMs: 15_000 });
       if (res.ok) {
         const data = await res.json();
-        const emails: Email[] = (data.emails ?? []).map((e: Email) => ({ ...e, accountId }));
+        const emails: Email[] = (data.emails ?? []).map((e: Email) => ({
+          ...e,
+          accountId,
+          time: formatEmailTime(e.receivedAt, e.time),
+        }));
         setEmailsByAccount(prev => ({ ...prev, [accountId]: emails }));
         setConnectedByAccount(prev => ({ ...prev, [accountId]: true }));
         setServerErrorByAccount(prev => ({ ...prev, [accountId]: false }));
@@ -282,7 +287,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       const res = await fetchWithTimeout(`/api/gmail/thread/${encodeURIComponent(threadId)}?${accountParam(accountId)}`, { timeoutMs: 15_000 });
       if (res.ok) {
         const data = await res.json();
-        const messages: ThreadMessage[] = (data.messages ?? []).map((m: ThreadMessage) => ({ ...m, accountId }));
+        const messages: ThreadMessage[] = (data.messages ?? []).map((m: ThreadMessage) => ({
+          ...m,
+          accountId,
+          time: formatEmailTime(m.receivedAt, m.time),
+        }));
         return messages;
       }
     } catch {
@@ -300,4 +309,3 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     </EmailContext.Provider>
   );
 }
-

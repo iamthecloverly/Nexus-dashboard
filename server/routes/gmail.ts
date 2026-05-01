@@ -26,6 +26,32 @@ function asApiError(e: unknown): GaxiosErrorLike {
   return e as GaxiosErrorLike;
 }
 
+function getMessageReceivedAt(internalDate?: string | null, dateHeader?: string): string | null {
+  const internalMs = Number(internalDate);
+  if (Number.isFinite(internalMs) && internalMs > 0) {
+    return new Date(internalMs).toISOString();
+  }
+
+  const headerMs = Date.parse(dateHeader ?? '');
+  if (Number.isFinite(headerMs)) {
+    return new Date(headerMs).toISOString();
+  }
+
+  return null;
+}
+
+function formatEmailTime(receivedAt: string | null): string {
+  if (!receivedAt) return '';
+  const msgDate = new Date(receivedAt);
+  if (Number.isNaN(msgDate.getTime())) return '';
+
+  const now = new Date();
+  const isToday = msgDate.toDateString() === now.toDateString();
+  return isToday
+    ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 /** Derive the cache key for a given google_tokens cookie value. */
 function gmailKey(tokensCookie: string, accountId: GoogleAccountId) {
   const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
@@ -88,14 +114,7 @@ gmailRouter.get('/messages', async (req, res) => {
         const isUnread = labelIds.includes('UNREAD');
         const isUrgent = labelIds.includes('STARRED');
 
-        const msgDate = new Date(dateHeader);
-        const now = new Date();
-        const isToday = msgDate.toDateString() === now.toDateString();
-        const timeDisplay = isNaN(msgDate.getTime())
-          ? ''
-          : isToday
-            ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const receivedAt = getMessageReceivedAt(latestMsg.internalDate, dateHeader);
 
         return {
           accountId,
@@ -105,7 +124,8 @@ gmailRouter.get('/messages', async (req, res) => {
           sender: senderName,
           senderEmail,
           initials,
-          time: timeDisplay,
+          receivedAt,
+          time: formatEmailTime(receivedAt),
           subject,
           preview: threadRes.data.snippet ?? latestMsg.snippet ?? '',
           unread: isUnread,
@@ -261,14 +281,7 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
       const senderEmail = nameMatch?.[2] ?? fromHeader;
       const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
 
-      const msgDate = new Date(dateHeader);
-      const now = new Date();
-      const isToday = msgDate.toDateString() === now.toDateString();
-      const timeDisplay = isNaN(msgDate.getTime())
-        ? ''
-        : isToday
-          ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const receivedAt = getMessageReceivedAt(msg.internalDate, dateHeader);
 
       const labelIds = msg.labelIds ?? [];
       const isUnread = labelIds.includes('UNREAD');
@@ -281,7 +294,8 @@ gmailRouter.get('/thread/:threadId', threadLimiter, async (req, res) => {
         sender: senderName,
         senderEmail,
         initials,
-        time: timeDisplay,
+        receivedAt,
+        time: formatEmailTime(receivedAt),
         body: plain,
         bodyHtml: html,
         unread: isUnread,

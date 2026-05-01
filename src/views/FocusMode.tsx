@@ -116,7 +116,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     return count;
   }, [sessionsData]);
 
-  const { events, mode: calendarMode, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
+  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents();
   useCalendarNotifications(events, isCalendarConnected);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -211,7 +211,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     const meta = FOCUS_EVENT_META[item.state];
     const isCurrent = item.state === 'current';
     const isPast = item.state === 'past';
-    const timeLabel = formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today');
+    const timeLabel = formatCalendarEventTime(item, 'today');
 
     if (isCurrent) {
       return (
@@ -339,15 +339,15 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
       ...[...scheduleGroups.current].sort((a, b) => a.sortMs - b.sortMs),
       ...[...scheduleGroups.allDay].sort((a, b) => a.sortMs - b.sortMs),
     ];
-    const nextItems = calendarMode === 'upcoming' ? scheduleGroups.primary : scheduleGroups.upcoming;
+    const nextItems = scheduleGroups.upcoming;
     const hasInsertedIndicator = scheduleGroups.displayable.length > 0;
 
     return (
       <>
-        {calendarMode !== 'upcoming' && scheduleGroups.earlier.length > 0 && (
+        {scheduleGroups.earlier.length > 0 && (
           <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Done</div>
         )}
-        {calendarMode !== 'upcoming' && scheduleGroups.earlier.map(renderTimelineEvent)}
+        {scheduleGroups.earlier.map(renderTimelineEvent)}
 
         {hasInsertedIndicator && (
           <div className="relative pl-12 mb-8 flex items-center gap-3">
@@ -371,14 +371,14 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           </div>
         )}
 
-        {calendarMode !== 'upcoming' && nowItems.length > 0 && (
+        {nowItems.length > 0 && (
           <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Now</div>
         )}
-        {calendarMode !== 'upcoming' && nowItems.map(renderTimelineEvent)}
+        {nowItems.map(renderTimelineEvent)}
 
         {nextItems.length > 0 && (
           <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">
-            {calendarMode === 'upcoming' ? 'Upcoming' : 'Next'}
+            Next
           </div>
         )}
         {nextItems.map(renderTimelineEvent)}
@@ -386,7 +386,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         <div className="relative pl-12 mt-4 mb-8 opacity-40">
           <div className="absolute left-[16px] top-1 w-4 h-4 rounded-full border-2 border-dashed border-white/40 bg-transparent z-10"></div>
           <div className="text-xs text-text-muted italic font-medium">
-            {calendarMode === 'upcoming' ? 'End of upcoming window' : 'End of scheduled day'}
+            End of scheduled day
           </div>
         </div>
       </>
@@ -453,7 +453,7 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           <div className="p-6 pb-2 z-30 bg-background-elevated/50 backdrop-blur-md border-b border-white/5">
             <h2 className="font-heading text-2xl font-semibold text-slate-100">Timeline</h2>
             <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">
-              {calendarMode === 'upcoming' ? 'Upcoming' : 'Today'}
+              Today
             </p>
           </div>
           <div className="flex-1 overflow-y-auto relative px-6 py-12">
