@@ -51,15 +51,15 @@
   .glass-panel {
     background: linear-gradient(
       155deg,
-      rgba(255, 255, 255, 0.055) 0%,
-      rgba(255, 255, 255, 0.02) 45%,
-      rgba(6, 7, 13, 0.45) 100%
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.018) 45%,
+      rgba(6, 7, 13, 0.38) 100%
     );
     border: 1px solid color-mix(in oklab, white 10%, transparent);
     box-shadow:
-      0 16px 48px rgba(0, 0, 0, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(18px) saturate(1.25);
+      0 12px 34px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(16px) saturate(1.12);
     border-radius: 1rem;
   }
 
@@ -78,21 +78,21 @@
 
   .neon-text-glow {
     text-shadow:
-      0 0 14px rgba(56, 189, 248, 0.55),
-      0 0 32px rgba(56, 189, 248, 0.28);
+      0 0 10px rgba(56, 189, 248, 0.34),
+      0 0 22px rgba(56, 189, 248, 0.16);
   }
 
   .shadow-glow {
     box-shadow:
-      0 0 18px rgba(56, 189, 248, 0.45),
-      0 0 36px rgba(56, 189, 248, 0.18);
+      0 0 12px rgba(56, 189, 248, 0.32),
+      0 0 24px rgba(56, 189, 248, 0.12);
   }
 
   .glow-border {
-    border-color: rgba(56, 189, 248, 0.42);
+    border-color: rgba(56, 189, 248, 0.32);
     box-shadow:
-      inset 0 0 22px rgba(56, 189, 248, 0.08),
-      0 0 26px rgba(56, 189, 248, 0.14);
+      inset 0 0 18px rgba(56, 189, 248, 0.055),
+      0 0 18px rgba(56, 189, 248, 0.1);
   }
 
   .custom-scrollbar::-webkit-scrollbar {

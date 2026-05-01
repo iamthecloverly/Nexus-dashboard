@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { parseISO, isBefore, isAfter, differenceInMinutes, startOfDay, differenceInCalendarDays, format } from 'date-fns';
+import { parseISO, isBefore, differenceInMinutes, startOfDay, differenceInCalendarDays, format } from 'date-fns';
 
 import { Task, TaskPriority } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
 import { useEmailContext } from '../contexts/emailContext';
-import { CalendarEvent } from '../types/calendar';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
@@ -17,6 +16,11 @@ import { SystemMetricsTile } from '../components/dashboard/SystemMetricsTile';
 import { DashboardDigestCard } from '../components/dashboard/DashboardDigestCard';
 import { TagInput } from '../components/TagInput';
 import type { SetViewFn } from '../config/navigation';
+import {
+  formatCalendarEventTime,
+  splitCalendarEvents,
+  type CalendarDisplayItem,
+} from '../lib/calendarDisplay';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -114,12 +118,34 @@ interface MainHubProps {
   externalCalendarRefreshTrigger?: number;
 }
 
+const SCHEDULE_STATUS_META: Record<CalendarDisplayItem['state'], { label: string; dot: string; pill: string; text: string }> = {
+  allDay: {
+    label: 'All day',
+    dot: 'bg-sky-300/70 border border-sky-200/40',
+    pill: 'border-sky-300/20 bg-sky-300/10 text-sky-200',
+    text: 'text-sky-200',
+  },
+  current: {
+    label: 'Now',
+    dot: 'bg-primary shadow-[0_0_10px_rgba(56,189,248,0.45)]',
+    pill: 'border-primary/25 bg-primary/10 text-primary',
+    text: 'text-primary',
+  },
+  upcoming: {
+    label: 'Next',
+    dot: 'bg-white/15 border border-white/25',
+    pill: 'border-white/10 bg-white/[0.04] text-text-muted',
+    text: 'text-text-muted',
+  },
+  past: {
+    label: 'Done',
+    dot: 'bg-white/10 border border-white/15',
+    pill: 'border-white/10 bg-white/[0.03] text-text-muted/80',
+    text: 'text-text-muted/80',
+  },
+};
+
 export default function MainHub({ setCurrentView, externalQuickAddTrigger, externalCalendarRefreshTrigger }: MainHubProps) {
-  const fmtTime = useMemo(() => new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }), []);
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
   const { state: { emailsByAccount, connectedByAccount, serverErrorByAccount } } = useEmailContext();
   const emails = emailsByAccount.primary;
@@ -193,15 +219,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   useCalendarNotifications(events, isCalendarConnected && notificationsGranted);
   useTaskNotifications(tasks, notificationsGranted);
 
-  // Pre-sort events once per fetch (avoids re-sorting on every `currentTime` tick).
-  const sortedEvents = useMemo(() => {
-    if (!events || events.length === 0) return [];
-    return [...events].sort((a, b) => {
-      const as = a.start.dateTime ? parseISO(a.start.dateTime) : parseISO(a.start.date ?? '');
-      const bs = b.start.dateTime ? parseISO(b.start.dateTime) : parseISO(b.start.date ?? '');
-      return as.getTime() - bs.getTime();
-    });
-  }, [events]);
+  const scheduleGroups = useMemo(() => splitCalendarEvents(events, currentTime), [events, currentTime]);
 
   // GitHub
   const [githubNotifs, setGithubNotifs] = useState<GithubNotification[]>([]);
@@ -227,6 +245,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [showEarlierEvents, setShowEarlierEvents] = useState(false);
 
   // Task inline edit
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -258,24 +277,22 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   /** Next calendar line for digest (upcoming / now / all-day). */
   const digestNextEventSnippet = useMemo(() => {
-    if (!isCalendarConnected || calendarError || sortedEvents.length === 0) return null;
-    const now = currentTime;
-    for (const ev of sortedEvents) {
-      const allDay = !ev.start.dateTime;
-      const start = ev.start.dateTime ? parseISO(ev.start.dateTime) : parseISO(ev.start.date ?? '');
-      const end = ev.end.dateTime ? parseISO(ev.end.dateTime) : parseISO(ev.end.date ?? '');
-      if (!isAfter(end, now)) continue;
-      const title = ((ev.summary || '').trim()) || 'Busy';
-      if (allDay) return `${title} · All day`;
-      if (isBefore(start, now) && isAfter(end, now)) return `${title} · Now`;
-      if (!isBefore(start, now)) {
-        const mins = differenceInMinutes(start, now);
-        if (mins >= 0 && mins < 90) return `${title} · in ${mins} min`;
-        return `${title} · ${fmtTime.format(start)}`;
-      }
+    if (!isCalendarConnected || calendarError || scheduleGroups.displayable.length === 0) return null;
+    const item =
+      scheduleGroups.current[0] ??
+      scheduleGroups.upcoming[0] ??
+      scheduleGroups.allDay[0];
+    if (!item) return null;
+
+    if (item.state === 'current') return `${item.title} · Now`;
+    if (item.state === 'allDay') {
+      return `${item.title} · ${formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today')}`;
     }
-    return null;
-  }, [sortedEvents, currentTime, isCalendarConnected, calendarError, fmtTime]);
+
+    const mins = differenceInMinutes(item.start, currentTime);
+    if (mins >= 0 && mins < 90) return `${item.title} · in ${mins} min`;
+    return `${item.title} · ${formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today')}`;
+  }, [scheduleGroups, currentTime, isCalendarConnected, calendarError, calendarMode]);
 
   // currentTime used only for event isCurrent/isPast — 10s is sufficient precision
   useEffect(() => {
@@ -389,66 +406,127 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     return () => window.removeEventListener('keydown', handler);
   }, [showSchedule]);
 
-  const renderEvent = useCallback((event: CalendarEvent) => {
-    const startTime = event.start.dateTime ? parseISO(event.start.dateTime) : parseISO(event.start.date ?? '');
-    const endTime = event.end.dateTime ? parseISO(event.end.dateTime) : parseISO(event.end.date ?? '');
-    const isAllDay = !event.start.dateTime;
-    const isPast = isBefore(endTime, currentTime) && !isAllDay;
-    const isCurrent = isBefore(startTime, currentTime) && isAfter(endTime, currentTime) && !isAllDay;
+  useEffect(() => {
+    setShowEarlierEvents(false);
+  }, [events, calendarMode]);
+
+  const renderScheduleItem = useCallback((
+    item: CalendarDisplayItem,
+    opts: { timeMode?: 'today' | 'upcoming'; compact?: boolean } = {},
+  ) => {
+    const meta = SCHEDULE_STATUS_META[item.state];
+    const isPast = item.state === 'past';
+    const isCurrent = item.state === 'current';
+    const timeLabel = formatCalendarEventTime(item, opts.timeMode ?? 'today');
 
     return (
-      <div key={event.id} className={`relative pl-8 transition-opacity ${isPast ? 'opacity-35' : ''}`}>
-        {/* Current-time bar — anchored to the very left of the outer container */}
+      <div
+        key={item.event.id}
+        className={`relative pl-8 ${opts.compact ? 'py-0.5' : 'py-1'} ${isPast ? 'text-foreground/60' : 'text-foreground'}`}
+      >
         {isCurrent && (
           <div
-            className="absolute -left-6 top-1/2 -translate-y-1/2 w-[3px] h-9 bg-primary rounded-full shadow-glow"
+            className="absolute -left-6 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-full bg-primary shadow-[0_0_12px_rgba(56,189,248,0.35)]"
             aria-hidden="true"
           />
         )}
-        {/* Timeline dot */}
-        <div
-          className={`absolute -left-[3px] top-[5px] w-[7px] h-[7px] rounded-full transition-colors ${
-            isCurrent
-              ? 'bg-primary shadow-glow'
-              : isPast
-                ? 'bg-white/15'
-                : 'bg-white/10 border border-white/20'
-          }`}
-          aria-hidden="true"
-        />
-        {/* Time label */}
-        <p className={`text-[11px] font-mono mb-0.5 ${isCurrent ? 'text-primary font-semibold' : 'text-text-muted'}`}>
-          {isAllDay
-            ? 'All Day'
-            : `${fmtTime.format(startTime)} – ${fmtTime.format(endTime)}${isCurrent ? ' • Now' : ''}`}
-        </p>
-        {/* Event title */}
-        <p className={`text-sm font-semibold leading-snug ${isPast ? 'text-foreground/50' : 'text-foreground'}`}>
-          {event.summary || 'Busy'}
+        <div className={`absolute -left-[3px] top-[9px] h-[7px] w-[7px] rounded-full ${meta.dot}`} aria-hidden="true" />
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`text-[11px] font-mono ${meta.text}`}>
+            {timeLabel}
+          </p>
+          <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>
+            {meta.label}
+          </span>
+        </div>
+        <p className={`mt-1 text-sm font-semibold leading-snug ${isPast ? 'text-foreground/55' : 'text-foreground'}`}>
+          {item.title}
         </p>
       </div>
     );
-  }, [currentTime, fmtTime]);
+  }, []);
 
   const renderDateHeader = useCallback((dateKey: string) => {
-    // dateKey is YYYY-MM-DD in local time; render as "Wed · Apr 29"
     const d = parseISO(dateKey);
     const label = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
     return (
-      <div key={`hdr:${dateKey}`} className="pt-2">
-        <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-text-muted/80">
+      <div key={`hdr:${dateKey}`} className="pt-1">
+        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/90">
           {label}
         </div>
       </div>
     );
   }, []);
 
-  const eventDateKey = useCallback((event: CalendarEvent): string => {
-    // Use start date in local time for grouping.
-    if (event.start.date) return event.start.date;
-    if (event.start.dateTime) return format(parseISO(event.start.dateTime), 'yyyy-MM-dd');
-    return format(new Date(), 'yyyy-MM-dd');
-  }, []);
+  const renderScheduleSection = useCallback((
+    label: string,
+    items: CalendarDisplayItem[],
+    opts: { compact: boolean; timeMode?: 'today' | 'upcoming' },
+  ) => {
+    if (items.length === 0) return null;
+    return (
+      <section className={opts.compact ? 'space-y-3' : 'space-y-4'} aria-label={label}>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/90">{label}</span>
+          <span className="h-px flex-1 bg-white/10" aria-hidden="true" />
+        </div>
+        <div className={opts.compact ? 'space-y-5' : 'space-y-6'}>
+          {items.map(item => renderScheduleItem(item, { compact: opts.compact, timeMode: opts.timeMode }))}
+        </div>
+      </section>
+    );
+  }, [renderScheduleItem]);
+
+  const renderEarlierSection = useCallback((opts: { compact: boolean }) => {
+    const count = scheduleGroups.earlier.length;
+    if (count === 0) return null;
+    const expanded = !opts.compact || showEarlierEvents;
+
+    return (
+      <section className="space-y-4" aria-label="Earlier today">
+        {opts.compact ? (
+          <button
+            type="button"
+            onClick={() => setShowEarlierEvents(v => !v)}
+            className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-left text-text-muted hover:border-white/15 hover:bg-white/[0.045] hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            aria-expanded={expanded}
+          >
+            <span className="text-[10px] font-mono uppercase tracking-[0.18em]">Earlier today</span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono">{count} done</span>
+            <span className="ml-auto material-symbols-outlined !text-[18px]" aria-hidden="true">
+              {expanded ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/90">Earlier today</span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-text-muted">{count} done</span>
+            <span className="h-px flex-1 bg-white/10" aria-hidden="true" />
+          </div>
+        )}
+
+        {expanded && (
+          <div className="space-y-5">
+            {scheduleGroups.earlier.map(item => renderScheduleItem(item, { compact: opts.compact }))}
+          </div>
+        )}
+      </section>
+    );
+  }, [renderScheduleItem, scheduleGroups.earlier, showEarlierEvents]);
+
+  const renderGroupedUpcoming = useCallback((items: CalendarDisplayItem[], opts: { compact: boolean }) => {
+    if (items.length === 0) return null;
+    const out: React.ReactNode[] = [];
+    let lastKey: string | null = null;
+    for (const item of items) {
+      if (item.dateKey !== lastKey) {
+        out.push(renderDateHeader(item.dateKey));
+        lastKey = item.dateKey;
+      }
+      out.push(renderScheduleItem(item, { compact: opts.compact, timeMode: 'today' }));
+    }
+    return out;
+  }, [renderDateHeader, renderScheduleItem]);
 
   const renderCalendarBody = useCallback((opts: { compact: boolean }) => {
     if (isLoadingEvents) {
@@ -572,7 +650,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    if (sortedEvents.length === 0) {
+    if (scheduleGroups.displayable.length === 0) {
       const debugHref = (() => {
         try {
           const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -591,7 +669,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       })();
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-2 ${wrapClass}`}>
-          <p className="text-sm text-text-muted">No events today.</p>
+          <span className="material-symbols-outlined text-3xl text-text-muted/70" aria-hidden="true">event_available</span>
+          <p className="text-sm text-foreground/90 font-medium">No events today</p>
           <button
             onClick={goIntegrations}
             className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
@@ -612,30 +691,60 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       );
     }
 
-    if (calendarMode !== 'upcoming') return sortedEvents.map(renderEvent);
-
-    // Upcoming mode: group with date headers so it’s obvious which day each event belongs to.
-    const out: React.ReactNode[] = [];
-    let lastKey: string | null = null;
-    for (const ev of sortedEvents) {
-      const key = eventDateKey(ev);
-      if (key !== lastKey) {
-        out.push(renderDateHeader(key));
-        lastKey = key;
-      }
-      out.push(renderEvent(ev));
+    if (calendarMode === 'upcoming') {
+      return (
+        <>
+          {opts.compact && (
+            <div className="rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2 text-[11px] text-primary/90">
+              Today is clear. Showing the next 7 days.
+            </div>
+          )}
+          <div className={opts.compact ? 'space-y-5' : 'space-y-6'}>
+            {renderGroupedUpcoming(scheduleGroups.primary, opts)}
+          </div>
+        </>
+      );
     }
-    return out;
+
+    const nowItems = [
+      ...[...scheduleGroups.current].sort((a, b) => a.sortMs - b.sortMs),
+      ...[...scheduleGroups.allDay].sort((a, b) => a.sortMs - b.sortMs),
+    ];
+    const primaryLimit = opts.compact ? 4 : Number.POSITIVE_INFINITY;
+    const shownUpcoming = scheduleGroups.upcoming.slice(0, primaryLimit);
+    const hiddenUpcomingCount = Math.max(0, scheduleGroups.upcoming.length - shownUpcoming.length);
+
+    return (
+      <>
+        {nowItems.length === 0 && shownUpcoming.length === 0 && scheduleGroups.earlier.length > 0 && (
+          <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-[11px] text-text-muted">
+            No more events today.
+          </div>
+        )}
+        {renderScheduleSection('Now', nowItems, { compact: opts.compact })}
+        {renderScheduleSection('Next', shownUpcoming, { compact: opts.compact })}
+        {opts.compact && hiddenUpcomingCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowSchedule(true)}
+            className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-left text-xs font-medium text-primary hover:bg-white/[0.05] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            {hiddenUpcomingCount} more today
+          </button>
+        )}
+        {renderEarlierSection(opts)}
+      </>
+    );
   }, [
     isLoadingEvents,
-    sortedEvents,
+    scheduleGroups,
     calendarMode,
     isCalendarConnected,
     calendarError,
     fetchEvents,
-    renderEvent,
-    eventDateKey,
-    renderDateHeader,
+    renderScheduleSection,
+    renderGroupedUpcoming,
+    renderEarlierSection,
     setCurrentView,
     setShowSchedule,
   ]);
@@ -699,29 +808,30 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           />
 
           {/* Calendar Widget */}
-          <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-8 flex flex-col relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/80 via-primary/30 to-transparent pointer-events-none"></div>
-            <div className="flex justify-between items-center mb-8">
+          <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-6 flex flex-col relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/55 via-primary/20 to-transparent pointer-events-none" />
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
               <button
                 onClick={() => setShowSchedule(true)}
                 className="font-heading text-xl text-foreground flex items-center gap-3 hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                 aria-label="Open full schedule"
               >
                 <span className="material-symbols-outlined text-primary text-[24px]" aria-hidden="true">event_note</span>
-                Schedule
-                {isCalendarConnected && !calendarError && calendarMode === 'upcoming' && (
-                  <span className="ml-1 text-[10px] font-mono uppercase tracking-[0.22em] text-text-muted bg-white/5 border border-white/10 px-2 py-1 rounded-full">
-                    Upcoming
+                <span>Schedule</span>
+                {isCalendarConnected && !calendarError && (
+                  <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted bg-white/[0.04] border border-white/10 px-2 py-1 rounded-full">
+                    {calendarMode === 'upcoming' ? 'Upcoming' : `${scheduleGroups.primary.length} open`}
                   </span>
                 )}
               </button>
-              <div className="flex items-center gap-1">
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {googleAccounts.secondary && (
-                  <div className="mr-2 flex items-center rounded-full border border-white/10 bg-white/5 p-0.5">
+                  <div className="flex items-center rounded-full border border-white/10 bg-white/[0.035] p-0.5">
                     <button
                       type="button"
                       onClick={() => setCalendarAccount('primary')}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.18em] transition-colors ${calendarAccount === 'primary' ? 'bg-white/10 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.16em] transition-colors ${calendarAccount === 'primary' ? 'bg-white/12 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
                       aria-pressed={calendarAccount === 'primary'}
                     >
                       Primary
@@ -729,19 +839,32 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                     <button
                       type="button"
                       onClick={() => setCalendarAccount('secondary')}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.18em] transition-colors ${calendarAccount === 'secondary' ? 'bg-white/10 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.16em] transition-colors ${calendarAccount === 'secondary' ? 'bg-white/12 text-foreground' : 'text-text-muted hover:text-foreground/80'}`}
                       aria-pressed={calendarAccount === 'secondary'}
                     >
                       Secondary
                     </button>
                   </div>
                 )}
-                <div className="flex items-center gap-0.5 bg-white/5 border border-white/8 rounded-full p-0.5">
-                  <button onClick={fetchEvents} aria-label="Refresh calendar" className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span></button>
-                <div className="relative" ref={calendarMenuRef}>
-                  <button onClick={() => setShowCalendarMenu(v => !v)} aria-label="Calendar options" aria-expanded={showCalendarMenu} className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><span className="material-symbols-outlined !text-sm" aria-hidden="true">more_vert</span></button>
+
+                <div className="relative flex items-center gap-0.5 bg-white/[0.035] border border-white/10 rounded-full p-0.5" ref={calendarMenuRef}>
+                  <button
+                    onClick={fetchEvents}
+                    aria-label="Refresh calendar"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined !text-[17px]" aria-hidden="true">refresh</span>
+                  </button>
+                  <button
+                    onClick={() => setShowCalendarMenu(v => !v)}
+                    aria-label="Calendar options"
+                    aria-expanded={showCalendarMenu}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined !text-[17px]" aria-hidden="true">more_vert</span>
+                  </button>
                   {showCalendarMenu && (
-                    <div className="absolute top-8 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[200px]">
+                    <div className="absolute top-10 right-0 z-50 glass-panel rounded-lg overflow-hidden border border-white/10 shadow-xl min-w-[240px]">
                       {calendarList.length > 0 && (
                         <div className="px-3 pt-3 pb-2 border-b border-white/10">
                           <p className="text-[10px] text-text-muted font-mono uppercase tracking-[0.22em] mb-1.5">View</p>
@@ -846,23 +969,24 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         onClick={() => setShowCalendarMenu(false)}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined !text-sm">open_in_new</span>
+                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">open_in_new</span>
                         Open Google Calendar
                       </a>
                     </div>
                   )}
                 </div>
-                </div>
+
                 <button
                   onClick={() => setCurrentView('FocusMode')}
-                  className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/10 px-3 py-2 rounded-full hover:bg-primary/20 transition-colors border border-primary/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  Focus Mode
+                  <span className="material-symbols-outlined !text-[15px]" aria-hidden="true">center_focus_strong</span>
+                  Focus
                 </button>
               </div>
             </div>
-            <div className="relative flex-1 flex flex-col gap-7 pl-6">
-              <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
+            <div className="relative flex-1 flex flex-col gap-6 pl-6">
+              <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-white/10" />
               {renderCalendarBody({ compact: true })}
             </div>
           </div>
@@ -1046,7 +1170,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <p className="text-xs text-text-muted group-hover/box:text-foreground transition-colors">Connect Gmail to see your inbox.</p>
               )}
             </div>
-            <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-3xl group-hover/box:bg-primary/20 transition-colors duration-700" aria-hidden="true"></div>
           </button>
 
           {/* GitHub Notifications — only shown when connected */}

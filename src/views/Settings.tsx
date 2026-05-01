@@ -249,7 +249,6 @@ export default function Settings({
             <div className="p-4 rounded-lg bg-white/5 border border-white/5">
               <SystemMetricsDisplay cpuLoad={cpuLoad} memUsed={memUsed} />
             </div>
-            <p className="text-[10px] text-text-muted mt-2">Live stats from this machine via the app server (one shared poll).</p>
           </section>
 
           {/* Connected accounts */}

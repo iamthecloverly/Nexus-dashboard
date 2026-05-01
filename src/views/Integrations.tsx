@@ -198,7 +198,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   };
 
   const ConnectedBadge = () => (
-    <div className="px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-bold uppercase tracking-wider">
+    <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/25 text-green-400 text-xs font-bold uppercase tracking-wider">
       Connected
     </div>
   );
@@ -207,7 +207,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
     <button
       onClick={onClick}
       aria-label={`Connect ${service}`}
-      className="px-4 py-1.5 rounded-full bg-primary text-background-dark text-xs font-bold hover:bg-primary/90 transition-colors shadow-[0_0_14px_rgba(56,189,248,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      className="px-4 py-1.5 rounded-full bg-primary text-background-dark text-xs font-bold hover:bg-primary/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
       Connect
     </button>
@@ -218,10 +218,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
       <div className="glass-panel w-full max-w-[1000px] flex-1 min-h-0 mx-auto flex flex-col rounded-xl relative overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-6 border-b border-white/10 bg-background-elevated/55 shrink-0">
-          <div>
-            <h1 className="font-heading font-semibold text-2xl text-foreground">Integrations</h1>
-            <p className="text-sm text-text-muted mt-1">Connect your external tools and services.</p>
-          </div>
+          <h1 className="font-heading font-semibold text-2xl text-foreground">Integrations</h1>
           <button
             onClick={() => setCurrentView('MainHub')}
             aria-label="Close integrations"
@@ -236,8 +233,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* Google Calendar + Gmail */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-colors"></div>
+            <div className="p-6 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.065] transition-colors group relative overflow-hidden">
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-lg">
                   <span className="material-symbols-outlined text-blue-500 text-3xl" aria-hidden="true">calendar_today</span>
@@ -264,8 +260,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
             </div>
 
             {/* Google (Secondary) */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-colors"></div>
+            <div className="p-6 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.065] transition-colors group relative overflow-hidden">
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-lg">
                   <span className="material-symbols-outlined text-blue-500 text-3xl" aria-hidden="true">inbox</span>
@@ -292,8 +287,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
             </div>
 
             {/* GitHub */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-gray-500/20 transition-colors"></div>
+            <div className="p-6 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.065] transition-colors group relative overflow-hidden">
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-[#24292F] flex items-center justify-center shadow-lg">
                   <span className="text-white font-bold text-xl">GH</span>
@@ -375,8 +369,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
             </div>
 
             {/* Discord */}
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-colors group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-purple-500/20 transition-colors"></div>
+            <div className="p-6 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.065] transition-colors group relative overflow-hidden">
               <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="w-12 h-12 rounded-lg bg-[#5865F2] flex items-center justify-center shadow-lg">
                   <span className="text-white font-bold text-xl">D</span>

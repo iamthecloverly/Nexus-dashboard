@@ -21,7 +21,7 @@ const WeatherGlyph = memo(function WeatherGlyph({ code }: { code: number | null 
   const name = weatherMaterialIconName(code);
   return (
     <span
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-[36px] leading-none text-primary material-symbols-outlined"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[36px] leading-none text-primary material-symbols-outlined"
       aria-hidden="true"
     >
       {name}
@@ -169,10 +169,10 @@ export function DashboardDigestCard({
 
   return (
     <section
-      className="glass-panel col-span-full p-5 flex flex-col gap-4 relative overflow-hidden min-h-0"
+      className="glass-panel col-span-full p-4 flex flex-col gap-3 relative overflow-hidden min-h-0"
       aria-label="Dashboard digest"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/70 via-primary/40 to-violet-400/40" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/50 via-primary/25 to-violet-400/25" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -182,15 +182,12 @@ export function DashboardDigestCard({
             </span>
             At a glance
           </h2>
-          <p className="text-[11px] text-text-muted mt-0.5 max-w-xl">
-            Quick read on mail, GitHub, Discord, weather, calendar, and tasks. Empty sections stay hidden until you connect services.
-          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {showCalendarRow && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex gap-3 items-start sm:col-span-2 lg:col-span-2">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex gap-3 items-start sm:col-span-2 lg:col-span-2">
             <span className="material-symbols-outlined text-primary shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
               calendar_clock
             </span>
@@ -217,7 +214,7 @@ export function DashboardDigestCard({
             onClick={() => {
               document.getElementById('main-tasks-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
-            className="text-left rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3 items-start"
+            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3 items-start"
           >
             <span className="material-symbols-outlined text-emerald-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
               task_alt
@@ -234,7 +231,7 @@ export function DashboardDigestCard({
           <button
             type="button"
             onClick={() => setCurrentView('Communications')}
-            className="text-left rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
+            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
           >
             <span className="material-symbols-outlined text-orange-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
               mail
@@ -253,7 +250,7 @@ export function DashboardDigestCard({
           <button
             type="button"
             onClick={() => setCurrentView('Integrations')}
-            className="text-left rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
+            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
           >
             <GithubMark className="h-5 w-5 shrink-0 mt-0.5 text-text-muted" />
             <div className="min-w-0 flex-1">
@@ -265,7 +262,7 @@ export function DashboardDigestCard({
         )}
 
         {showDiscord && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex gap-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex gap-3">
             <span className="material-symbols-outlined text-indigo-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
               chat_bubble
             </span>
@@ -278,7 +275,7 @@ export function DashboardDigestCard({
         )}
 
         {showWeatherTile && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-row items-center gap-3 min-h-[88px]">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex flex-row items-center gap-3 min-h-[88px]">
             {loading && !data ? (
               <div className="flex items-center gap-3 w-full justify-center py-1 text-text-muted text-sm">
                 <span className="material-symbols-outlined animate-spin shrink-0 text-[22px]" aria-hidden="true">
@@ -361,7 +358,7 @@ export function DashboardDigestCard({
 
       {/* AI Daily Brief — only shown when AI is configured */}
       {aiConfigured && (
-        <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 flex gap-3 items-start">
+        <div className="rounded-lg border border-violet-500/15 bg-violet-500/[0.035] p-4 flex gap-3 items-start">
           <span className="material-symbols-outlined text-violet-400 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
             auto_awesome
           </span>
@@ -412,9 +409,7 @@ export function DashboardDigestCard({
                 <p className="text-xs text-red-400">{briefError}</p>
               )
             ) : (
-              <p className="text-xs text-text-muted italic">
-                Click Generate for a 2–3 sentence AI summary of your day.
-              </p>
+              <p className="text-xs text-text-muted">No brief yet.</p>
             )}
           </div>
         </div>

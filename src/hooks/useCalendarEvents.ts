@@ -2,16 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { splitCalendarEvents } from '../lib/calendarDisplay';
 
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
-function calendarDayInTimeZone(timeZone: string): string {
+function calendarDayInTimeZone(timeZone: string, date = new Date()): string {
   const dtf = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   });
-  const parts = dtf.formatToParts(new Date());
+  const parts = dtf.formatToParts(date);
   let y = '';
   let m = '';
   let d = '';
@@ -22,6 +23,22 @@ function calendarDayInTimeZone(timeZone: string): string {
   }
   if (!y || !m || !d) return '';
   return `${y}-${m}-${d}`;
+}
+
+function localCalendarDayStamp(date = new Date()): string {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const day = timeZone ? calendarDayInTimeZone(timeZone, date) : '';
+    return timeZone && day ? `${timeZone}:${day}` : date.toDateString();
+  } catch {
+    return date.toDateString();
+  }
+}
+
+function msUntilNextLocalDay(now = new Date()): number {
+  const next = new Date(now);
+  next.setHours(24, 0, 5, 0);
+  return Math.max(1_000, next.getTime() - now.getTime());
 }
 
 function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}): string {
@@ -106,6 +123,7 @@ export function useCalendarEvents(): CalendarState {
   const [error, setError] = useState<CalendarError | null>(null);
   const [mode, setMode] = useState<'today' | 'upcoming'>('today');
   const requestSeqRef = useRef(0);
+  const lastFetchedDayRef = useRef<string | null>(null);
 
   const initAccountId: 'primary' | 'secondary' = (() => {
     const v = localStorage.getItem(STORAGE_KEYS.calendarAccount);
@@ -138,6 +156,7 @@ export function useCalendarEvents(): CalendarState {
 
   const refetch = useCallback(async () => {
     const requestId = ++requestSeqRef.current;
+    const requestDayStamp = localCalendarDayStamp();
     const isStale = () => requestId !== requestSeqRef.current;
     setIsLoading(true);
     setError(null);
@@ -148,6 +167,7 @@ export function useCalendarEvents(): CalendarState {
       };
       const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts), { timeoutMs: 15_000 });
       if (isStale()) return;
+      lastFetchedDayRef.current = requestDayStamp;
       if ('error' in result) {
         const err = result.error;
         setMode('today');
@@ -178,15 +198,18 @@ export function useCalendarEvents(): CalendarState {
         }
       } else {
         const todays = result.data.events ?? [];
-        if (todays.length === 0) {
-          // UX: if there's nothing today, show upcoming events so the tile isn't blank.
+        const todaySplit = splitCalendarEvents(todays, new Date());
+        if (!todaySplit.hasRemainingToday) {
+          // UX: once today is done, show the next useful events without hiding earlier-today history when fallback is empty.
           const upcoming = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarUpcomingUrl(7, opts), { timeoutMs: 15_000 });
           if (isStale()) return;
           if (!('error' in upcoming)) {
-            setEvents(upcoming.data.events ?? []);
-            setMode('upcoming');
+            const upcomingEvents = upcoming.data.events ?? [];
+            const upcomingSplit = splitCalendarEvents(upcomingEvents, new Date());
+            setEvents(upcomingSplit.displayable.length > 0 ? upcomingEvents : todays);
+            setMode(upcomingSplit.displayable.length > 0 ? 'upcoming' : 'today');
           } else {
-            setEvents([]);
+            setEvents(todays);
             setMode('today');
           }
         } else {
@@ -197,6 +220,7 @@ export function useCalendarEvents(): CalendarState {
       }
     } catch {
       if (isStale()) return;
+      lastFetchedDayRef.current = requestDayStamp;
       setIsConnected(false);
       setError('network_error');
       setMode('today');
@@ -206,6 +230,36 @@ export function useCalendarEvents(): CalendarState {
   }, [accountId, includedCalendarIds, mainCalendarId]);
 
   useEffect(() => { refetch(); }, [refetch]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let timeoutId: number | undefined;
+
+    const scheduleNextRollover = () => {
+      timeoutId = window.setTimeout(() => {
+        refetch();
+        scheduleNextRollover();
+      }, msUntilNextLocalDay());
+    };
+
+    scheduleNextRollover();
+    return () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [refetch]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      const fetchedDay = lastFetchedDayRef.current;
+      if (fetchedDay && fetchedDay !== localCalendarDayStamp()) refetch();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetch]);
 
   return {
     events,
@@ -222,3 +276,9 @@ export function useCalendarEvents(): CalendarState {
     refetch,
   };
 }
+
+export const __testOnly = {
+  calendarDayInTimeZone,
+  localCalendarDayStamp,
+  msUntilNextLocalDay,
+};

@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { format, parseISO, isBefore, isAfter } from 'date-fns';
+import { format } from 'date-fns';
 
 import { Task } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
-import { CalendarEvent } from '../types/calendar';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
 import type { SetViewFn } from '../config/navigation';
+import {
+  formatCalendarEventTime,
+  splitCalendarEvents,
+  type CalendarDisplayItem,
+} from '../lib/calendarDisplay';
 
 /** Timer presets. `isBreak` determines cosmetic colour in the UI. */
 const PRESETS = [
@@ -17,6 +21,29 @@ const PRESETS = [
 ] as const;
 
 const POMODORO_KEY = 'dashboard_pomodoro_sessions';
+
+const FOCUS_EVENT_META: Record<CalendarDisplayItem['state'], { label: string; dot: string; pill: string }> = {
+  allDay: {
+    label: 'All day',
+    dot: 'bg-sky-300/70 border border-sky-200/40',
+    pill: 'border-sky-300/20 bg-sky-300/10 text-sky-200',
+  },
+  current: {
+    label: 'Now',
+    dot: 'bg-primary shadow-[0_0_10px_rgba(56,189,248,0.45)]',
+    pill: 'border-primary/25 bg-primary/10 text-primary',
+  },
+  upcoming: {
+    label: 'Next',
+    dot: 'bg-white/15 border border-white/25',
+    pill: 'border-white/10 bg-white/[0.04] text-text-muted',
+  },
+  past: {
+    label: 'Done',
+    dot: 'bg-white/10 border border-white/15',
+    pill: 'border-white/10 bg-white/[0.03] text-text-muted/80',
+  },
+};
 
 function todayKey(): string {
   return format(new Date(), 'yyyy-MM-dd');
@@ -178,70 +205,53 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     return { remainingTasks: remaining, nowTasks: now, nextTasks: next };
   }, [tasks]);
 
-  const getEventTimes = (event: CalendarEvent) => {
-    const startTime = event.start.dateTime
-      ? parseISO(event.start.dateTime)
-      : parseISO(event.start.date ?? '');
-    const endTime = event.end.dateTime
-      ? parseISO(event.end.dateTime)
-      : parseISO(event.end.date ?? '');
-    return { startTime, endTime };
-  };
+  const scheduleGroups = useMemo(() => splitCalendarEvents(events, currentTime), [events, currentTime]);
 
-  const renderTimelineEvent = (event: CalendarEvent) => {
-    const { startTime, endTime } = getEventTimes(event);
-    const isAllDay = !event.start.dateTime;
-    const isPast = !isAllDay && isBefore(endTime, currentTime);
-    const isCurrent = !isAllDay && isBefore(startTime, currentTime) && isAfter(endTime, currentTime);
-    const timeLabel = isAllDay
-      ? (calendarMode === 'upcoming' ? `All Day · ${format(startTime, 'MMM d')}` : 'All Day')
-      : calendarMode === 'upcoming'
-        ? `${format(startTime, 'MMM d · h:mm a')} — ${format(endTime, 'h:mm a')}`
-        : `${format(startTime, 'h:mm a')} — ${format(endTime, 'h:mm a')}`;
+  const renderTimelineEvent = (item: CalendarDisplayItem) => {
+    const meta = FOCUS_EVENT_META[item.state];
+    const isCurrent = item.state === 'current';
+    const isPast = item.state === 'past';
+    const timeLabel = formatCalendarEventTime(item, calendarMode === 'upcoming' ? 'upcoming' : 'today');
 
     if (isCurrent) {
       return (
-        <div key={event.id} className="relative pl-12 mb-12">
-          <div className="absolute left-[20px] top-1.5 w-2 h-2 rounded-full bg-primary z-10 animate-ring"></div>
-          <div className="text-xs text-primary mb-2 font-bold tracking-wide uppercase">In Progress</div>
-          <div className="p-8 rounded-xl bg-primary/10 border-2 glow-border relative overflow-hidden group transition-colors duration-500 hover:bg-primary/[0.15]">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[100px] -mr-32 -mt-32 pointer-events-none group-hover:scale-150 transition-transform duration-700"></div>
-            <div className="relative z-10">
-              <h3 className="font-heading text-3xl font-bold text-white leading-tight tracking-tight neon-text-glow">{event.summary || 'Busy'}</h3>
-              <p className="text-sm text-primary/80 mt-2 font-mono">{timeLabel}</p>
-              <a
-                href={event.htmlLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-2 text-xs text-primary/60 hover:text-primary transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                View in Calendar
-              </a>
-            </div>
+        <div key={item.event.id} className="relative pl-12 mb-10">
+          <div className={`absolute left-[20px] top-1.5 w-2 h-2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
+          <div className="mb-2 flex items-center gap-2">
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
+            <span className="text-xs text-primary/80 font-mono">{timeLabel}</span>
+          </div>
+          <div className="p-6 rounded-xl bg-primary/[0.08] border border-primary/25 relative overflow-hidden group transition-colors duration-300 hover:bg-primary/[0.12]">
+            <h3 className="font-heading text-2xl font-bold text-white leading-tight tracking-tight">{item.title}</h3>
+            <a
+              href={item.event.htmlLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-2 text-xs text-primary/70 hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            >
+              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">open_in_new</span>
+              View in Calendar
+            </a>
           </div>
         </div>
       );
     }
 
     return (
-      <div key={event.id} className={`relative pl-12 mb-12 ${isPast ? 'opacity-40' : ''}`}>
-        <div className="absolute left-[20px] top-1.5 w-2 h-2 rounded-full bg-white/20 border border-white/30 z-10"></div>
-        <div className="text-xs text-text-muted mb-1 font-medium">{timeLabel}</div>
-        <div className={`p-4 rounded-lg bg-white/5 border border-white/10 ${!isPast ? 'glass-panel-hover cursor-pointer group' : ''}`}>
-          <h3 className={`font-medium text-slate-100 ${!isPast ? 'group-hover:text-white transition-colors' : ''}`}>
-            {event.summary || 'Busy'}
+      <div key={item.event.id} className={`relative pl-12 mb-8 ${isPast ? 'opacity-65' : ''}`}>
+        <div className={`absolute left-[20px] top-1.5 w-2 h-2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
+          <span className="text-xs text-text-muted font-mono">{timeLabel}</span>
+        </div>
+        <div className={`p-4 rounded-lg border ${isPast ? 'bg-white/[0.025] border-white/8' : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.07] transition-colors group'}`}>
+          <h3 className={`font-medium ${isPast ? 'text-slate-400' : 'text-slate-100 group-hover:text-white transition-colors'}`}>
+            {item.title}
           </h3>
         </div>
       </div>
     );
   };
-
-  // Insert current-time indicator between past and upcoming events
-  const sortedEvents = useMemo(() => {
-    if (!events || events.length === 0) return [];
-    return [...events].sort((a, b) => (a.start.dateTime ?? a.start.date ?? '').localeCompare(b.start.dateTime ?? b.start.date ?? ''));
-  }, [events]);
 
   const renderTimeline = () => {
     if (isLoadingEvents) {
@@ -325,30 +335,31 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
       );
     }
 
-    const pastEvents: CalendarEvent[] = [];
-    const upcomingEvents: CalendarEvent[] = [];
-    for (const e of sortedEvents) {
-      const isPast = !!e.start.dateTime && isBefore(getEventTimes(e).endTime, currentTime);
-      (isPast ? pastEvents : upcomingEvents).push(e);
-    }
-
-    const hasInsertedIndicator = upcomingEvents.length > 0 || pastEvents.length > 0;
+    const nowItems = [
+      ...[...scheduleGroups.current].sort((a, b) => a.sortMs - b.sortMs),
+      ...[...scheduleGroups.allDay].sort((a, b) => a.sortMs - b.sortMs),
+    ];
+    const nextItems = calendarMode === 'upcoming' ? scheduleGroups.primary : scheduleGroups.upcoming;
+    const hasInsertedIndicator = scheduleGroups.displayable.length > 0;
 
     return (
       <>
-        {pastEvents.map(renderTimelineEvent)}
+        {calendarMode !== 'upcoming' && scheduleGroups.earlier.length > 0 && (
+          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Done</div>
+        )}
+        {calendarMode !== 'upcoming' && scheduleGroups.earlier.map(renderTimelineEvent)}
 
         {hasInsertedIndicator && (
           <div className="relative pl-12 mb-8 flex items-center gap-3">
-            <div className="absolute left-[16px] w-4 h-4 rounded-full bg-primary z-10 shadow-[0_0_12px_rgba(6,232,249,0.6)]"></div>
+            <div className="absolute left-[16px] w-4 h-4 rounded-full bg-primary z-10 shadow-[0_0_12px_rgba(56,189,248,0.35)]"></div>
             <div className="flex-1 h-px bg-primary/40 ml-4"></div>
-            <span className="text-[11px] font-bold text-primary bg-primary/10 border border-primary/30 px-2 py-1 rounded neon-text-glow shrink-0">
+            <span className="text-[11px] font-bold text-primary bg-primary/10 border border-primary/25 px-2 py-1 rounded shrink-0">
               {format(currentTime, 'h:mm a')}
             </span>
           </div>
         )}
 
-        {upcomingEvents.length === 0 && pastEvents.length === 0 && (
+        {scheduleGroups.displayable.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2">
             <p className="text-sm text-text-muted">No events scheduled.</p>
             <button
@@ -360,7 +371,17 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           </div>
         )}
 
-        {upcomingEvents.map(renderTimelineEvent)}
+        {calendarMode !== 'upcoming' && nowItems.length > 0 && (
+          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Now</div>
+        )}
+        {calendarMode !== 'upcoming' && nowItems.map(renderTimelineEvent)}
+
+        {nextItems.length > 0 && (
+          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">
+            {calendarMode === 'upcoming' ? 'Upcoming' : 'Next'}
+          </div>
+        )}
+        {nextItems.map(renderTimelineEvent)}
 
         <div className="relative pl-12 mt-4 mb-8 opacity-40">
           <div className="absolute left-[16px] top-1 w-4 h-4 rounded-full border-2 border-dashed border-white/40 bg-transparent z-10"></div>

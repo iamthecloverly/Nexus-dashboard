@@ -21,7 +21,6 @@ interface ComposeState {
 }
 
 const EMPTY_COMPOSE: ComposeState = { to: '', subject: '', body: '', sending: false, error: null };
-const KEYBOARD_SHORTCUTS = [['C', 'Compose'], ['E', 'Archive'], ['Esc', 'Close'], ['↑↓', 'Navigate']] as const;
 const EMAIL_ROW_PX = 92;
 const UNREAD_DIVIDER_PX = 17;
 type RequestIdleCallbackFn = (cb: () => void, opts?: { timeout?: number }) => number;
@@ -732,7 +731,7 @@ function InboxPane({
       <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0 bg-background-elevated/55">
         <div className="flex items-center gap-3">
           <h2 className="font-heading font-semibold text-xl text-foreground">{accountLabel(accountId)}</h2>
-          <div className="flex h-6 items-center justify-center gap-x-2 rounded-full bg-primary/10 px-3 border border-primary/20 shadow-[0_0_10px_rgba(6,232,249,0.2)]">
+          <div className="flex h-6 items-center justify-center gap-x-2 rounded-full bg-primary/10 px-3 border border-primary/20">
             {unreadCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>}
             <p className="text-primary text-xs font-medium uppercase tracking-wider">{unreadCount} Unread</p>
           </div>
@@ -764,7 +763,7 @@ function InboxPane({
 
       {/* Search */}
       <div className="px-6 py-4 border-b border-white/10 shrink-0 bg-background-elevated/30">
-        <div className="glass-search flex items-center gap-3 px-4 py-2.5 rounded-xl">
+        <div className="glass-search flex items-center gap-3 px-4 py-2.5 rounded-lg">
           <span className="material-symbols-outlined text-text-muted text-[20px]" aria-hidden="true">search</span>
           <input
             ref={searchRef}
@@ -854,7 +853,7 @@ function InboxPane({
             <button
               onClick={() => openCompose()}
               aria-label="Compose new email"
-              className="fab-compose absolute bottom-8 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-primary text-background-dark flex items-center justify-center shadow-lg hover:scale-110 hover:shadow-[0_0_22px_rgba(56,189,248,0.45)] active:scale-95 transition-transform z-30 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground"
+              className="fab-compose absolute bottom-8 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-primary text-background-dark flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform z-30 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground"
             >
               <span className="material-symbols-outlined text-[28px] font-bold" aria-hidden="true">edit</span>
             </button>
@@ -1084,15 +1083,6 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 shrink-0 bg-background-elevated/70 backdrop-blur-md flex items-center justify-center gap-6 font-mono text-[11px] text-text-muted">
-          {KEYBOARD_SHORTCUTS.map(([key, label]) => (
-            <div key={key} className="flex items-center gap-2 group cursor-default">
-              <span className="px-1.5 py-0.5 rounded border border-white/20 bg-white/5 text-white group-hover:border-primary group-hover:text-primary transition-colors">{key}</span>
-              <span className="group-hover:text-foreground transition-colors">{label}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
