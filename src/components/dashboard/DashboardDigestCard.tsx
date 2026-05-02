@@ -1,4 +1,4 @@
-import { useCallback, memo, useState } from 'react';
+import { useCallback, memo, useEffect, useState } from 'react';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 import { useWeatherForecast } from '../../hooks/useWeatherForecast';
 import { csrfHeaders } from '../../lib/csrf';
@@ -136,6 +136,12 @@ export function DashboardDigestCard({
       setBriefLoading(false);
     }
   }, [calendarEvents, unreadCount, remainingTasks]);
+
+  useEffect(() => {
+    const handler = () => { void fetchBrief(); };
+    window.addEventListener('dashboard:generate-brief', handler);
+    return () => window.removeEventListener('dashboard:generate-brief', handler);
+  }, [fetchBrief]);
 
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) return;

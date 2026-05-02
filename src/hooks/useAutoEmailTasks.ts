@@ -91,6 +91,9 @@ export function useAutoEmailTasks() {
               priority: s.priority === 'Normal' ? undefined : s.priority,
               completed: false,
               group: s.group,
+              source: { type: 'email', id: s.emailId, label: 'AI auto extraction' },
+              createdAt: new Date().toISOString(),
+              tags: ['email'],
             });
           }
           totalAdded += data.suggestions.length;

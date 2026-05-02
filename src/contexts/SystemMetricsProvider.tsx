@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
+import { markSyncStatus } from '../lib/dashboardFeatures';
 
 function parsePayload(data: unknown): { cpuLoad: number; memUsed: number } | null {
   if (!data || typeof data !== 'object') return null;
@@ -32,12 +33,20 @@ export function SystemMetricsProvider({
   const refresh = useCallback(async () => {
     try {
       const res = await fetchWithTimeout('/api/system', { timeoutMs: 5000 });
-      if (!res.ok) return;
+      if (!res.ok) {
+        markSyncStatus('system', 'error', `HTTP ${res.status}`);
+        return;
+      }
       const next = parsePayload(await res.json());
-      if (!next) return;
+      if (!next) {
+        markSyncStatus('system', 'error', 'Invalid payload');
+        return;
+      }
       setCpuLoad(next.cpuLoad);
       setMemUsed(next.memUsed);
+      markSyncStatus('system', 'ok');
     } catch {
+      markSyncStatus('system', 'error', 'Network error');
       /* ignore */
     }
   }, []);

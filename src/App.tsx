@@ -24,6 +24,7 @@ import { SystemMetricsProvider } from './contexts/SystemMetricsProvider';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useViewportDesktopGate } from './hooks/useViewportDesktopGate';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
+import { downloadLocalDashboardData } from './lib/dashboardFeatures';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -38,11 +39,16 @@ function AppAuthed({
   quickAddTrigger,
   composeTrigger,
   calendarRefreshTrigger,
+  focusStartTrigger,
   commandPaletteOpen,
   setCommandPaletteOpen,
   handlePaletteOpenQuickAdd,
   handlePaletteComposeEmail,
   handlePaletteRefreshCalendar,
+  handlePaletteOpenTimeline,
+  handlePaletteGenerateBrief,
+  handlePaletteExportData,
+  handlePaletteStartFocus,
 }: {
   currentView: ViewId;
   setCurrentView: Dispatch<SetStateAction<ViewId>>;
@@ -50,11 +56,16 @@ function AppAuthed({
   quickAddTrigger: number;
   composeTrigger: number;
   calendarRefreshTrigger: number;
+  focusStartTrigger: number;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   handlePaletteOpenQuickAdd: () => void;
   handlePaletteComposeEmail: () => void;
   handlePaletteRefreshCalendar: () => void;
+  handlePaletteOpenTimeline: () => void;
+  handlePaletteGenerateBrief: () => void;
+  handlePaletteExportData: () => void;
+  handlePaletteStartFocus: () => void;
 }) {
   const { showToast } = useToast();
   const { actions: { addTask } } = useTaskContext();
@@ -84,7 +95,14 @@ function AppAuthed({
       : (isLg ? 24 : MOBILE_BOTTOM_NAV_HEIGHT_PX + 24);
 
   const handlePaletteAddTask = useCallback((title: string) => {
-    addTask({ id: crypto.randomUUID(), title, completed: false, group: 'now' });
+    addTask({
+      id: crypto.randomUUID(),
+      title,
+      completed: false,
+      group: 'now',
+      source: { type: 'manual' },
+      createdAt: new Date().toISOString(),
+    });
     showToast(`Task "${title}" added`, 'success');
   }, [addTask, showToast]);
 
@@ -151,7 +169,7 @@ function AppAuthed({
               />
             </ErrorBoundary>
           )}
-          {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} /></ErrorBoundary>}
+          {currentView === 'FocusMode' && <ErrorBoundary label="Focus Mode"><FocusMode setCurrentView={setCurrentView} externalStartTrigger={focusStartTrigger} /></ErrorBoundary>}
           {currentView === 'Communications' && (
             <ErrorBoundary label="Communications">
               <Communications
@@ -201,6 +219,10 @@ function AppAuthed({
           onMarkAllRead={markAllRead}
           onRefreshCalendar={handlePaletteRefreshCalendar}
           onAddTask={handlePaletteAddTask}
+          onOpenTodayTimeline={handlePaletteOpenTimeline}
+          onGenerateBrief={handlePaletteGenerateBrief}
+          onExportData={handlePaletteExportData}
+          onStartFocus={handlePaletteStartFocus}
         />
       </div>
     </>
@@ -216,6 +238,7 @@ function AppContent() {
   const [quickAddTrigger, setQuickAddTrigger] = useState(0);
   const [composeTrigger, setComposeTrigger] = useState(0);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
+  const [focusStartTrigger, setFocusStartTrigger] = useState(0);
 
   const handlePaletteOpenQuickAdd = useCallback(() => {
     setCurrentView('MainHub');
@@ -230,6 +253,25 @@ function AppContent() {
   const handlePaletteRefreshCalendar = useCallback(() => {
     setCurrentView('MainHub');
     setCalendarRefreshTrigger(n => n + 1);
+  }, []);
+
+  const handlePaletteOpenTimeline = useCallback(() => {
+    setCurrentView('MainHub');
+    window.setTimeout(() => window.dispatchEvent(new Event('dashboard:open-timeline')), 60);
+  }, []);
+
+  const handlePaletteGenerateBrief = useCallback(() => {
+    setCurrentView('MainHub');
+    window.setTimeout(() => window.dispatchEvent(new Event('dashboard:generate-brief')), 60);
+  }, []);
+
+  const handlePaletteExportData = useCallback(() => {
+    downloadLocalDashboardData();
+  }, []);
+
+  const handlePaletteStartFocus = useCallback(() => {
+    setCurrentView('FocusMode');
+    setFocusStartTrigger(n => n + 1);
   }, []);
 
   useCommandPaletteShortcut(() => setCommandPaletteOpen(o => !o));
@@ -271,11 +313,16 @@ function AppContent() {
               quickAddTrigger={quickAddTrigger}
               composeTrigger={composeTrigger}
               calendarRefreshTrigger={calendarRefreshTrigger}
+              focusStartTrigger={focusStartTrigger}
               commandPaletteOpen={commandPaletteOpen}
               setCommandPaletteOpen={setCommandPaletteOpen}
               handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
               handlePaletteComposeEmail={handlePaletteComposeEmail}
               handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
+              handlePaletteOpenTimeline={handlePaletteOpenTimeline}
+              handlePaletteGenerateBrief={handlePaletteGenerateBrief}
+              handlePaletteExportData={handlePaletteExportData}
+              handlePaletteStartFocus={handlePaletteStartFocus}
             />
           </MusicProvider>
         </EmailProvider>

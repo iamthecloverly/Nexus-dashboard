@@ -67,6 +67,7 @@ describe('TaskProvider', () => {
         { id: '', title: 'bad id', completed: false, group: 'now' }, // empty id
         { id: 'x', title: 123, completed: false, group: 'now' }, // title not string
         { id: 'y', title: 'bad group', completed: false, group: 'sometime' }, // invalid group
+        { id: 'z', title: 'bad source', completed: false, group: 'now', source: { type: 'unknown' } },
       ];
       localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(mixed));
 
@@ -74,6 +75,25 @@ describe('TaskProvider', () => {
       renderWithProvider(c => { ctx = c; });
       expect(ctx.state.tasks).toHaveLength(1);
       expect(ctx.state.tasks[0]?.id).toBe('task-1');
+    });
+
+    it('hydrates valid task metadata used by dashboard features', () => {
+      const saved: Task[] = [{
+        ...SAMPLE_TASK,
+        priority: 'Critical',
+        dueDate: '2026-05-01',
+        deferredUntil: '2026-05-02',
+        source: { type: 'email', id: 'email-1', label: 'Ava' },
+        createdAt: '2026-05-01T12:00:00.000Z',
+        tags: ['email'],
+      }];
+      localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(saved));
+
+      let ctx!: ReturnType<typeof useTaskContext>;
+      renderWithProvider(c => { ctx = c; });
+      expect(ctx.state.tasks).toHaveLength(1);
+      expect(ctx.state.tasks[0]?.source?.type).toBe('email');
+      expect(ctx.state.tasks[0]?.deferredUntil).toBe('2026-05-02');
     });
 
     it('starts empty when localStorage contains non-array JSON', () => {

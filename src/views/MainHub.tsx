@@ -21,6 +21,16 @@ import {
   splitCalendarEvents,
   type CalendarDisplayItem,
 } from '../lib/calendarDisplay';
+import {
+  buildTaskFromCalendar,
+  buildTodayTimeline,
+  findCalendarConflicts,
+  findFollowUpEmails,
+  isTaskDeferred,
+  readDashboardPanelVisibility,
+  tomorrowKey,
+  type TodayTimelineItem,
+} from '../lib/dashboardFeatures';
 
 /**
  * Isolated clock display — owns its own 1s interval so that only this small
@@ -145,6 +155,20 @@ const SCHEDULE_STATUS_META: Record<CalendarDisplayItem['state'], { label: string
   },
 };
 
+const TIMELINE_ICON: Record<TodayTimelineItem['kind'], string> = {
+  calendar: 'event',
+  task: 'task_alt',
+  email: 'mail',
+  github: 'code',
+};
+
+const TIMELINE_STATUS_CLASS: Record<TodayTimelineItem['status'], string> = {
+  now: 'border-primary/25 bg-primary/10 text-primary',
+  next: 'border-white/10 bg-white/[0.04] text-text-muted',
+  done: 'border-white/10 bg-white/[0.025] text-text-muted/70',
+  attention: 'border-amber-300/25 bg-amber-300/10 text-amber-200',
+};
+
 export default function MainHub({ setCurrentView, externalQuickAddTrigger, externalCalendarRefreshTrigger }: MainHubProps) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
   const { state: { emailsByAccount, connectedByAccount, serverErrorByAccount } } = useEmailContext();
@@ -245,6 +269,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [showSchedule, setShowSchedule] = useState(false);
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [showEarlierEvents, setShowEarlierEvents] = useState(false);
+  const [selectedCalendarItem, setSelectedCalendarItem] = useState<CalendarDisplayItem | null>(null);
+  const [panelVisibility, setPanelVisibility] = useState(readDashboardPanelVisibility);
 
   // Task inline edit
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -262,17 +288,33 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [quickAddTags, setQuickAddTags] = useState<string[]>([]);
   const quickAddRef = useRef<HTMLInputElement>(null);
 
-  const { remainingTasks, activeTasks, completedTasks } = useMemo(() => {
+  const { remainingTasks, activeTasks, completedTasks, deferredTasks } = useMemo(() => {
     const active: Task[] = [];
     const completed: Task[] = [];
-    for (const t of tasks) { (t.completed ? completed : active).push(t); }
-    return { remainingTasks: active.length, activeTasks: active, completedTasks: completed };
-  }, [tasks]);
+    const deferred: Task[] = [];
+    for (const t of tasks) {
+      if (t.completed) completed.push(t);
+      else if (isTaskDeferred(t, currentTime)) deferred.push(t);
+      else active.push(t);
+    }
+    return { remainingTasks: active.length, activeTasks: active, completedTasks: completed, deferredTasks: deferred };
+  }, [tasks, currentTime]);
 
   const { unreadCount, lastUnreadEmail } = useMemo(() => {
     const unread = emails.filter(e => e.unread && !e.archived && !e.deleted);
     return { unreadCount: unread.length, lastUnreadEmail: unread[0] ?? null };
   }, [emails]);
+
+  const todayTimeline = useMemo(() => buildTodayTimeline({
+    calendarItems: scheduleGroups.displayable,
+    tasks,
+    emails,
+    github: githubNotifs.map(n => ({ id: n.id, title: n.title, repo: n.repo, updatedAt: n.updatedAt })),
+    now: currentTime,
+  }), [scheduleGroups.displayable, tasks, emails, githubNotifs, currentTime]);
+
+  const followUpEmails = useMemo(() => findFollowUpEmails(emails, currentTime), [emails, currentTime]);
+  const calendarConflicts = useMemo(() => findCalendarConflicts(events, currentTime), [events, currentTime]);
 
   /** Next calendar line for digest (upcoming / now / all-day). */
   const digestNextEventSnippet = useMemo(() => {
@@ -351,6 +393,24 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     showToast('Calendar refreshed', 'info');
   }, [externalCalendarRefreshTrigger, fetchEvents, showToast]);
 
+  useEffect(() => {
+    const refreshLayout = () => setPanelVisibility(readDashboardPanelVisibility());
+    const openTimeline = () => {
+      setPanelVisibility(readDashboardPanelVisibility());
+      window.setTimeout(() => {
+        document.getElementById('main-today-timeline-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 40);
+    };
+    window.addEventListener('storage', refreshLayout);
+    window.addEventListener('dashboard:layout-updated', refreshLayout);
+    window.addEventListener('dashboard:open-timeline', openTimeline);
+    return () => {
+      window.removeEventListener('storage', refreshLayout);
+      window.removeEventListener('dashboard:layout-updated', refreshLayout);
+      window.removeEventListener('dashboard:open-timeline', openTimeline);
+    };
+  }, []);
+
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && quickAddTitle.trim()) {
       addTask({
@@ -361,6 +421,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         priority: quickAddPriority,
         dueDate: quickAddDueDate || undefined,
         tags: quickAddTags.length > 0 ? quickAddTags : undefined,
+        source: { type: 'manual' },
+        createdAt: new Date().toISOString(),
       });
       showToast('Task added', 'success');
       setQuickAddTitle('');
@@ -419,9 +481,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     const timeLabel = formatCalendarEventTime(item, opts.timeMode ?? 'today');
 
     return (
-      <div
+      <button
+        type="button"
         key={item.event.id}
-        className={`relative pl-8 ${opts.compact ? 'py-0.5' : 'py-1'} ${isPast ? 'text-foreground/60' : 'text-foreground'}`}
+        onClick={() => setSelectedCalendarItem(item)}
+        className={`relative w-full pl-8 text-left rounded-lg pr-2 transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${opts.compact ? 'py-0.5' : 'py-1'} ${isPast ? 'text-foreground/60' : 'text-foreground'}`}
       >
         {isCurrent && (
           <div
@@ -441,7 +505,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         <p className={`mt-1 text-sm font-semibold leading-snug ${isPast ? 'text-foreground/55' : 'text-foreground'}`}>
           {item.title}
         </p>
-      </div>
+      </button>
     );
   }, []);
 
@@ -705,6 +769,30 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     setShowSchedule,
   ]);
 
+  const handleAddCalendarPrepTask = useCallback((item: CalendarDisplayItem) => {
+    addTask(buildTaskFromCalendar(item));
+    showToast('Calendar prep task added', 'success');
+  }, [addTask, showToast]);
+
+  const handleDeferTask = useCallback((task: Task) => {
+    updateTask(task.id, { deferredUntil: tomorrowKey(currentTime), group: 'next' });
+    showToast('Task deferred until tomorrow', 'info');
+  }, [currentTime, showToast, updateTask]);
+
+  const handleTimelineActivate = useCallback((item: TodayTimelineItem) => {
+    if (item.kind === 'calendar' && item.calendarItem) {
+      setSelectedCalendarItem(item.calendarItem);
+      return;
+    }
+    if (item.kind === 'task') {
+      document.getElementById('main-tasks-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (item.kind === 'email') {
+      setCurrentView('Communications');
+    }
+  }, [setCurrentView]);
+
   return (
     <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden px-8 py-10 max-w-[1440px] mx-auto w-full">
       <header className="flex justify-between items-end mb-8 flex-shrink-0">
@@ -748,22 +836,110 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       >
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[minmax(200px,_auto)]">
 
-          <DashboardDigestCard
-            setCurrentView={setCurrentView}
-            gmailConnected={gmailConnected}
-            gmailServerError={gmailServerError}
-            unreadCount={unreadCount}
-            githubConnected={githubConnected}
-            githubUnreadCount={githubNotifs.length}
-            discordWebhookConfigured={discordWebhookConfigured}
-            calendarConnected={isCalendarConnected && !calendarError}
-            nextEventSnippet={digestNextEventSnippet}
-            calendarEvents={events}
-            remainingTasks={remainingTasks}
-            aiConfigured={aiConfigured}
-          />
+          {panelVisibility.digest && (
+            <DashboardDigestCard
+              setCurrentView={setCurrentView}
+              gmailConnected={gmailConnected}
+              gmailServerError={gmailServerError}
+              unreadCount={unreadCount}
+              githubConnected={githubConnected}
+              githubUnreadCount={githubNotifs.length}
+              discordWebhookConfigured={discordWebhookConfigured}
+              calendarConnected={isCalendarConnected && !calendarError}
+              nextEventSnippet={digestNextEventSnippet}
+              calendarEvents={events}
+              remainingTasks={remainingTasks}
+              aiConfigured={aiConfigured}
+            />
+          )}
+
+          {panelVisibility.todayTimeline && (
+            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 p-6 flex flex-col relative overflow-hidden scroll-mt-4">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/55 via-sky-400/20 to-transparent pointer-events-none" />
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">timeline</span>
+                  Today Timeline
+                </h2>
+                <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded">
+                  {todayTimeline.length} ITEMS
+                </span>
+              </div>
+              {todayTimeline.length === 0 ? (
+                <div className="flex flex-1 flex-col justify-center rounded-lg border border-white/10 bg-white/[0.025] p-4 text-sm text-text-muted">
+                  Nothing needs attention right now.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {todayTimeline.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleTimelineActivate(item)}
+                      className="flex items-start gap-3 rounded-lg border border-white/8 bg-white/[0.025] px-3 py-2.5 text-left hover:border-white/15 hover:bg-white/[0.05] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined mt-0.5 text-[18px] text-text-muted" aria-hidden="true">
+                        {TIMELINE_ICON[item.kind]}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="truncate text-sm font-medium text-foreground">{item.title}</span>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${TIMELINE_STATUS_CLASS[item.status]}`}>
+                            {item.status}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-text-muted">{item.subtitle}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-mono text-text-muted">{item.timeLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {panelVisibility.alerts && (followUpEmails.length > 0 || calendarConflicts.length > 0 || deferredTasks.length > 0) && (
+            <section className="glass-panel col-span-1 md:col-span-2 p-6 flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-300/60 via-amber-300/20 to-transparent pointer-events-none" />
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
+                  <span className="material-symbols-outlined text-amber-300 text-[22px]" aria-hidden="true">release_alert</span>
+                  Attention
+                </h2>
+                <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded">
+                  {followUpEmails.length + calendarConflicts.length + deferredTasks.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('Communications')}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Follow-ups</p>
+                  <p className="mt-2 text-2xl font-heading text-foreground">{followUpEmails.length}</p>
+                  <p className="mt-1 truncate text-xs text-text-muted">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSchedule(true)}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Conflicts</p>
+                  <p className="mt-2 text-2xl font-heading text-foreground">{calendarConflicts.length}</p>
+                  <p className="mt-1 truncate text-xs text-text-muted">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
+                </button>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Deferred</p>
+                  <p className="mt-2 text-2xl font-heading text-foreground">{deferredTasks.length}</p>
+                  <p className="mt-1 truncate text-xs text-text-muted">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Calendar Widget */}
+          {panelVisibility.schedule && (
           <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-6 flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/55 via-primary/20 to-transparent pointer-events-none" />
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -946,11 +1122,13 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               {renderCalendarBody({ compact: true })}
             </div>
           </div>
+          )}
 
           {/* System — this machine (shared /api/system poll) */}
-          <SystemMetricsTile />
+          {panelVisibility.system && <SystemMetricsTile />}
 
           {/* Tasks */}
+          {panelVisibility.tasks && (
           <div id="main-tasks-panel" className="glass-panel col-span-1 row-span-2 p-7 flex flex-col relative overflow-hidden scroll-mt-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/70 via-green-400/20 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-8">
@@ -1047,6 +1225,14 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                           {tag}
                         </span>
                       ))}
+                      {task.source?.type && task.source.type !== 'manual' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-muted bg-white/[0.04] border border-white/10 px-1.5 py-0.5 rounded">
+                          <span className="material-symbols-outlined !text-[10px]" aria-hidden="true">
+                            {task.source.type === 'email' ? 'mail' : 'event'}
+                          </span>
+                          {task.source.type}
+                        </span>
+                      )}
                       {overdue && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 uppercase tracking-wide">
                           <span className="material-symbols-outlined !text-[11px]" aria-hidden="true">warning</span>
@@ -1055,6 +1241,13 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       )}
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeferTask(task)}
+                    aria-label={`Defer task until tomorrow: ${task.title}`}
+                    className="opacity-0 group-hover/task:opacity-100 transition-opacity text-text-muted hover:text-primary flex-shrink-0 mt-0.5 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                  >
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">schedule</span>
+                  </button>
                   <button
                     onClick={() => deleteTask(task.id)}
                     aria-label={`Delete task: ${task.title}`}
@@ -1065,6 +1258,32 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 </div>
                 );
               })}
+              {activeTasks.length === 0 && (
+                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-text-muted">
+                  No active tasks right now.
+                </div>
+              )}
+              {deferredTasks.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border-glass">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Deferred</p>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-text-muted">{deferredTasks.length}</span>
+                  </div>
+                  {deferredTasks.slice(0, 4).map(task => (
+                    <div key={task.id} className="group/deferred flex items-start gap-3 p-3 rounded-xl opacity-55 hover:opacity-90 transition-opacity">
+                      <span className="material-symbols-outlined !text-[16px] text-text-muted mt-0.5" aria-hidden="true">schedule</span>
+                      <span className="text-sm text-text-muted flex-1">{task.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateTask(task.id, { deferredUntil: undefined })}
+                        className="text-[11px] text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {completedTasks.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border-glass">
                   {completedTasks.map(task => (
@@ -1089,8 +1308,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </div>
             )}
           </div>
+          )}
 
           {/* Triage */}
+          {panelVisibility.triage && (
           <button
             onClick={() => setCurrentView('Communications')}
             className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -1127,9 +1348,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               )}
             </div>
           </button>
+          )}
 
           {/* GitHub Notifications — only shown when connected */}
-          {githubConnected && (
+          {githubConnected && panelVisibility.github && (
             <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-6 flex flex-col relative">
               <div className="flex justify-between items-center mb-5">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
@@ -1299,6 +1521,64 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <div className="absolute left-1 top-2 bottom-0 w-[1px] bg-border-glass" />
                 {renderCalendarBody({ compact: false })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCalendarItem && (
+        <div
+          className="fixed inset-0 z-[560] flex items-center justify-center bg-background-dark/70 p-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Calendar event details"
+        >
+          <div className="glass-panel w-full max-w-lg rounded-xl border border-white/15 p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">
+                  {SCHEDULE_STATUS_META[selectedCalendarItem.state].label}
+                </p>
+                <h2 className="mt-2 font-heading text-2xl text-foreground leading-tight break-words">
+                  {selectedCalendarItem.title}
+                </h2>
+                <p className="mt-2 text-sm text-text-muted">
+                  {formatCalendarEventTime(selectedCalendarItem, 'today')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCalendarItem(null)}
+                aria-label="Close event details"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-white/10 hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleAddCalendarPrepTask(selectedCalendarItem)}
+                className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Add prep task
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedCalendarItem(null); setCurrentView('FocusMode'); }}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-foreground hover:bg-white/[0.07] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Focus
+              </button>
+              <a
+                href={selectedCalendarItem.event.htmlLink}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-center text-sm font-medium text-foreground hover:bg-white/[0.07] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Open event
+              </a>
             </div>
           </div>
         </div>

@@ -6,11 +6,13 @@ import { useTaskContext } from '../contexts/taskContext';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
 import type { SetViewFn } from '../config/navigation';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import {
   formatCalendarEventTime,
   splitCalendarEvents,
   type CalendarDisplayItem,
 } from '../lib/calendarDisplay';
+import { addNotificationLog, type FocusSessionEntry } from '../lib/dashboardFeatures';
 
 /** Timer presets. `isBreak` determines cosmetic colour in the UI. */
 const PRESETS = [
@@ -62,6 +64,21 @@ function saveSessionsData(data: Record<string, number>) {
   try { localStorage.setItem(POMODORO_KEY, JSON.stringify(data)); } catch { /* quota */ }
 }
 
+function loadFocusSessionEntries(): FocusSessionEntry[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.focusSessions);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FocusSessionEntry[];
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFocusSessionEntries(entries: FocusSessionEntry[]) {
+  try { localStorage.setItem(STORAGE_KEYS.focusSessions, JSON.stringify(entries.slice(0, 20))); } catch { /* quota */ }
+}
+
 /** Plays a short triple-beep completion sound via the Web Audio API. */
 function playCompletionSound() {
   try {
@@ -89,13 +106,22 @@ function playCompletionSound() {
   }
 }
 
-export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewFn }) {
+export default function FocusMode({
+  setCurrentView,
+  externalStartTrigger,
+}: {
+  setCurrentView: SetViewFn;
+  externalStartTrigger?: number;
+}) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask } } = useTaskContext();
 
   const [selectedPreset, setSelectedPreset] = useState(2); // default to 25 min
   const [timeLeft, setTimeLeft] = useState(PRESETS[2].seconds);
   const [isActive, setIsActive] = useState(false);
   const justCompletedRef = useRef(false);
+  const [focusNote, setFocusNote] = useState('');
+  const [focusSessions, setFocusSessions] = useState<FocusSessionEntry[]>(loadFocusSessionEntries);
+  const [showBreakSuggestion, setShowBreakSuggestion] = useState(false);
 
   // Pomodoro session count
   const [sessionsData, setSessionsData] = useState<Record<string, number>>(loadSessionsData);
@@ -150,10 +176,35 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
         saveSessionsData(updated);
         return updated;
       });
+      const entry: FocusSessionEntry = {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        minutes: Math.round(preset.seconds / 60),
+        mode: 'focus',
+        note: focusNote.trim() || undefined,
+      };
+      setFocusSessions(prev => {
+        const next = [entry, ...prev].slice(0, 20);
+        saveFocusSessionEntries(next);
+        return next;
+      });
+      addNotificationLog({
+        type: 'focus',
+        title: 'Focus session complete',
+        body: focusNote.trim() || `${Math.round(preset.seconds / 60)} minutes completed`,
+      });
+      setFocusNote('');
+      setShowBreakSuggestion(true);
+    } else {
+      addNotificationLog({
+        type: 'focus',
+        title: 'Break complete',
+        body: `${Math.round(preset.seconds / 60)} minute break completed`,
+      });
     }
 
     playCompletionSound();
-  }, [selectedPreset]);
+  }, [focusNote, selectedPreset]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10000);
@@ -165,6 +216,14 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
     setIsActive(false);
     setTimeLeft(PRESETS[index].seconds);
   }, []);
+
+  useEffect(() => {
+    if (!externalStartTrigger) return;
+    setSelectedPreset(2);
+    setTimeLeft(PRESETS[2].seconds);
+    setShowBreakSuggestion(false);
+    setIsActive(true);
+  }, [externalStartTrigger]);
 
   const toggleTimer = () => setIsActive(!isActive);
   const resetTimer = () => {
@@ -593,30 +652,70 @@ export default function FocusMode({ setCurrentView }: { setCurrentView: SetViewF
           </div>
 
           {/* Session Info + Pomodoro History */}
-          <div className="glass-panel rounded-xl p-4 flex items-center justify-between h-auto flex-none">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isBreak ? 'bg-green-500/10 border-green-500/20' : 'bg-primary/10 border-primary/20'}`}>
-                <span className={`material-symbols-outlined text-[20px] ${isBreak ? 'text-green-400' : 'text-primary'}`}>timer</span>
-              </div>
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Session</p>
-                <p className="text-sm text-slate-100 font-medium">{isActive ? (isBreak ? 'Break' : 'In progress') : timeLeft === currentPreset.seconds ? 'Not started' : 'Paused'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {todayCount > 0 && (
-                <div className="text-center">
-                  <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Today</p>
-                  <p className="text-sm font-bold text-slate-100">
-                    {todayCount} session{todayCount !== 1 ? 's' : ''}{streak > 1 ? ` 🔥${streak}` : ''}
-                  </p>
+          <div className="glass-panel rounded-xl p-4 flex flex-col gap-4 h-auto flex-none">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isBreak ? 'bg-green-500/10 border-green-500/20' : 'bg-primary/10 border-primary/20'}`}>
+                  <span className={`material-symbols-outlined text-[20px] ${isBreak ? 'text-green-400' : 'text-primary'}`}>timer</span>
                 </div>
-              )}
-              <div className="text-right">
-                <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Remaining</p>
-                <p className={`text-sm font-mono font-bold ${isActive ? (isBreak ? 'text-green-400' : 'text-primary') : 'text-slate-400'}`}>{formatTime(timeLeft)}</p>
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Session</p>
+                  <p className="text-sm text-slate-100 font-medium">{isActive ? (isBreak ? 'Break' : 'In progress') : timeLeft === currentPreset.seconds ? 'Not started' : 'Paused'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {todayCount > 0 && (
+                  <div className="text-center">
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Today</p>
+                    <p className="text-sm font-bold text-slate-100">
+                      {todayCount} session{todayCount !== 1 ? 's' : ''}{streak > 1 ? ` 🔥${streak}` : ''}
+                    </p>
+                  </div>
+                )}
+                <div className="text-right">
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-0.5">Remaining</p>
+                  <p className={`text-sm font-mono font-bold ${isActive ? (isBreak ? 'text-green-400' : 'text-primary') : 'text-slate-400'}`}>{formatTime(timeLeft)}</p>
+                </div>
               </div>
             </div>
+
+            {showBreakSuggestion && !isBreak && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-green-400/20 bg-green-400/10 px-3 py-2">
+                <p className="text-xs text-green-200">Focus complete. Take a short reset.</p>
+                <button
+                  type="button"
+                  onClick={() => { selectPreset(0); setShowBreakSuggestion(false); setIsActive(true); }}
+                  className="rounded-full border border-green-400/25 bg-green-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-green-300 hover:bg-green-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-400"
+                >
+                  Start break
+                </button>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="focus-session-note" className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Session note</label>
+              <textarea
+                id="focus-session-note"
+                value={focusNote}
+                onChange={e => setFocusNote(e.target.value)}
+                placeholder="What should this block accomplish?"
+                className="mt-2 h-20 w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 placeholder:text-white/25 focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/20"
+              />
+            </div>
+
+            {focusSessions.length > 0 && (
+              <div className="border-t border-white/10 pt-3">
+                <p className="mb-2 text-[10px] text-text-muted uppercase tracking-wider font-bold">Recent focus notes</p>
+                <div className="flex flex-col gap-2">
+                  {focusSessions.slice(0, 3).map(session => (
+                    <div key={session.id} className="rounded-lg bg-white/[0.035] px-3 py-2">
+                      <p className="text-xs text-slate-100">{session.note || `${session.minutes} minutes completed`}</p>
+                      <p className="mt-1 text-[10px] text-text-muted">{format(new Date(session.createdAt), 'MMM d · HH:mm')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </main>

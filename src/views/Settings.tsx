@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SystemMetricsDisplay } from '../components/layout/SystemMetricsDisplay';
 import { useToast } from '../components/Toast';
 import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
@@ -7,11 +7,50 @@ import { useNotificationPermission } from '../hooks/useNotificationPermission';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import type { SetViewFn } from '../config/navigation';
+import {
+  DEFAULT_DASHBOARD_PANEL_VISIBILITY,
+  readDashboardPanelVisibility,
+  readNotificationLog,
+  readSyncHealth,
+  writeDashboardPanelVisibility,
+  type DashboardPanelId,
+  type SyncService,
+} from '../lib/dashboardFeatures';
 
 interface ConnectionStatus {
   google: boolean;
   github: boolean;
   discord: boolean;
+}
+
+const PANEL_LABELS: Record<DashboardPanelId, string> = {
+  digest: 'At a glance',
+  todayTimeline: 'Today Timeline',
+  alerts: 'Attention',
+  schedule: 'Schedule',
+  system: 'System',
+  tasks: 'Tasks',
+  triage: 'Triage',
+  github: 'GitHub',
+};
+
+const SYNC_LABELS: Record<SyncService, string> = {
+  calendar: 'Calendar',
+  gmailPrimary: 'Gmail 1',
+  gmailSecondary: 'Gmail 2',
+  system: 'System',
+};
+
+function formatSyncTime(value?: string): string {
+  if (!value) return 'Never';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return 'Unknown';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 export default function Settings({
@@ -29,6 +68,10 @@ export default function Settings({
   const [connections, setConnections] = useState<ConnectionStatus>({ google: false, github: false, discord: false });
   const [cleared, setCleared] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [panelVisibility, setPanelVisibility] = useState(readDashboardPanelVisibility);
+  const [syncHealth, setSyncHealth] = useState(readSyncHealth);
+  const [notificationLog, setNotificationLog] = useState(readNotificationLog);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // AI / OpenAI key
   const [aiConfigured, setAiConfigured] = useState(false);
@@ -99,6 +142,78 @@ export default function Settings({
     setTimeout(() => window.location.reload(), 600);
   };
 
+  const togglePanel = (id: DashboardPanelId) => {
+    setPanelVisibility(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      writeDashboardPanelVisibility(next);
+      window.dispatchEvent(new Event('dashboard:layout-updated'));
+      return next;
+    });
+  };
+
+  const resetPanelLayout = () => {
+    writeDashboardPanelVisibility(DEFAULT_DASHBOARD_PANEL_VISIBILITY);
+    setPanelVisibility(DEFAULT_DASHBOARD_PANEL_VISIBILITY);
+    window.dispatchEvent(new Event('dashboard:layout-updated'));
+    showToast('Dashboard layout reset', 'info');
+  };
+
+  const refreshLocalStatus = () => {
+    setSyncHealth(readSyncHealth());
+    setNotificationLog(readNotificationLog());
+    showToast('Local status refreshed', 'info');
+  };
+
+  const exportLocalData = () => {
+    const values = Object.fromEntries(
+      Object.values(STORAGE_KEYS).map(key => [key, localStorage.getItem(key)]),
+    );
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), values }, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `nexus-dashboard-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Local dashboard data exported', 'success');
+  };
+
+  const importLocalData = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as { values?: Record<string, string | null> };
+      const allowedKeys = new Set<string>(Object.values(STORAGE_KEYS));
+      if (!parsed.values || typeof parsed.values !== 'object') throw new Error('Invalid export');
+      for (const [key, value] of Object.entries(parsed.values)) {
+        if (!allowedKeys.has(key)) continue;
+        if (typeof value === 'string') localStorage.setItem(key, value);
+        else localStorage.removeItem(key);
+      }
+      setPanelVisibility(readDashboardPanelVisibility());
+      setSyncHealth(readSyncHealth());
+      setNotificationLog(readNotificationLog());
+      window.dispatchEvent(new Event('dashboard:layout-updated'));
+      showToast('Local data imported', 'success');
+    } catch {
+      showToast('Import failed. Choose a valid Nexus export.', 'error');
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const clearNotificationLog = () => {
+    localStorage.removeItem(STORAGE_KEYS.notificationLog);
+    setNotificationLog([]);
+    showToast('Notification history cleared', 'info');
+  };
+
+  const clearTaskData = () => {
+    localStorage.removeItem(STORAGE_KEYS.tasks);
+    showToast('Tasks cleared. Refresh to reload the empty list.', 'info');
+  };
+
   const toggleResume = () => {
     const next = !resumeEnabled;
     setResumeEnabled(next);
@@ -166,6 +281,40 @@ export default function Settings({
                   </button>
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* Dashboard layout */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Dashboard Layout</h2>
+              <button
+                type="button"
+                onClick={resetPanelLayout}
+                className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              >
+                Reset
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(Object.keys(DEFAULT_DASHBOARD_PANEL_VISIBILITY) as DashboardPanelId[]).map(id => (
+                <div key={id} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                  <span className="material-symbols-outlined text-text-muted !text-[20px]" aria-hidden="true">dashboard_customize</span>
+                  <span className="flex-1 text-sm text-foreground">{PANEL_LABELS[id]}</span>
+                  <button
+                    type="button"
+                    onClick={() => togglePanel(id)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                      panelVisibility[id]
+                        ? 'bg-primary/20 text-primary border-primary/30 hover:bg-primary/30'
+                        : 'bg-white/5 text-text-muted border-white/10 hover:bg-white/10'
+                    }`}
+                    aria-pressed={panelVisibility[id]}
+                  >
+                    {panelVisibility[id] ? 'On' : 'Off'}
+                  </button>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -239,6 +388,34 @@ export default function Settings({
                     </ul>
                   </div>
                 )}
+                <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="text-xs text-foreground font-medium">Recent notification history</p>
+                    <button
+                      type="button"
+                      onClick={clearNotificationLog}
+                      disabled={notificationLog.length === 0}
+                      className="text-[11px] text-text-muted hover:text-primary disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {notificationLog.length === 0 ? (
+                    <p className="text-[11px] text-text-muted">No local notification history yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {notificationLog.slice(0, 5).map(entry => (
+                        <div key={entry.id} className="flex items-start gap-2 rounded-md bg-white/[0.035] px-2 py-2">
+                          <span className="material-symbols-outlined text-text-muted !text-[16px] mt-0.5" aria-hidden="true">notifications</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs text-foreground">{entry.title}</p>
+                            <p className="truncate text-[10px] text-text-muted">{entry.body ?? entry.type}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>
@@ -248,6 +425,38 @@ export default function Settings({
             <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">System</h2>
             <div className="p-4 rounded-lg bg-white/5 border border-white/5">
               <SystemMetricsDisplay cpuLoad={cpuLoad} memUsed={memUsed} />
+            </div>
+          </section>
+
+          {/* Sync health */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Sync Health</h2>
+              <button
+                type="button"
+                onClick={refreshLocalStatus}
+                className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              >
+                Refresh
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(Object.keys(SYNC_LABELS) as SyncService[]).map(service => {
+                const record = syncHealth[service];
+                const ok = record?.status === 'ok';
+                return (
+                  <div key={service} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                    <span className={`h-2 w-2 rounded-full ${ok ? 'bg-green-400' : record ? 'bg-red-400' : 'bg-white/20'}`} aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-foreground">{SYNC_LABELS[service]}</p>
+                      <p className="truncate text-[10px] text-text-muted">{formatSyncTime(record?.checkedAt)}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${ok ? 'text-green-400' : record ? 'text-red-400' : 'text-text-muted'}`}>
+                      {record?.status ?? 'idle'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
@@ -360,6 +569,46 @@ export default function Settings({
           {/* Danger zone */}
           <section>
             <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Data</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <button
+                type="button"
+                onClick={exportLocalData}
+                className="py-2 rounded-lg border border-white/10 text-sm font-medium text-foreground hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Export local data
+              </button>
+              <button
+                type="button"
+                onClick={() => importInputRef.current?.click()}
+                className="py-2 rounded-lg border border-white/10 text-sm font-medium text-foreground hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Import local data
+              </button>
+            </div>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={e => { void importLocalData(e.target.files?.[0] ?? null); }}
+              aria-label="Import local dashboard data"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <button
+                type="button"
+                onClick={clearTaskData}
+                className="py-2 rounded-lg border border-white/10 text-sm font-medium text-text-muted hover:bg-white/5 hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Clear tasks only
+              </button>
+              <button
+                type="button"
+                onClick={clearNotificationLog}
+                className="py-2 rounded-lg border border-white/10 text-sm font-medium text-text-muted hover:bg-white/5 hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Clear notification history
+              </button>
+            </div>
             {confirmClear ? (
               <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 flex flex-col gap-3">
                 <p className="text-sm text-red-300 font-medium">This will erase all tasks, checklist items, and your profile name. Are you sure?</p>

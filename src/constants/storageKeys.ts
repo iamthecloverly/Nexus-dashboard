@@ -19,10 +19,17 @@ export const STORAGE_KEYS = {
   calendarMainId: 'dashboard_calendar_main_id',
   /** JSON string array of calendar IDs to include (optional). */
   calendarIncludedIds: 'dashboard_calendar_included_ids',
+  /** JSON object of dashboard panel IDs to visible/hidden booleans. */
+  dashboardPanelVisibility: 'dashboard_panel_visibility',
+  /** JSON array of recent local notification records. */
+  notificationLog: 'dashboard_notification_log',
+  /** JSON object of integration sync status records. */
+  syncHealth: 'dashboard_sync_health',
+  /** JSON array of focus session notes and completions. */
+  focusSessions: 'dashboard_focus_sessions',
 } as const;
 
 /** sessionStorage keys (tab-scoped); not cleared by Settings → Clear All Data */
 export const SESSION_KEYS = {
   viewportDesktopOverride: 'dashboard_viewport_desktop_override',
 } as const;
-

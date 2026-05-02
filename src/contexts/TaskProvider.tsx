@@ -7,12 +7,31 @@ const DEFAULT_TASKS: Task[] = [];
 
 function isValidTask(t: unknown): t is Task {
   const task = t as Task;
+  const source = task.source as unknown;
   return (
     typeof t === 'object' && t !== null &&
     typeof task.id === 'string' && task.id.length > 0 &&
     typeof task.title === 'string' &&
     typeof task.completed === 'boolean' &&
     (task.group === 'now' || task.group === 'next') &&
+    (task.priority === undefined || task.priority === 'Priority' || task.priority === 'Critical') &&
+    (task.dueDate === undefined || typeof task.dueDate === 'string') &&
+    (task.deferredUntil === undefined || typeof task.deferredUntil === 'string') &&
+    (task.createdAt === undefined || typeof task.createdAt === 'string') &&
+    (
+      source === undefined ||
+      (
+        typeof source === 'object' &&
+        source !== null &&
+        (
+          (source as { type?: unknown }).type === 'manual' ||
+          (source as { type?: unknown }).type === 'email' ||
+          (source as { type?: unknown }).type === 'calendar'
+        ) &&
+        ((source as { id?: unknown }).id === undefined || typeof (source as { id?: unknown }).id === 'string') &&
+        ((source as { label?: unknown }).label === undefined || typeof (source as { label?: unknown }).label === 'string')
+      )
+    ) &&
     (task.tags === undefined || (Array.isArray(task.tags) && task.tags.every(tag => typeof tag === 'string')))
   );
 }
@@ -63,4 +82,3 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     </TaskContext.Provider>
   );
 }
-

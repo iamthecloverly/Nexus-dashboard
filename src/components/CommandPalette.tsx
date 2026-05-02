@@ -17,6 +17,10 @@ export type CommandPaletteProps = {
   onRefreshCalendar: () => void;
   /** Create a task inline from the palette (e.g. "Add task: Buy milk"). */
   onAddTask: (title: string) => void;
+  onOpenTodayTimeline: () => void;
+  onGenerateBrief: () => void;
+  onExportData: () => void;
+  onStartFocus: () => void;
 };
 
 type Cmd =
@@ -32,9 +36,13 @@ const COMMANDS: Cmd[] = [
   { kind: 'view', id: 'Settings', label: 'Settings', icon: 'settings' },
   { kind: 'music', label: 'Music — toggle player or open library', icon: 'library_music' },
   { kind: 'action', id: 'add-task', label: 'Add task', icon: 'add_task' },
+  { kind: 'action', id: 'today-timeline', label: 'Open today timeline', icon: 'timeline' },
+  { kind: 'action', id: 'start-focus', label: 'Start 25 minute focus', icon: 'play_circle' },
+  { kind: 'action', id: 'generate-brief', label: 'Generate daily brief', icon: 'auto_awesome' },
   { kind: 'action', id: 'compose-email', label: 'Compose email', icon: 'edit_square' },
   { kind: 'action', id: 'mark-all-read', label: 'Mark all emails as read', icon: 'drafts' },
   { kind: 'action', id: 'refresh-calendar', label: 'Refresh calendar', icon: 'event_available' },
+  { kind: 'action', id: 'export-data', label: 'Export local data', icon: 'download' },
 ];
 
 function isTypingTarget(el: Element | null): boolean {
@@ -60,6 +68,10 @@ export function CommandPalette({
   onMarkAllRead,
   onRefreshCalendar,
   onAddTask,
+  onOpenTodayTimeline,
+  onGenerateBrief,
+  onExportData,
+  onStartFocus,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
@@ -131,6 +143,18 @@ export function CommandPalette({
             onComposeEmail();
             onClose();
             break;
+          case 'today-timeline':
+            onOpenTodayTimeline();
+            onClose();
+            break;
+          case 'start-focus':
+            onStartFocus();
+            onClose();
+            break;
+          case 'generate-brief':
+            onGenerateBrief();
+            onClose();
+            break;
           case 'mark-all-read':
             onMarkAllRead();
             onClose();
@@ -139,10 +163,14 @@ export function CommandPalette({
             onRefreshCalendar();
             onClose();
             break;
+          case 'export-data':
+            onExportData();
+            onClose();
+            break;
         }
       }
     },
-    [setCurrentView, onToggleMusic, onComposeEmail, onMarkAllRead, onRefreshCalendar, onClose],
+    [setCurrentView, onToggleMusic, onComposeEmail, onOpenTodayTimeline, onStartFocus, onGenerateBrief, onMarkAllRead, onRefreshCalendar, onExportData, onClose],
   );
 
   useEffect(() => {

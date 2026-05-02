@@ -6,6 +6,7 @@ import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 import type { Email, GmailAccountId, ThreadMessage } from '../types/email';
 import { EmailContext } from './emailContext';
 import { formatEmailTime } from '../lib/emailTime';
+import { markSyncStatus } from '../lib/dashboardFeatures';
 
 const ACCOUNTS: GmailAccountId[] = ['primary', 'secondary'];
 
@@ -62,18 +63,22 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         setEmailsByAccount(prev => ({ ...prev, [accountId]: emails }));
         setConnectedByAccount(prev => ({ ...prev, [accountId]: true }));
         setServerErrorByAccount(prev => ({ ...prev, [accountId]: false }));
+        markSyncStatus(accountId === 'primary' ? 'gmailPrimary' : 'gmailSecondary', 'ok');
       } else if (res.status === 401 || res.status === 403) {
         // When dashboard gate blocks (session expired / allowlist / missing profile), treat as disconnected.
         setConnectedByAccount(prev => ({ ...prev, [accountId]: false }));
         setServerErrorByAccount(prev => ({ ...prev, [accountId]: false }));
+        markSyncStatus(accountId === 'primary' ? 'gmailPrimary' : 'gmailSecondary', 'error', `HTTP ${res.status}`);
       } else {
         // 5xx or unexpected — server is up but erroring; keep connected state, flag error
         setServerErrorByAccount(prev => ({ ...prev, [accountId]: true }));
+        markSyncStatus(accountId === 'primary' ? 'gmailPrimary' : 'gmailSecondary', 'error', `HTTP ${res.status}`);
       }
     } catch {
       // AbortError = our 15s timeout fired; treat same as network error
       setConnectedByAccount(prev => ({ ...prev, [accountId]: false }));
       setServerErrorByAccount(prev => ({ ...prev, [accountId]: true }));
+      markSyncStatus(accountId === 'primary' ? 'gmailPrimary' : 'gmailSecondary', 'error', 'Network error');
     } finally {
       setEmailsLoadingByAccount(prev => ({ ...prev, [accountId]: false }));
     }

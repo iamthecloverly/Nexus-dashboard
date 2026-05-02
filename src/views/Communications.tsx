@@ -11,6 +11,7 @@ import { TaskSuggestion } from '../types/taskSuggestion';
 import type { TaskPriority } from '../types/task';
 import { csrfHeaders } from '../lib/csrf';
 import type { SetViewFn } from '../config/navigation';
+import { buildTaskFromEmail, isFollowUpEmail } from '../lib/dashboardFeatures';
 
 interface ComposeState {
   to: string;
@@ -365,6 +366,7 @@ function InboxPane({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [compose, setCompose] = useState<ComposeState | null>(null);
   const [detail, setDetail] = useState<EmailDetail | null>(null);
+  const [followUpOnly, setFollowUpOnly] = useState(false);
   /** Set of message IDs that are currently expanded in the thread accordion */
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -384,7 +386,16 @@ function InboxPane({
       const priority: TaskPriority | undefined = VALID_PRIORITIES.has(s.priority as TaskPriority)
         ? (s.priority as TaskPriority)
         : undefined;
-      addTask({ id: s.id, title: s.title, priority, completed: false, group: s.group });
+      addTask({
+        id: s.id,
+        title: s.title,
+        priority,
+        completed: false,
+        group: s.group,
+        source: { type: 'email', id: s.emailId, label: 'AI suggestion' },
+        createdAt: new Date().toISOString(),
+        tags: ['email'],
+      });
     }
     showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');
     setSuggestions([]);
@@ -394,10 +405,16 @@ function InboxPane({
   const visibleEmails = useMemo(() => emails.filter(email =>
     !email.archived &&
     !email.deleted &&
+    (!followUpOnly || isFollowUpEmail(email)) &&
     ((email.subject ?? '').toLowerCase().includes(lowerQuery) ||
      (email.sender ?? '').toLowerCase().includes(lowerQuery) ||
      (email.preview ?? '').toLowerCase().includes(lowerQuery))
-  ), [emails, lowerQuery]);
+  ), [emails, followUpOnly, lowerQuery]);
+
+  const followUpCount = useMemo(
+    () => emails.filter(email => isFollowUpEmail(email)).length,
+    [emails],
+  );
 
   const unreadCount = useMemo(
     () => emails.filter(e => e.unread && !e.archived && !e.deleted).length,
@@ -407,6 +424,21 @@ function InboxPane({
   const openCompose = useCallback((prefill?: Partial<ComposeState>) => {
     setCompose({ ...EMPTY_COMPOSE, ...prefill });
   }, []);
+
+  const addTaskFromEmail = useCallback((email: Pick<Email, 'id' | 'subject' | 'sender' | 'preview'>) => {
+    addTask(buildTaskFromEmail(email));
+    showToast('Email task added', 'success');
+  }, [addTask, showToast]);
+
+  const addTaskFromDetail = useCallback(() => {
+    if (!detail) return;
+    addTaskFromEmail({
+      id: detail.id,
+      subject: detail.subject,
+      sender: detail.sender,
+      preview: detail.body ? detail.body.slice(0, 220) : `Email from ${detail.sender}`,
+    });
+  }, [addTaskFromEmail, detail]);
 
   const analyzeAllUnread = async () => {
     if (accountId !== 'primary') {
@@ -720,10 +752,19 @@ function InboxPane({
           setSelectedIndex(i => Math.max(i - 1, 0));
         }
       }
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        if (detail) {
+          addTaskFromDetail();
+          return;
+        }
+        const email = current[idx];
+        if (email) addTaskFromEmail(email);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [accountId, archiveEmail, detail, isActive, onCloseView, showToast]);
+  }, [accountId, addTaskFromDetail, addTaskFromEmail, archiveEmail, detail, isActive, onCloseView, showToast]);
 
   return (
     <div className={`flex-1 min-w-0 min-h-0 flex flex-col border-white/10 ${isActive ? 'bg-white/[0.02]' : ''}`} onMouseDown={onActivate}>
@@ -737,6 +778,18 @@ function InboxPane({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFollowUpOnly(v => !v)}
+            aria-pressed={followUpOnly}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+              followUpOnly
+                ? 'text-amber-200 bg-amber-300/10 border-amber-300/25'
+                : 'text-text-muted bg-white/[0.04] border-white/10 hover:text-foreground'
+            }`}
+          >
+            <span className="material-symbols-outlined !text-sm" aria-hidden="true">flag</span>
+            {followUpCount}
+          </button>
           <button
             onClick={analyzeAllUnread}
             disabled={isAnalyzingAll || !gmailConnected || accountId !== 'primary'}
@@ -892,6 +945,14 @@ function InboxPane({
                   </p>
                 </div>
                 <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={addTaskFromDetail}
+                    aria-label="Create task from this email"
+                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add_task</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => openCompose({ to: detail.senderEmail, subject: `Re: ${detail.subject}` })}

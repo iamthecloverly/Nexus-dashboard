@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Task } from '../types/task';
+import { addNotificationLog } from '../lib/dashboardFeatures';
 
 /**
  * Fires a desktop notification for tasks that are due today and not yet
@@ -25,6 +26,7 @@ export function useTaskNotifications(tasks: Task[], enabled = true) {
 
       try {
         const priorityPrefix = task.priority === 'Critical' ? '🔴 ' : task.priority === 'Priority' ? '🟡 ' : '';
+        addNotificationLog({ type: 'task', title: 'Task due today', body: task.title });
         const n = new Notification(`${priorityPrefix}Task due today`, {
           body: task.title,
           icon: '/favicon.ico',

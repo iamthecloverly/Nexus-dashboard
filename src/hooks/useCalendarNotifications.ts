@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { parseISO, differenceInSeconds } from 'date-fns';
 import type { CalendarEvent } from '../types/calendar';
+import { addNotificationLog } from '../lib/dashboardFeatures';
 
 const NOTIFY_BEFORE_SECONDS = 5 * 60;
 
@@ -68,6 +69,7 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
         const body = minutesBefore > 0
           ? `Starting in ${minutesBefore} minute${minutesBefore !== 1 ? 's' : ''}`
           : 'Starting now';
+        addNotificationLog({ type: 'calendar', title: event.summary ?? 'Calendar Event', body });
 
         try {
           const n = new Notification(event.summary ?? 'Calendar Event', {

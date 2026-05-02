@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { markSyncStatus } from '../lib/dashboardFeatures';
 
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
 function calendarDayInTimeZone(timeZone: string, date = new Date()): string {
@@ -154,6 +155,7 @@ export function useCalendarEvents(): CalendarState {
       lastFetchedDayRef.current = requestDayStamp;
       if ('error' in result) {
         const err = result.error;
+        markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
         if (err.status === 401) {
           const code = err.code ?? '';
           const msg = err.error ?? '';
@@ -183,12 +185,14 @@ export function useCalendarEvents(): CalendarState {
         const todays = result.data.events ?? [];
         setEvents(todays);
         setIsConnected(true);
+        markSyncStatus('calendar', 'ok');
       }
     } catch {
       if (isStale()) return;
       lastFetchedDayRef.current = requestDayStamp;
       setIsConnected(false);
       setError('network_error');
+      markSyncStatus('calendar', 'error', 'Network error');
     } finally {
       if (!isStale()) setIsLoading(false);
     }
