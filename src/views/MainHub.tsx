@@ -12,6 +12,7 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { useDismissibleLayer } from '../hooks/useDismissibleLayer';
 import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
+import { useWeatherForecast } from '../hooks/useWeatherForecast';
 import { SystemMetricsTile } from '../components/dashboard/SystemMetricsTile';
 import { DashboardDigestCard } from '../components/dashboard/DashboardDigestCard';
 import { TagInput } from '../components/TagInput';
@@ -64,6 +65,89 @@ function ClockDisplay() {
       </h1>
       <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{date}</p>
     </>
+  );
+}
+
+/** Material Symbols ligature name for WMO weather_code. */
+function weatherMaterialIconName(code: number | null): string {
+  if (code === null) return 'wb_cloudy';
+  if (code === 0) return 'wb_sunny';
+  if (code <= 3) return 'partly_cloudy_day';
+  if (code === 45 || code === 48) return 'foggy';
+  if (code >= 51 && code <= 67) return 'rainy';
+  if (code >= 71 && code <= 86) return 'snowing';
+  if (code >= 95) return 'thunderstorm';
+  return 'wb_cloudy';
+}
+
+function MainHubWeatherTile() {
+  const { data, loading, error, refresh } = useWeatherForecast(true);
+
+  const useMyLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        try {
+          localStorage.setItem(
+            STORAGE_KEYS.weatherCoords,
+            JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+          );
+        } catch { /* quota */ }
+        refresh();
+      },
+      () => { /* denied */ },
+      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 600_000 },
+    );
+  }, [refresh]);
+
+  const iconName = weatherMaterialIconName(data?.weatherCode ?? null);
+  const temperature = data ? `${Math.round(data.temperatureC)}°` : loading ? '--' : 'N/A';
+  const feelsLike = data ? `${Math.round(data.apparentC)}°` : '--';
+  const humidity = data?.humidity != null ? `${Math.round(data.humidity)}%` : '--';
+
+  return (
+    <section className="w-full rounded-xl border border-white/10 bg-white/[0.035] p-4 shadow-inner md:w-[300px]" aria-label="Weather">
+      <div className="flex items-start gap-3">
+        <span
+          className="material-symbols-outlined flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[28px] text-primary"
+          aria-hidden="true"
+        >
+          {iconName}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">Weather</p>
+              <p className="mt-1 font-heading text-2xl text-foreground">{temperature}</p>
+            </div>
+            <button
+              type="button"
+              onClick={refresh}
+              aria-label="Refresh weather"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-white/[0.08] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className={`material-symbols-outlined !text-[18px] ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">
+                refresh
+              </span>
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-3 text-xs text-text-muted">
+            <span>Feels {feelsLike}</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="material-symbols-outlined !text-[16px]" aria-hidden="true">humidity_percentage</span>
+              {humidity}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={useMyLocation}
+            className="mt-2 text-[10px] font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+          >
+            {error ? 'Retry location' : 'My location'}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -794,24 +878,18 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   }, [setCurrentView]);
 
   return (
-    <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden px-8 py-10 max-w-[1440px] mx-auto w-full">
-      <header className="flex justify-between items-end mb-8 flex-shrink-0">
-        <div className="flex flex-col gap-1.5">
-          <ClockDisplay />
-        </div>
-        <div className="flex gap-3 items-center">
-          <div className="flex items-center gap-2 glass-panel !rounded-full px-4 py-2 text-xs text-text-muted">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-            Online
+    <div className="relative z-10 flex h-screen flex-1 flex-col overflow-hidden px-5 py-6 md:px-6 xl:px-7 w-full max-w-none">
+      <header className="glass-panel mb-5 flex-shrink-0 overflow-hidden p-5 md:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2">
+            <ClockDisplay />
           </div>
-          <button onClick={() => setCurrentView('Settings')} aria-label="Settings" className="glass-panel p-2.5 rounded-full flex items-center justify-center group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-            <span className="material-symbols-outlined text-text-muted group-hover:text-primary transition-colors text-[20px]" aria-hidden="true">tune</span>
-          </button>
+          <MainHubWeatherTile />
         </div>
       </header>
 
       {showOnboarding && tasks.length === 0 && !isCalendarConnected && (
-        <div className="flex-shrink-0 mb-6 glass-panel rounded-xl p-4 border-l-4 border-primary/60 flex items-start gap-4">
+        <div className="flex-shrink-0 mb-5 glass-panel rounded-xl p-4 border-l-4 border-primary/60 flex items-start gap-4">
           <span className="material-symbols-outlined text-primary text-[24px] flex-shrink-0 mt-0.5" aria-hidden="true">waving_hand</span>
           <div className="flex-1">
             <p className="text-sm font-semibold text-foreground mb-1">Welcome to your dashboard!</p>
@@ -831,10 +909,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       )}
 
       <main
-        className="flex-1 overflow-y-auto pr-4 pb-12 custom-scrollbar"
+        className="flex-1 overflow-y-auto pr-2 pb-8 custom-scrollbar"
         style={{ contentVisibility: 'auto', containIntrinsicSize: '1100px 900px' }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[minmax(200px,_auto)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-5 auto-rows-[minmax(190px,_auto)]">
 
           {panelVisibility.digest && (
             <DashboardDigestCard
@@ -854,12 +932,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           )}
 
           {panelVisibility.todayTimeline && (
-            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 p-6 flex flex-col relative overflow-hidden scroll-mt-4">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/55 via-sky-400/20 to-transparent pointer-events-none" />
+            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[250px] p-5 flex flex-col relative overflow-hidden scroll-mt-4">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/45 via-sky-400/12 to-transparent pointer-events-none" />
               <div className="flex items-center justify-between gap-3 mb-5">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">timeline</span>
-                  Today Timeline
+                  Today&apos;s Timeline
                 </h2>
                 <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded">
                   {todayTimeline.length} ITEMS
@@ -876,9 +954,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       key={item.id}
                       type="button"
                       onClick={() => handleTimelineActivate(item)}
-                      className="flex items-start gap-3 rounded-lg border border-white/8 bg-white/[0.025] px-3 py-2.5 text-left hover:border-white/15 hover:bg-white/[0.05] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-3 text-left hover:border-white/15 hover:bg-white/[0.05] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
-                      <span className="material-symbols-outlined mt-0.5 text-[18px] text-text-muted" aria-hidden="true">
+                      <span className="material-symbols-outlined flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.035] text-[18px] text-text-muted" aria-hidden="true">
                         {TIMELINE_ICON[item.kind]}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -898,13 +976,13 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </section>
           )}
 
-          {panelVisibility.alerts && (followUpEmails.length > 0 || calendarConflicts.length > 0 || deferredTasks.length > 0) && (
-            <section className="glass-panel col-span-1 md:col-span-2 p-6 flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-300/60 via-amber-300/20 to-transparent pointer-events-none" />
+          {panelVisibility.alerts && (
+            <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[250px] p-5 flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-300/45 via-amber-300/12 to-transparent pointer-events-none" />
               <div className="flex items-center justify-between gap-3 mb-5">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-amber-300 text-[22px]" aria-hidden="true">release_alert</span>
-                  Attention
+                  Action Center
                 </h2>
                 <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded">
                   {followUpEmails.length + calendarConflicts.length + deferredTasks.length}
@@ -940,8 +1018,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
           {/* Calendar Widget */}
           {panelVisibility.schedule && (
-          <div className="glass-panel col-span-1 md:col-span-2 row-span-2 p-6 flex flex-col relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/55 via-primary/20 to-transparent pointer-events-none" />
+          <div className="glass-panel col-span-1 md:col-span-2 xl:col-span-4 row-span-2 p-5 flex flex-col relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none" />
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
               <button
                 onClick={() => setShowSchedule(true)}
@@ -1129,9 +1207,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
           {/* Tasks */}
           {panelVisibility.tasks && (
-          <div id="main-tasks-panel" className="glass-panel col-span-1 row-span-2 p-7 flex flex-col relative overflow-hidden scroll-mt-4">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/70 via-green-400/20 to-transparent pointer-events-none"></div>
-            <div className="flex justify-between items-center mb-8">
+          <div id="main-tasks-panel" className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] max-h-[360px] p-5 flex flex-col relative overflow-hidden scroll-mt-4">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/45 via-green-400/12 to-transparent pointer-events-none"></div>
+            <div className="flex justify-between items-center mb-5">
               <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                 <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">checklist</span>
                 Tasks
@@ -1167,9 +1245,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               </div>
             </div>
             {tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center flex-1 text-center gap-3 opacity-60">
-                <span className="material-symbols-outlined text-3xl text-text-muted">task_alt</span>
-                <p className="text-sm text-text-muted">No tasks yet.<br/>Click + to add one.</p>
+              <div className="flex flex-1 items-center rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3">
+                <p className="text-sm text-text-muted">No active tasks right now.</p>
               </div>
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
@@ -1310,30 +1387,31 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           </div>
           )}
 
-          {/* Triage */}
+          {/* Gmail Inbox */}
           {panelVisibility.triage && (
           <button
             onClick={() => setCurrentView('Communications')}
-            className="glass-panel col-span-1 row-span-1 p-6 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] p-5 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             aria-label="Open email inbox"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/70 via-orange-400/20 to-transparent pointer-events-none"></div>
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/45 via-orange-400/12 to-transparent pointer-events-none"></div>
             {unreadCount > 0 && (
               <div className="absolute top-5 right-5 w-2 h-2">
                 <span className="animate-pulse motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75" aria-hidden="true"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.55)]"></span>
               </div>
             )}
-            <h2 className="font-heading text-lg text-foreground mb-auto flex items-center gap-3">
-              <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">mark_email_unread</span>
-              Triage
+            <h2 className="font-heading text-lg text-foreground mb-6 flex items-center gap-3">
+              <span className="material-symbols-outlined text-orange-300 text-[22px]" aria-hidden="true">mail</span>
+              Gmail Inbox
             </h2>
-            <div className="mt-4">
+            <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
               {gmailConnected ? (
                 <>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-4xl font-heading text-foreground">{unreadCount}</span>
-                    <span className="text-xs text-text-muted font-medium uppercase tracking-widest">New</span>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">Gmail</p>
+                  <div className="flex items-baseline gap-2 mt-2 mb-1">
+                    <span className="text-3xl font-heading text-foreground">{unreadCount}</span>
+                    <span className="text-xs text-text-muted font-medium uppercase tracking-widest">Unread</span>
                   </div>
                   {lastUnreadEmail ? (
                     <p className="text-xs text-text-muted truncate group-hover/box:text-foreground transition-colors">Last from <span className="text-primary group-hover/box:font-bold">{lastUnreadEmail.sender}</span></p>
@@ -1392,16 +1470,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
         </div>
       </main>
-
-      {/* FAB */}
-      <button
-        onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
-        aria-label="Add task"
-        className="fixed right-10 w-16 h-16 bg-primary text-background-dark rounded-2xl flex items-center justify-center shadow-[0_12px_36px_rgba(56,189,248,0.38)] hover:shadow-[0_18px_46px_rgba(56,189,248,0.5)] transition-shadow z-50 overflow-hidden group btn-interact focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground bottom-10 max-lg:bottom-[calc(var(--app-bottom-nav-height,0px)+env(safe-area-inset-bottom,0px)+2.5rem)]"
-      >
-        <span className="material-symbols-outlined !text-[32px] !font-bold relative z-10" aria-hidden="true">add</span>
-        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" aria-hidden="true"></div>
-      </button>
 
       {showQuickAdd && (
         <div className="fixed inset-0 z-50 flex items-end justify-end p-10 pointer-events-none">

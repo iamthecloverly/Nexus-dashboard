@@ -20,11 +20,16 @@ export const DEFAULT_DASHBOARD_PANEL_VISIBILITY: Record<DashboardPanelId, boolea
   digest: true,
   todayTimeline: true,
   alerts: true,
-  schedule: true,
+  schedule: false,
   system: true,
   tasks: true,
   triage: true,
-  github: true,
+  github: false,
+};
+
+const DASHBOARD_PANEL_LAYOUT_VERSION = 3;
+type StoredDashboardPanelVisibility = Partial<Record<DashboardPanelId, boolean>> & {
+  __layoutVersion?: number;
 };
 
 export type SyncService = 'calendar' | 'gmailPrimary' | 'gmailSecondary' | 'system';
@@ -100,15 +105,23 @@ function safeWriteJson(key: string, value: unknown) {
 }
 
 export function readDashboardPanelVisibility(): Record<DashboardPanelId, boolean> {
-  const stored = safeReadJson<Partial<Record<DashboardPanelId, boolean>>>(
+  const stored = safeReadJson<StoredDashboardPanelVisibility>(
     STORAGE_KEYS.dashboardPanelVisibility,
     {},
   );
-  return { ...DEFAULT_DASHBOARD_PANEL_VISIBILITY, ...stored };
+  if (stored.__layoutVersion !== DASHBOARD_PANEL_LAYOUT_VERSION) {
+    return DEFAULT_DASHBOARD_PANEL_VISIBILITY;
+  }
+  const panels = { ...stored };
+  delete panels.__layoutVersion;
+  return { ...DEFAULT_DASHBOARD_PANEL_VISIBILITY, ...panels };
 }
 
 export function writeDashboardPanelVisibility(next: Record<DashboardPanelId, boolean>) {
-  safeWriteJson(STORAGE_KEYS.dashboardPanelVisibility, next);
+  safeWriteJson(STORAGE_KEYS.dashboardPanelVisibility, {
+    __layoutVersion: DASHBOARD_PANEL_LAYOUT_VERSION,
+    ...next,
+  });
 }
 
 export function readSyncHealth(): SyncHealth {

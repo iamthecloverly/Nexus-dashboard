@@ -1,33 +1,8 @@
-import { useCallback, memo, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
-import { useWeatherForecast } from '../../hooks/useWeatherForecast';
 import { csrfHeaders } from '../../lib/csrf';
 import type { SetViewFn } from '../../config/navigation';
 import type { CalendarEvent } from '../../types/calendar';
-
-/** Material Symbols ligature name for WMO weather_code (stable icon names only). */
-function weatherMaterialIconName(code: number | null): string {
-  if (code === null) return 'wb_cloudy';
-  if (code === 0) return 'wb_sunny';
-  if (code <= 3) return 'partly_cloudy_day';
-  if (code === 45 || code === 48) return 'foggy';
-  if (code >= 51 && code <= 67) return 'rainy';
-  if (code >= 71 && code <= 86) return 'snowing';
-  if (code >= 95) return 'thunderstorm';
-  return 'wb_cloudy';
-}
-
-const WeatherGlyph = memo(function WeatherGlyph({ code }: { code: number | null }) {
-  const name = weatherMaterialIconName(code);
-  return (
-    <span
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[36px] leading-none text-primary material-symbols-outlined"
-      aria-hidden="true"
-    >
-      {name}
-    </span>
-  );
-});
 
 /** GitHub logo — avoids pulling in an extra icon/font dependency. */
 function GithubMark({ className }: { className?: string }) {
@@ -74,11 +49,6 @@ export function DashboardDigestCard({
   const showGmail = gmailConnected || gmailServerError;
   const showGithub = githubConnected;
   const showDiscord = discordWebhookConfigured;
-
-  const { data, loading, error, refresh } = useWeatherForecast(true);
-
-  /** Show tile while loading, when we have data, or after a failed fetch (compact retry — never blank placeholder). */
-  const showWeatherTile = loading || !!data || !!error;
 
   // AI daily brief — cached in localStorage per-day so tab switches don't waste tokens.
   const [brief, setBrief] = useState<string | null>(() => {
@@ -143,23 +113,6 @@ export function DashboardDigestCard({
     return () => window.removeEventListener('dashboard:generate-brief', handler);
   }, [fetchBrief]);
 
-  const useMyLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        try {
-          localStorage.setItem(
-            STORAGE_KEYS.weatherCoords,
-            JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-          );
-        } catch { /* quota */ }
-        refresh();
-      },
-      () => { /* denied */ },
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 600_000 },
-    );
-  }, [refresh]);
-
   const showCalendarRow = calendarConnected && nextEventSnippet != null;
   const showTasksRow = remainingTasks > 0;
 
@@ -167,7 +120,6 @@ export function DashboardDigestCard({
     Number(showGmail) +
     Number(showGithub) +
     Number(showDiscord) +
-    Number(showWeatherTile) +
     Number(showCalendarRow) +
     Number(showTasksRow);
 
@@ -240,10 +192,10 @@ export function DashboardDigestCard({
             className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
           >
             <span className="material-symbols-outlined text-orange-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-              mail
+              mark_email_unread
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Gmail</p>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Triage</p>
               <p className="text-2xl font-heading text-foreground tabular-nums">{gmailServerError ? '—' : unreadCount}</p>
               <p className="text-xs text-text-muted mt-1">
                 {gmailServerError ? 'Server unreachable' : unreadCount === 0 ? 'Inbox zero' : 'Unread'}
@@ -280,86 +232,6 @@ export function DashboardDigestCard({
           </div>
         )}
 
-        {showWeatherTile && (
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex flex-row items-center gap-3 min-h-[88px]">
-            {loading && !data ? (
-              <div className="flex items-center gap-3 w-full justify-center py-1 text-text-muted text-sm">
-                <span className="material-symbols-outlined animate-spin shrink-0 text-[22px]" aria-hidden="true">
-                  progress_activity
-                </span>
-                Loading weather…
-              </div>
-            ) : data ? (
-              <>
-                <WeatherGlyph code={data.weatherCode} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Weather</p>
-                  <p className="text-2xl font-heading text-foreground tabular-nums">{Math.round(data.temperatureC)}°</p>
-                  <p className="text-xs text-text-muted flex items-center gap-1.5 flex-wrap">
-                    <span>Feels {Math.round(data.apparentC)}°</span>
-                    {data.humidity != null && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span className="material-symbols-outlined inline-block text-[14px] shrink-0 opacity-70 align-middle" aria-hidden="true">
-                          water_drop
-                        </span>
-                        <span>{Math.round(data.humidity)}%</span>
-                      </>
-                    )}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => refresh()}
-                    className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-white/5 transition-colors"
-                    aria-label="Refresh weather"
-                    title="Refresh"
-                  >
-                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                      refresh
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={useMyLocation}
-                    aria-label="Use my current location for weather"
-                    className="text-[10px] font-medium text-primary hover:underline text-right px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-                  >
-                    My location
-                  </button>
-                </div>
-              </>
-            ) : error ? (
-              <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex items-start gap-3">
-                  <WeatherGlyph code={null} />
-                  <div>
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Weather</p>
-                    <p className="text-sm text-foreground">Couldn&apos;t load forecast</p>
-                    <p className="text-xs text-text-muted mt-0.5">Check network or try another location.</p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => refresh()}
-                    className="rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/[0.1] transition-colors"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={useMyLocation}
-                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:underline"
-                  >
-                    Use GPS
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
       </div>
 
       {/* AI Daily Brief — only shown when AI is configured */}

@@ -90,15 +90,24 @@ export function NavigationRail({
             type="button"
             onClick={() => go('MainHub')}
             aria-label="Nexus — Main hub"
-            className="relative outline-none rounded-2xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background-dark"
+            className="group flex w-full items-center gap-3 rounded-2xl p-1.5 pr-3 text-left transition-colors hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background-dark"
           >
-            <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/35 via-sky-400/25 to-transparent blur-md opacity-70" aria-hidden="true" />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-sky-400 to-sky-300 text-background-dark shadow-[0_12px_28px_rgba(56,189,248,0.35)] ring-1 ring-white/15">
-              <span className="material-symbols-outlined font-bold text-[26px] leading-none" aria-hidden="true">
-                hub
+            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+              <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/35 via-sky-400/25 to-transparent blur-md opacity-70" aria-hidden="true" />
+              <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-sky-400 to-sky-300 text-background-dark shadow-[0_12px_28px_rgba(56,189,248,0.35)] ring-1 ring-white/15">
+                <span className="material-symbols-outlined font-bold text-[26px] leading-none" aria-hidden="true">
+                  hub
+                </span>
               </span>
             </span>
-            <span className="sr-only">Nexus</span>
+            <span className="min-w-0">
+              <span className="block truncate font-heading text-lg font-semibold tracking-wide text-foreground transition-colors group-hover:text-primary">
+                Nexus
+              </span>
+              <span className="block truncate text-[10px] font-medium uppercase tracking-[0.22em] text-white/32">
+                Dashboard
+              </span>
+            </span>
           </button>
         </div>
 
@@ -133,6 +142,17 @@ export function NavigationRail({
               onHoverIntent={onPreloadMusic}
             />
             <RailIconButton label="Settings" icon="settings" active={active('Settings')} onClick={() => go('Settings')} />
+          </div>
+          <div className="px-1.5 pt-1 text-[10px] leading-relaxed text-white/30">
+            Made with love by{' '}
+            <a
+              href="https://linkedin.com/in/thecloverly"
+              target="_blank"
+              rel="noreferrer"
+              className="text-white/50 underline decoration-white/15 underline-offset-2 transition-colors hover:text-white/75 hover:decoration-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            >
+              Sribalaji
+            </a>
           </div>
         </div>
       </div>

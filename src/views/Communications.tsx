@@ -22,7 +22,7 @@ interface ComposeState {
 }
 
 const EMPTY_COMPOSE: ComposeState = { to: '', subject: '', body: '', sending: false, error: null };
-const EMAIL_ROW_PX = 92;
+const EMAIL_ROW_PX = 110;
 const UNREAD_DIVIDER_PX = 17;
 type RequestIdleCallbackFn = (cb: () => void, opts?: { timeout?: number }) => number;
 function getRequestIdleCallback(): RequestIdleCallbackFn | null {
@@ -30,22 +30,97 @@ function getRequestIdleCallback(): RequestIdleCallbackFn | null {
   return typeof w.requestIdleCallback === 'function' ? w.requestIdleCallback : null;
 }
 
-/** Renders server-sanitized HTML (still use only trusted API responses). */
-function EmailHtmlBody({ html }: { html: string }) {
+function buildEmailFrameDoc(html: string): string {
+  return `<!doctype html>
+<html>
+<head>
+  <base target="_blank">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 20px;
+      background: #fff;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      max-width: 100%;
+    }
+    img, picture, svg {
+      max-width: 100%;
+      height: auto;
+    }
+    table {
+      max-width: 100%;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    a {
+      color: #1a73e8;
+    }
+  </style>
+</head>
+<body>${html}</body>
+</html>`;
+}
+
+/** Renders server-sanitized HTML in an iframe so email CSS cannot leak into the app. */
+function EmailHtmlFrame({ html }: { html: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(420);
+  const srcDoc = useMemo(() => buildEmailFrameDoc(html), [html]);
+
+  const resize = useCallback(() => {
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+      const contentHeight = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
+      const nextHeight = Math.max(280, Math.min(5000, contentHeight));
+      setHeight(nextHeight + 2);
+    } catch {
+      setHeight(720);
+    }
+  }, []);
+
   return (
-    <div
-      className="email-html-body max-w-none text-[15px] sm:text-base text-foreground/90 leading-[1.65] tracking-[0.01em] break-words [&_img]:max-w-full [&_img]:h-auto [&_picture]:block [&_picture_img]:max-w-full [&_svg]:max-w-full [&_table]:max-w-full [&_table]:border-collapse [&_td]:border [&_td]:border-white/10 [&_td]:align-top [&_th]:border [&_th]:border-white/10 [&_th]:align-top [&_a]:text-primary [&_a]:underline [&_a]:break-all [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:my-2 [&_blockquote]:text-text-muted [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:text-[13px] [&_code]:text-[13px] [&_li]:my-0.5 [&_ul]:my-2 [&_ol]:my-2"
-      dangerouslySetInnerHTML={{ __html: html }}
+    <iframe
+      ref={iframeRef}
+      title="Email body"
+      srcDoc={srcDoc}
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      className="email-html-frame"
+      style={{ height }}
+      onLoad={resize}
     />
   );
 }
 
-function EmailBodyDisplay({ plain, html }: { plain: string; html?: string | null }) {
+function EmailBodyDisplay({
+  plain,
+  html,
+}: {
+  plain: string;
+  html?: string | null;
+}) {
   if (html?.trim()) {
-    return <EmailHtmlBody html={html} />;
+    return <EmailHtmlFrame html={html} />;
   }
   return (
-    <pre className="text-[15px] sm:text-base text-foreground/90 whitespace-pre-wrap break-words font-sans leading-[1.65] tracking-[0.01em]">
+    <pre className="email-readable-body">
       {plain || '(empty)'}
     </pre>
   );
@@ -282,7 +357,7 @@ const EmailRow = React.memo(function EmailRow({
             </span>
           )}
         </div>
-        <p className={`text-[13px] truncate leading-relaxed ${email.unread ? 'text-text-muted' : 'text-text-muted/70'}`}>{email.preview}</p>
+        <p className={`text-[13px] leading-relaxed line-clamp-2 ${email.unread ? 'text-text-muted' : 'text-text-muted/70'}`}>{email.preview}</p>
       </div>
 
       <div
@@ -367,6 +442,7 @@ function InboxPane({
   const [compose, setCompose] = useState<ComposeState | null>(null);
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [followUpOnly, setFollowUpOnly] = useState(false);
+  const [readerWide, setReaderWide] = useState(false);
   /** Set of message IDs that are currently expanded in the thread accordion */
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -378,6 +454,7 @@ function InboxPane({
 
   // AI task extraction (primary only for now; server bulk endpoint assumes primary auth)
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
+  const [isAnalyzingDetail, setIsAnalyzingDetail] = useState(false);
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([]);
   const [suggestionContext, setSuggestionContext] = useState('');
 
@@ -421,6 +498,12 @@ function InboxPane({
     [emails],
   );
 
+  const detailStats = useMemo(() => {
+    if (!detail?.body) return { words: 0, readMinutes: 0 };
+    const words = detail.body.trim().split(/\s+/).filter(Boolean).length;
+    return { words, readMinutes: Math.max(1, Math.ceil(words / 225)) };
+  }, [detail?.body]);
+
   const openCompose = useCallback((prefill?: Partial<ComposeState>) => {
     setCompose({ ...EMPTY_COMPOSE, ...prefill });
   }, []);
@@ -439,6 +522,69 @@ function InboxPane({
       preview: detail.body ? detail.body.slice(0, 220) : `Email from ${detail.sender}`,
     });
   }, [addTaskFromEmail, detail]);
+
+  const copyDetailSender = useCallback(async () => {
+    if (!detail?.senderEmail) return;
+    try {
+      await navigator.clipboard.writeText(detail.senderEmail);
+      showToast('Sender copied', 'success');
+    } catch {
+      showToast('Could not copy sender', 'error');
+    }
+  }, [detail, showToast]);
+
+  const archiveDetail = useCallback(() => {
+    if (!detail) return;
+    archiveEmail(accountId, detail.id);
+    setDetail(null);
+    showToast('Email archived', 'info');
+  }, [accountId, archiveEmail, detail, showToast]);
+
+  const deleteDetail = useCallback(() => {
+    if (!detail) return;
+    deleteEmail(accountId, detail.id);
+    setDetail(null);
+    showToast('Email moved to trash', 'info');
+  }, [accountId, deleteEmail, detail, showToast]);
+
+  const markDetailUnread = useCallback(() => {
+    if (!detail) return;
+    toggleRead(accountId, detail.id);
+    showToast('Email marked unread', 'info');
+  }, [accountId, detail, showToast, toggleRead]);
+
+  const analyzeDetailEmail = useCallback(async () => {
+    if (!detail) return;
+    if (accountId !== 'primary') {
+      showToast('AI analysis is currently only enabled for Inbox 1', 'info');
+      return;
+    }
+
+    setIsAnalyzingDetail(true);
+    try {
+      const res = await fetch('/api/ai/extract-tasks-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({ emailIds: [detail.id] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.code === 'NO_AI_KEY') showToast('AI not configured — add your OpenAI key in Settings.', 'error');
+        else showToast(data.error ?? 'Failed to analyze email', 'error');
+        return;
+      }
+      if (!data.suggestions?.length) {
+        showToast('No actionable task found in this email', 'info');
+        return;
+      }
+      setSuggestions(data.suggestions);
+      setSuggestionContext(detail.subject || 'selected email');
+    } catch {
+      showToast('Failed to reach the AI service', 'error');
+    } finally {
+      setIsAnalyzingDetail(false);
+    }
+  }, [accountId, detail, showToast]);
 
   const analyzeAllUnread = async () => {
     if (accountId !== 'primary') {
@@ -543,6 +689,7 @@ function InboxPane({
     onActivate();
     // Reset thread expansion — newest message (last in list) will auto-expand after load
     setExpandedMsgIds(new Set());
+    setReaderWide(false);
     setDetail({
       id: email.id,
       threadId: email.threadId,
@@ -769,7 +916,7 @@ function InboxPane({
   return (
     <div className={`flex-1 min-w-0 min-h-0 flex flex-col border-white/10 ${isActive ? 'bg-white/[0.02]' : ''}`} onMouseDown={onActivate}>
       {/* Pane header */}
-      <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0 bg-background-elevated/55">
+      <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-white/10 shrink-0 bg-background-elevated/55">
         <div className="flex items-center gap-3">
           <h2 className="font-heading font-semibold text-xl text-foreground">{accountLabel(accountId)}</h2>
           <div className="flex h-6 items-center justify-center gap-x-2 rounded-full bg-primary/10 px-3 border border-primary/20">
@@ -777,7 +924,7 @@ function InboxPane({
             <p className="text-primary text-xs font-medium uppercase tracking-wider">{unreadCount} Unread</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => setFollowUpOnly(v => !v)}
             aria-pressed={followUpOnly}
@@ -788,6 +935,7 @@ function InboxPane({
             }`}
           >
             <span className="material-symbols-outlined !text-sm" aria-hidden="true">flag</span>
+            <span className="hidden xl:inline">Follow-ups</span>
             {followUpCount}
           </button>
           <button
@@ -815,7 +963,7 @@ function InboxPane({
       </div>
 
       {/* Search */}
-      <div className="px-6 py-4 border-b border-white/10 shrink-0 bg-background-elevated/30">
+      <div className="px-5 py-4 border-b border-white/10 shrink-0 bg-background-elevated/30">
         <div className="glass-search flex items-center gap-3 px-4 py-2.5 rounded-lg">
           <span className="material-symbols-outlined text-text-muted text-[20px]" aria-hidden="true">search</span>
           <input
@@ -830,6 +978,9 @@ function InboxPane({
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={onActivate}
           />
+          <span className="hidden xl:inline-flex shrink-0 rounded-full border border-white/10 bg-white/[0.035] px-2 py-0.5 text-[10px] font-mono text-text-muted">
+            {visibleEmails.length}
+          </span>
         </div>
       </div>
 
@@ -861,9 +1012,27 @@ function InboxPane({
                 )}
               </div>
             ) : visibleEmails.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-text-muted gap-4">
-                <span className="material-symbols-outlined text-4xl" aria-hidden="true">inbox</span>
-                <p>{searchQuery ? 'No emails match your search.' : 'Inbox zero!'}</p>
+              <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center text-text-muted">
+                <span className="material-symbols-outlined text-4xl" aria-hidden="true">
+                  {searchQuery || followUpOnly ? 'search_off' : 'inbox'}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {searchQuery || followUpOnly ? 'No Matching Emails' : 'Inbox Zero'}
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    {searchQuery || followUpOnly ? 'Try clearing filters or searching a different sender, subject, or preview.' : 'Nothing needs triage in this inbox.'}
+                  </p>
+                </div>
+                {(searchQuery || followUpOnly) && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setFollowUpOnly(false); searchRef.current?.focus(); }}
+                    className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
             ) : (
               <AutoSizer
@@ -914,66 +1083,143 @@ function InboxPane({
 
           {detail && (
             <div
-              className="absolute inset-0 z-40 flex flex-col min-w-0 bg-background-elevated/97 backdrop-blur-md border-t border-white/10 shadow-[0_-12px_48px_rgba(0,0,0,0.35)]"
+              className={`${readerWide ? 'fixed inset-6 z-[650] rounded-xl border border-white/15 shadow-2xl' : 'absolute inset-0 z-40 border-t border-white/10 shadow-[0_-12px_48px_rgba(0,0,0,0.35)]'} flex flex-col min-w-0 overflow-hidden bg-background-elevated/97 backdrop-blur-md`}
               role="dialog"
               aria-modal="true"
               aria-labelledby={`email-detail-title-${accountId}`}
             >
-              <div className="flex items-start gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-white/10 shrink-0 bg-background-elevated/90">
-                <button
-                  type="button"
-                  onClick={() => setDetail(null)}
-                  aria-label="Back to inbox"
-                  className="w-9 h-9 shrink-0 mt-0.5 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  <span className="material-symbols-outlined text-[22px]" aria-hidden="true">arrow_back</span>
-                </button>
-                <div className="flex-1 min-w-0 py-0.5">
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <h3 id={`email-detail-title-${accountId}`} className="font-heading font-semibold text-base sm:text-lg text-white break-words min-w-0 flex-1">
-                      {detail.subject}
-                    </h3>
-                    {(detail.messageCount ?? 1) > 1 && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary shrink-0">
-                        <span className="material-symbols-outlined !text-[12px]" aria-hidden="true">forum</span>
-                        {detail.messageCount}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs sm:text-sm text-text-muted mt-1 break-all line-clamp-2">
-                    {detail.sender} &lt;{detail.senderEmail}&gt; · {detail.time}
-                  </p>
-                </div>
-                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={addTaskFromDetail}
-                    aria-label="Create task from this email"
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add_task</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openCompose({ to: detail.senderEmail, subject: `Re: ${detail.subject}` })}
-                    aria-label="Reply to this email"
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">reply</span>
-                  </button>
+              <div className="shrink-0 border-b border-white/10 bg-background-elevated/90">
+                <div className="flex items-start gap-2 sm:gap-3 px-3 sm:px-5 py-3">
                   <button
                     type="button"
                     onClick={() => setDetail(null)}
-                    aria-label="Close email"
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    aria-label="Back to inbox"
+                    className="w-9 h-9 shrink-0 mt-0.5 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+                    <span className="material-symbols-outlined text-[22px]" aria-hidden="true">arrow_back</span>
                   </button>
+                  <div className="flex-1 min-w-0 py-0.5">
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <h3 id={`email-detail-title-${accountId}`} className="font-heading font-semibold text-base sm:text-xl text-white break-words min-w-0 flex-1 leading-snug">
+                        {detail.subject}
+                      </h3>
+                      {(detail.messageCount ?? 1) > 1 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary shrink-0">
+                          <span className="material-symbols-outlined !text-[12px]" aria-hidden="true">forum</span>
+                          {detail.messageCount}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs sm:text-sm text-text-muted mt-1 break-all line-clamp-2">
+                      {detail.sender} &lt;{detail.senderEmail}&gt; · {detail.time}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={analyzeDetailEmail}
+                      disabled={isAnalyzingDetail || accountId !== 'primary'}
+                      aria-label="Analyze this email for tasks"
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-primary disabled:opacity-35 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className={`material-symbols-outlined text-[20px] ${isAnalyzingDetail ? 'animate-spin' : ''}`} aria-hidden="true">
+                        {isAnalyzingDetail ? 'progress_activity' : 'auto_awesome'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addTaskFromDetail}
+                      aria-label="Create task from this email"
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add_task</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openCompose({ to: detail.senderEmail, subject: `Re: ${detail.subject}` })}
+                      aria-label="Reply to this email"
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">reply</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReaderWide(v => !v)}
+                      aria-label={readerWide ? 'Exit wide reader' : 'Open wide reader'}
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{readerWide ? 'close_fullscreen' : 'open_in_full'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetail(null)}
+                      aria-label="Close email"
+                      className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-text-muted hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 bg-background-dark/35 px-4 sm:px-5 py-2.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${detail.bodyHtml ? 'border-primary/20 bg-primary/10 text-primary' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                      <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">
+                        {detail.bodyHtml ? 'web_asset' : 'subject'}
+                      </span>
+                      {detail.bodyHtml ? 'Gmail Layout' : 'Text Fallback'}
+                    </span>
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[11px] text-text-muted">
+                      {detailStats.words > 0 ? `${detailStats.readMinutes} Min Read` : 'Loading…'}
+                    </span>
+                    {(detail.messageCount ?? 1) > 1 && (
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[11px] text-text-muted">
+                        Thread View
+                      </span>
+                    )}
+                    <span className="hidden md:inline-flex min-w-0 max-w-[280px] truncate rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[11px] text-text-muted">
+                      {detail.senderEmail}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={copyDetailSender}
+                      aria-label="Copy sender address"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-foreground hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined !text-[18px]" aria-hidden="true">content_copy</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={markDetailUnread}
+                      aria-label="Mark email unread"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-foreground hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined !text-[18px]" aria-hidden="true">mark_as_unread</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={archiveDetail}
+                      aria-label="Archive email"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-foreground hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined !text-[18px]" aria-hidden="true">archive</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteDetail}
+                      aria-label="Move email to trash"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-rose-300 hover:bg-rose-500/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined !text-[18px]" aria-hidden="true">delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar min-w-0">
-                <div className="mx-auto w-full max-w-4xl px-4 sm:px-8 py-6 pb-16 min-w-0">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar min-w-0 bg-background-dark/20">
+                <div className={`mx-auto w-full ${readerWide ? 'max-w-5xl' : 'max-w-3xl'} px-4 sm:px-8 py-6 pb-16 min-w-0`}>
                   {(detail.messageCount ?? 1) <= 1 ? (
                     detail.loading ? (
                       <div className="flex items-center justify-center py-20">
@@ -1111,10 +1357,18 @@ export default function Communications({ setCurrentView, externalComposeTrigger 
   const [activePane, setActivePane] = useState<GmailAccountId>('primary');
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 p-4 sm:p-8">
-      <div className="glass-panel w-full max-w-[1800px] flex-1 min-h-0 mx-auto flex flex-col rounded-xl relative overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0 bg-background-elevated/55">
-          <h1 className="font-heading font-semibold text-2xl text-foreground">Inbox Triage</h1>
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 p-4 sm:p-6">
+      <div className="glass-panel w-full max-w-none flex-1 min-h-0 mx-auto flex flex-col rounded-xl relative overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10 shrink-0 bg-background-elevated/55">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="material-symbols-outlined flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary" aria-hidden="true">
+              mark_email_unread
+            </span>
+            <div className="min-w-0">
+              <h1 className="font-heading font-semibold text-2xl text-foreground text-pretty">Inbox Triage</h1>
+              <p className="hidden sm:block truncate text-xs text-text-muted">Review mail, extract tasks, and clear what does not need attention.</p>
+            </div>
+          </div>
           <button
             onClick={() => setCurrentView('MainHub')}
             aria-label="Close communications"

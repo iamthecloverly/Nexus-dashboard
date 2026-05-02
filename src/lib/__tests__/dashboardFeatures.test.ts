@@ -66,7 +66,24 @@ describe('dashboard feature helpers', () => {
     writeDashboardPanelVisibility({ ...readDashboardPanelVisibility(), github: false });
 
     expect(readDashboardPanelVisibility().github).toBe(false);
-    expect(readDashboardPanelVisibility().schedule).toBe(true);
+    expect(readDashboardPanelVisibility().schedule).toBe(false);
+    expect(readDashboardPanelVisibility().digest).toBe(true);
+    expect(readDashboardPanelVisibility().todayTimeline).toBe(true);
+  });
+
+  it('ignores stale saved panel layouts from older dashboard versions', () => {
+    localStorage.setItem(STORAGE_KEYS.dashboardPanelVisibility, JSON.stringify({
+      digest: true,
+      schedule: true,
+      github: true,
+    }));
+
+    expect(readDashboardPanelVisibility()).toMatchObject({
+      digest: true,
+      schedule: false,
+      github: false,
+      todayTimeline: true,
+    });
   });
 
   it('hides deferred tasks until their local day arrives', () => {
