@@ -224,7 +224,7 @@ function normalizeAccountEvent(event: CalendarEvent, accountId: CalendarAccountI
 
 export function useCalendarEvents(options: UseCalendarEventsOptions = {}): CalendarState {
   const accountMode = options.accountMode ?? 'selected';
-  const respectSavedFilters = options.respectSavedFilters ?? true;
+  const respectSavedFilters = options.respectSavedFilters ?? accountMode === 'selected';
   const [initialCalendarState] = useState(readInitialCalendarState);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -303,6 +303,11 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
         result: { ok: true; data: { events?: CalendarEvent[] } };
       } => !('error' in accountResult.result));
 
+      const errors = accountResults
+        .map(accountResult => ('error' in accountResult.result ? accountResult.result.error : null))
+        .filter((err): err is ApiError => err != null)
+        .sort((a, b) => rankCalendarError(a) - rankCalendarError(b));
+
       if (successes.length > 0) {
         const prefixIds = accountMode === 'allConnected' && successes.length > 1;
         const todays = successes
@@ -310,14 +315,19 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
             (result.data.events ?? []).map(event => normalizeAccountEvent(event, eventAccountId, prefixIds)),
           )
           .filter(event => calendarEventOverlapsLocalDay(event, requestNow));
+        if (todays.length === 0 && errors.length > 0) {
+          const err = errors[0]!;
+          markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
+          const state = calendarErrorState(err);
+          setEvents([]);
+          setIsConnected(state.isConnected);
+          setError(state.error);
+          return;
+        }
         setEvents(todays);
         setIsConnected(true);
         markSyncStatus('calendar', 'ok');
       } else {
-        const errors = accountResults
-          .map(accountResult => ('error' in accountResult.result ? accountResult.result.error : null))
-          .filter((err): err is ApiError => err != null)
-          .sort((a, b) => rankCalendarError(a) - rankCalendarError(b));
         const err = errors[0] ?? { status: 500, error: 'Unknown calendar error' };
         markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
         const state = calendarErrorState(err);

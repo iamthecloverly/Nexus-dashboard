@@ -190,6 +190,30 @@ describe('useCalendarEvents', () => {
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBe('old-main-calendar');
   });
 
+  it('ignores saved calendar filters by default when fetching all connected accounts', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    localStorage.setItem(STORAGE_KEYS.calendarSelectionVersion, __testOnly.CALENDAR_SELECTION_VERSION);
+    localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['old-main-calendar']));
+    localStorage.setItem(`${STORAGE_KEYS.calendarMainId}_primary`, 'old-main-calendar');
+    mockedApiFetchJson.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/auth/google/accounts') {
+        return {
+          ok: true,
+          data: { accounts: [{ accountId: 'primary', connected: true }] },
+        };
+      }
+      return { ok: true, data: { events: [timedEvent('shift', '2026-05-01T12:00:00', '2026-05-01T15:00:00')] } };
+    });
+
+    const { result } = renderHook(() => useCalendarEvents({ accountMode: 'allConnected' }));
+    await flushPromises();
+
+    const requestedUrl = String(mockedApiFetchJson.mock.calls.find(([input]) => String(input).startsWith('/api/calendar/events'))?.[0]);
+    expect(requestedUrl).not.toContain('calendarIds=');
+    expect(result.current.events.map(event => event.id)).toEqual(['shift']);
+  });
+
   it('merges today events from all connected Google accounts', async () => {
     vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
     mockedApiFetchJson.mockImplementation(async (input) => {
@@ -225,6 +249,35 @@ describe('useCalendarEvents', () => {
       'primary:primary-next',
       'secondary:secondary-now',
     ]);
+  });
+
+  it('surfaces a connected account error instead of hiding it behind an empty account', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    mockedApiFetchJson.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/auth/google/accounts') {
+        return {
+          ok: true,
+          data: {
+            accounts: [
+              { accountId: 'primary', connected: true },
+              { accountId: 'secondary', connected: true },
+            ],
+          },
+        };
+      }
+      if (url.includes('accountId=secondary')) {
+        return { ok: false, error: { status: 401, error: 'Token expired or invalid' } };
+      }
+      return { ok: true, data: { events: [] } };
+    });
+
+    const { result } = renderHook(() => useCalendarEvents({ accountMode: 'allConnected' }));
+    await flushPromises();
+
+    expect(result.current.events).toEqual([]);
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.error).toBe('not_connected');
   });
 
   it('uses refreshing state instead of blocking loading for visible-tab refreshes', async () => {
