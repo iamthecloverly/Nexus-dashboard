@@ -54,6 +54,30 @@ describe('Calendar routes', () => {
     expect(events.map(event => event.id)).toEqual(['first', 'second']);
   });
 
+  it('pages through calendar list results so late subscription calendars are included', async () => {
+    const list = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: 'primary', summary: 'Primary' }],
+          nextPageToken: 'page-2',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: 'w2w-schedule', summary: 'W2W Schedule' }],
+        },
+      });
+
+    const calendars = await __testOnly.listReadableCalendars({
+      calendarList: { list },
+    } as unknown as calendar_v3.Calendar);
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(list.mock.calls[0][0]).toMatchObject({ maxResults: 250, minAccessRole: 'reader' });
+    expect(list.mock.calls[1][0]).toMatchObject({ pageToken: 'page-2' });
+    expect(calendars.map(calendar => calendar.id)).toEqual(['primary', 'w2w-schedule']);
+  });
+
   it('keeps auto calendar list cache short so new shared calendars appear quickly', () => {
     expect(__testOnly.CALENDAR_LIST_TTL_MS).toBe(5 * 60 * 1000);
   });

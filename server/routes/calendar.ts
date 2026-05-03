@@ -112,6 +112,23 @@ function defaultCalendarIdsFromList(
   return Array.from(new Set(['primary', ...ids]));
 }
 
+async function listReadableCalendars(calendar: calendar_v3.Calendar): Promise<calendar_v3.Schema$CalendarListEntry[]> {
+  const items: calendar_v3.Schema$CalendarListEntry[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await calendar.calendarList.list({
+      minAccessRole: 'reader',
+      maxResults: 250,
+      pageToken,
+    });
+    items.push(...(response.data.items ?? []));
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return items;
+}
+
 /** RFC3339 bounds for one calendar day (client tz when provided). */
 function resolveCalendarBounds(req: express.Request): {
   timeMin: string;
@@ -256,8 +273,7 @@ calendarRouter.get('/events', async (req, res) => {
           const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
           const { timeZone } = bounds;
-          const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-          const items = calListRes.data.items ?? [];
+          const items = await listReadableCalendars(calendar);
           const ids = calendarIdsRequested?.length ? calendarIdsRequested : defaultCalendarIdsFromList(items);
 
           // Fetch wider window so we still capture events that overlap today but start before timeMin.
@@ -353,8 +369,7 @@ calendarRouter.get('/events', async (req, res) => {
       // relying on it can silently omit subscription/work calendars.
       const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
       const calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
-        const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-        const items = (calListRes.data.items ?? []);
+        const items = await listReadableCalendars(calendar);
         return defaultCalendarIdsFromList(items);
       });
 
@@ -440,8 +455,7 @@ calendarRouter.get('/calendars', async (req, res) => {
     const result = await cacheGet(cacheKey, 10 * 60_000, async () => {
       const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-      const items = calListRes.data.items ?? [];
+      const items = await listReadableCalendars(calendar);
       const calendars: CalendarListItem[] = items
         .map(i => ({
           id: i.id!,
@@ -496,8 +510,7 @@ calendarRouter.get('/debug', async (req, res) => {
     const timeMax = startOfTomorrow.toISOString();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
-    const items = calListRes.data.items ?? [];
+    const items = await listReadableCalendars(calendar);
     const calendarIds = items.map(c => c.id!).filter(Boolean);
     const ids = calendarIds.length ? calendarIds : ['primary'];
     const uniqueIds = Array.from(new Set(['primary', ...ids]));
@@ -594,6 +607,7 @@ calendarRouter.get('/debug', async (req, res) => {
 
 export const __testOnly = {
   defaultCalendarIdsFromList,
+  listReadableCalendars,
   listCalendarEvents,
   CALENDAR_LIST_TTL_MS,
 };
