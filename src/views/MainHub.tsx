@@ -212,6 +212,14 @@ interface MainHubProps {
   externalCalendarRefreshTrigger?: number;
 }
 
+type CalendarListItem = {
+  id: string;
+  summary: string | null;
+  primary: boolean;
+  selected: boolean;
+  hidden: boolean;
+};
+
 const SCHEDULE_STATUS_META: Record<CalendarDisplayItem['state'], { label: string; dot: string; pill: string; text: string }> = {
   allDay: {
     label: 'All day',
@@ -264,6 +272,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const {
     events,
     isLoading: isLoadingEvents,
+    isRefreshing: isRefreshingEvents,
     isConnected: isCalendarConnected,
     error: calendarError,
     accountId: calendarAccount,
@@ -277,7 +286,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   } = useCalendarEvents({ accountMode: 'allConnected' });
 
   const [googleAccounts, setGoogleAccounts] = useState<{ primary: boolean; secondary: boolean }>({ primary: true, secondary: false });
-  const [calendarList, setCalendarList] = useState<Array<{ id: string; summary: string | null; primary: boolean; selected: boolean; hidden: boolean }>>([]);
+  const [calendarList, setCalendarList] = useState<CalendarListItem[]>([]);
+  const [isRefreshingCalendarList, setIsRefreshingCalendarList] = useState(false);
   useEffect(() => {
     let cancelled = false;
     fetch('/api/auth/google/accounts')
@@ -300,27 +310,37 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const includedCalendarIdsRef = useRef(includedCalendarIds);
   includedCalendarIdsRef.current = includedCalendarIds;
 
+  const fetchCalendarList = useCallback(async (opts: { forceRefresh?: boolean; signal?: AbortSignal } = {}) => {
+    const { forceRefresh = false, signal } = opts;
+    const params = new URLSearchParams({ accountId: calendarAccount });
+    if (forceRefresh) params.set('refresh', '1');
+    if (forceRefresh) setIsRefreshingCalendarList(true);
+    try {
+      const response = await fetch(`/api/calendar/calendars?${params.toString()}`, { signal });
+      const data = response.ok ? await response.json() as { calendars?: CalendarListItem[] } : null;
+      if (!data?.calendars) return;
+      const list = Array.isArray(data.calendars) ? data.calendars : [];
+      setCalendarList(list);
+      // Cleanup stale IDs using refs to avoid re-triggering this effect on every calendar selection.
+      const curMain = mainCalendarIdRef.current;
+      if (curMain && !list.some(c => c.id === curMain)) setMainCalendarId(null);
+      const curIncluded = includedCalendarIdsRef.current;
+      if (curIncluded && curIncluded.length) {
+        const next = curIncluded.filter(id => list.some(c => c.id === id));
+        if (next.length !== curIncluded.length) setIncludedCalendarIds(next.length ? next : null);
+      }
+    } catch {
+      // Calendar events can still refresh even if the list metadata request fails.
+    } finally {
+      if (forceRefresh) setIsRefreshingCalendarList(false);
+    }
+  }, [calendarAccount, setIncludedCalendarIds, setMainCalendarId]);
+
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/calendar/calendars?accountId=${encodeURIComponent(calendarAccount)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: unknown) => {
-        const data = d as { calendars?: Array<{ id: string; summary: string | null; primary: boolean; selected: boolean; hidden: boolean }> } | null;
-        if (cancelled || !data?.calendars) return;
-        const list = Array.isArray(data.calendars) ? data.calendars : [];
-        setCalendarList(list);
-        // Cleanup stale IDs using refs to avoid re-triggering this effect on every calendar selection.
-        const curMain = mainCalendarIdRef.current;
-        if (curMain && !list.some(c => c.id === curMain)) setMainCalendarId(null);
-        const curIncluded = includedCalendarIdsRef.current;
-        if (curIncluded && curIncluded.length) {
-          const next = curIncluded.filter(id => list.some(c => c.id === id));
-          if (next.length !== curIncluded.length) setIncludedCalendarIds(next.length ? next : null);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [calendarAccount, setMainCalendarId, setIncludedCalendarIds]);
+    const controller = new AbortController();
+    void fetchCalendarList({ signal: controller.signal });
+    return () => controller.abort();
+  }, [fetchCalendarList]);
 
   // Desktop notifications — gated on browser permission being granted.
   const notificationsGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
@@ -465,6 +485,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     intervalMs: 5 * 60 * 1000,
   });
 
+  const refreshCalendar = useCallback(() => {
+    void fetchCalendarList({ forceRefresh: true });
+    fetchEvents();
+  }, [fetchCalendarList, fetchEvents]);
+  const isCalendarRefreshPending = isRefreshingEvents || isRefreshingCalendarList;
+
   // External triggers from command palette
   useEffect(() => {
     if (!externalQuickAddTrigger) return;
@@ -474,9 +500,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   useEffect(() => {
     if (!externalCalendarRefreshTrigger) return;
-    fetchEvents();
+    refreshCalendar();
     showToast('Calendar refreshed', 'info');
-  }, [externalCalendarRefreshTrigger, fetchEvents, showToast]);
+  }, [externalCalendarRefreshTrigger, refreshCalendar, showToast]);
 
   useEffect(() => {
     const refreshLayout = () => setPanelVisibility(readDashboardPanelVisibility());
@@ -712,7 +738,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           <span className="material-symbols-outlined text-3xl text-text-muted" aria-hidden="true">wifi_off</span>
           <p className="text-sm text-foreground font-medium">Connection failed</p>
           <p className="text-xs text-text-muted max-w-[220px]">Could not reach the server. Check your connection and try again.</p>
-          <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+          <button onClick={refreshCalendar} className={primaryBtnClass}>Retry</button>
         </div>
       );
     }
@@ -765,7 +791,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           <p className="text-sm text-foreground font-medium">Failed to load events</p>
           <p className="text-xs text-text-muted max-w-[240px]">Google Calendar returned an error. Retry or reconnect your account.</p>
           <div className="flex gap-2 flex-wrap justify-center">
-            <button onClick={fetchEvents} className={primaryBtnClass}>Retry</button>
+            <button onClick={refreshCalendar} className={primaryBtnClass}>Retry</button>
             <button onClick={goIntegrations} className={primaryBtnClass}>Reconnect</button>
           </div>
         </div>
@@ -809,12 +835,24 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               </button>
             </>
           ) : (
-            <button
-              onClick={goIntegrations}
-              className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-            >
-              If you expect events, reconnect Google →
-            </button>
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={refreshCalendar}
+                disabled={isCalendarRefreshPending}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className={`material-symbols-outlined text-[15px] ${isCalendarRefreshPending ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
+                {isCalendarRefreshPending ? 'Refreshing...' : 'Refresh calendar'}
+              </button>
+              <button
+                type="button"
+                onClick={goIntegrations}
+                className="text-[11px] text-text-muted hover:text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              >
+                Manage Google connection
+              </button>
+            </div>
           )}
           {import.meta.env.DEV && debugHref && (
             <a
@@ -864,7 +902,8 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     scheduleGroups,
     isCalendarConnected,
     calendarError,
-    fetchEvents,
+    refreshCalendar,
+    isCalendarRefreshPending,
     renderScheduleSection,
     renderEarlierSection,
     calendarFiltersActive,
@@ -1080,11 +1119,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
                 <div className="relative flex items-center gap-0.5 bg-white/[0.035] border border-white/10 rounded-full p-0.5" ref={calendarMenuRef}>
                   <button
-                    onClick={fetchEvents}
+                    onClick={refreshCalendar}
+                    disabled={isCalendarRefreshPending}
                     aria-label="Refresh calendar"
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/10 transition-colors disabled:cursor-wait disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
-                    <span className="material-symbols-outlined !text-[17px]" aria-hidden="true">refresh</span>
+                    <span className={`material-symbols-outlined !text-[17px] ${isCalendarRefreshPending ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
                   </button>
                   <button
                     onClick={() => setShowCalendarMenu(v => !v)}
@@ -1117,7 +1157,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         </div>
                       )}
                       <button
-                        onClick={() => { fetchEvents(); setShowCalendarMenu(false); }}
+                        onClick={() => { refreshCalendar(); setShowCalendarMenu(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground transition-colors flex items-center gap-2"
                       >
                         <span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span>
@@ -1571,11 +1611,12 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={fetchEvents}
+                onClick={refreshCalendar}
+                disabled={isCalendarRefreshPending}
                 aria-label="Refresh calendar"
-                className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:text-primary hover:bg-white/5 transition-colors disabled:cursor-wait disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
-                <span className="material-symbols-outlined !text-sm" aria-hidden="true">refresh</span>
+                <span className={`material-symbols-outlined !text-sm ${isCalendarRefreshPending ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
               </button>
               <a
                 href="https://calendar.google.com"

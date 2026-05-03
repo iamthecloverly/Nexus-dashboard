@@ -4,7 +4,7 @@ import { google, type calendar_v3 } from 'googleapis';
 import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
 import { getSignedCookie, parseJsonCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
-import { cacheGet, tokenKey } from '../lib/apiCache.ts';
+import { cacheBust, cacheGet, tokenKey } from '../lib/apiCache.ts';
 import { createAuthedGoogleClient, getGoogleTokensFromCookie, parseAccountId } from '../lib/googleClient.ts';
 import { logger } from '../lib/logger.ts';
 
@@ -92,6 +92,11 @@ function queryStringParam(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
   return undefined;
+}
+
+function queryBooleanParam(value: unknown): boolean {
+  const raw = queryStringParam(value)?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
 function addDaysKey(day: string, deltaDays: number): string {
@@ -311,6 +316,7 @@ calendarRouter.get('/events', async (req, res) => {
 
   const bounds = resolveCalendarBounds(req);
   const debug = !isProduction && queryStringParam(req.query.debug) === '1';
+  const forceRefresh = queryBooleanParam(req.query.refresh) || queryBooleanParam(req.query.forceRefresh);
   const calendarIdsParam = queryStringParam(req.query.calendarIds);
   const calendarIdsRequested = calendarIdsParam
     ? calendarIdsParam.split(',').map(s => s.trim()).filter(Boolean).slice(0, 20)
@@ -325,6 +331,83 @@ calendarRouter.get('/events', async (req, res) => {
       `calendar:events:${bounds.timeMin}|${bounds.timeMax}|${bounds.timeZone}|${calendarIdsRequested?.join('|') ?? 'auto'}`,
     );
     const debugCacheKey = debug ? `${cacheKey}:debug` : cacheKey;
+    if (forceRefresh) cacheBust(debugCacheKey);
+
+    const fetchFreshEvents = async () => {
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+      const { timeZone } = bounds;
+      const fetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
+      const fetchMax = new Date(bounds.dayEndUtcMs + 24 * 60 * 60 * 1000).toISOString();
+
+      // Fetch all readable, non-hidden calendars (cached), then query each in parallel.
+      // Google Calendar's `selected` flag is only the sidebar checkbox state;
+      // relying on it can silently omit subscription/work calendars.
+      let calendarIds: string[];
+      if (calendarIdsRequested?.length) {
+        calendarIds = calendarIdsRequested;
+      } else {
+        const listCacheKey = tokenKey(`${accountId}:${tokens.refresh_token ?? tokensCookie}`, 'calendar:list');
+        if (forceRefresh) {
+          cacheBust(listCacheKey);
+          calendarIds = defaultCalendarIdsFromList(await listReadableCalendars(calendar));
+        } else {
+          calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
+            const items = await listReadableCalendars(calendar);
+            return defaultCalendarIdsFromList(items);
+          });
+        }
+      }
+
+      const idsToQuery = Array.from(new Set(calendarIds));
+
+      const settled = await Promise.allSettled(
+        idsToQuery.map(calId =>
+          listCalendarEvents(calendar, {
+            calendarId: calId,
+            timeMin: fetchMin,
+            timeMax: fetchMax,
+            timeZone,
+          }),
+        ),
+      );
+
+      for (let i = 0; i < settled.length; i++) {
+        const s = settled[i]!;
+        if (s.status === 'rejected') {
+          logger.warn({ calId: idsToQuery[i], reason: s.reason }, 'calendar.events.list failed');
+        }
+      }
+
+      const eventArrays = settled.flatMap(s =>
+        s.status === 'fulfilled' ? s.value : [],
+      );
+
+      const detailedEvents = dedupeAndSortEvents(eventArrays, bounds);
+      let fallbackEvents: calendar_v3.Schema$Event[] = [];
+      const rejectedIds = settled.flatMap((s, idx) => (s.status === 'rejected' ? [idsToQuery[idx]!] : []));
+      const allRejected =
+        settled.length > 0 && settled.every((x): x is PromiseRejectedResult => x.status === 'rejected');
+      if (rejectedIds.length > 0 || detailedEvents.length === 0) {
+        const fallbackIds = detailedEvents.length === 0 ? idsToQuery : rejectedIds;
+        fallbackEvents = await listFreeBusyFallbackEvents(calendar, {
+          calendarIds: fallbackIds,
+          timeMin: bounds.timeMin,
+          timeMax: bounds.timeMax,
+          timeZone,
+        }).catch(error => {
+          logger.warn({ error, fallbackIds }, 'calendar.freebusy fallback failed');
+          return [];
+        });
+      }
+
+      const allEvents = dedupeAndSortEvents([...detailedEvents, ...fallbackEvents], bounds);
+      if (allRejected && allEvents.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
+
+      return { events: allEvents };
+    };
 
     const result = debug
       ? await (async () => {
@@ -399,71 +482,9 @@ calendarRouter.get('/events', async (req, res) => {
             },
           };
         })()
-      : await cacheGet(debugCacheKey, CALENDAR_TTL_MS, async () => {
-      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
-
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-      const { timeZone } = bounds;
-      const fetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
-      const fetchMax = new Date(bounds.dayEndUtcMs + 24 * 60 * 60 * 1000).toISOString();
-
-      // Fetch all readable, non-hidden calendars (cached), then query each in parallel.
-      // Google Calendar's `selected` flag is only the sidebar checkbox state;
-      // relying on it can silently omit subscription/work calendars.
-      const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
-      const calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
-        const items = await listReadableCalendars(calendar);
-        return defaultCalendarIdsFromList(items);
-      });
-
-      const idsToQuery = Array.from(new Set(calendarIdsRequested?.length ? calendarIdsRequested : calendarIds));
-
-      const settled = await Promise.allSettled(
-        idsToQuery.map(calId =>
-          listCalendarEvents(calendar, {
-            calendarId: calId,
-            timeMin: fetchMin,
-            timeMax: fetchMax,
-            timeZone,
-          }),
-        ),
-      );
-
-      for (let i = 0; i < settled.length; i++) {
-        const s = settled[i]!;
-        if (s.status === 'rejected') {
-          logger.warn({ calId: idsToQuery[i], reason: s.reason }, 'calendar.events.list failed');
-        }
-      }
-
-      const eventArrays = settled.flatMap(s =>
-        s.status === 'fulfilled' ? s.value : [],
-      );
-
-      const detailedEvents = dedupeAndSortEvents(eventArrays, bounds);
-      let fallbackEvents: calendar_v3.Schema$Event[] = [];
-      const rejectedIds = settled.flatMap((s, idx) => (s.status === 'rejected' ? [idsToQuery[idx]!] : []));
-      const allRejected =
-        settled.length > 0 && settled.every((x): x is PromiseRejectedResult => x.status === 'rejected');
-      if (rejectedIds.length > 0 || detailedEvents.length === 0) {
-        const fallbackIds = detailedEvents.length === 0 ? idsToQuery : rejectedIds;
-        fallbackEvents = await listFreeBusyFallbackEvents(calendar, {
-          calendarIds: fallbackIds,
-          timeMin: bounds.timeMin,
-          timeMax: bounds.timeMax,
-          timeZone,
-        }).catch(error => {
-          logger.warn({ error, fallbackIds }, 'calendar.freebusy fallback failed');
-          return [];
-        });
-      }
-
-      const allEvents = dedupeAndSortEvents([...detailedEvents, ...fallbackEvents], bounds);
-      if (allRejected && allEvents.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
-
-      return { events: allEvents };
-    });
+      : forceRefresh
+        ? await fetchFreshEvents()
+        : await cacheGet(debugCacheKey, CALENDAR_TTL_MS, fetchFreshEvents);
 
     res.json(result);
   } catch (error: unknown) {
@@ -491,11 +512,13 @@ calendarRouter.get('/calendars', async (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
   const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+  const forceRefresh = queryBooleanParam(req.query.refresh) || queryBooleanParam(req.query.forceRefresh);
 
   try {
     const { tokensCookie, tokens } = auth;
     const cacheKey = tokenKey(`${accountId}:${tokens.refresh_token ?? tokensCookie}`, 'calendar:calendars');
-    const result = await cacheGet(cacheKey, 10 * 60_000, async () => {
+    if (forceRefresh) cacheBust(cacheKey);
+    const fetchCalendars = async () => {
       const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
       const items = await listReadableCalendars(calendar);
@@ -512,7 +535,10 @@ calendarRouter.get('/calendars', async (req, res) => {
         .filter(i => !!i.id)
         .sort((a, b) => Number(b.primary) - Number(a.primary) || String(a.summary ?? '').localeCompare(String(b.summary ?? '')));
       return { accountId, calendars };
-    });
+    };
+    const result = forceRefresh
+      ? await fetchCalendars()
+      : await cacheGet(cacheKey, 10 * 60_000, fetchCalendars);
     res.json(result);
   } catch (error: unknown) {
     const err = error as { response?: { status?: number }; code?: string; message?: string };

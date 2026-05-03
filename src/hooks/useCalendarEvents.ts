@@ -54,7 +54,7 @@ function msUntilNextLocalDay(now = new Date()): number {
   return Math.max(1_000, next.getTime() - now.getTime());
 }
 
-function calendarEventsUrl(opts: { accountId?: CalendarAccountId; calendarIds?: string[] } = {}, date = new Date()): string {
+function calendarEventsUrl(opts: { accountId?: CalendarAccountId; calendarIds?: string[]; forceRefresh?: boolean } = {}, date = new Date()): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!tz) return '/api/calendar/events';
@@ -63,6 +63,7 @@ function calendarEventsUrl(opts: { accountId?: CalendarAccountId; calendarIds?: 
     const q = new URLSearchParams({ day, tz });
     if (opts.accountId) q.set('accountId', opts.accountId);
     if (opts.calendarIds && opts.calendarIds.length) q.set('calendarIds', opts.calendarIds.join(','));
+    if (opts.forceRefresh) q.set('refresh', '1');
     return `/api/calendar/events?${q.toString()}`;
   } catch {
     return '/api/calendar/events';
@@ -339,6 +340,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
       const fetchAccountEvents = async (fetchAccountId: CalendarAccountId, required: boolean): Promise<CalendarEventsFetchResult> => {
         const opts = {
           accountId: fetchAccountId,
+          forceRefresh: reason === 'manual',
           calendarIds: respectSavedFilters && fetchAccountId === accountId
             ? includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined)
             : undefined,

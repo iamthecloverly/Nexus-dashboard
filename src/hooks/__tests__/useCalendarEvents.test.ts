@@ -109,6 +109,25 @@ describe('useCalendarEvents', () => {
     expect(mockedApiFetchJson).toHaveBeenCalledTimes(2);
   });
 
+  it('bypasses the server calendar cache on manual refetches', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+
+    const { result } = renderHook(() => useCalendarEvents());
+    await flushPromises();
+
+    act(() => {
+      result.current.refetch();
+    });
+    await flushPromises();
+
+    const eventUrls = mockedApiFetchJson.mock.calls
+      .map(([input]) => String(input))
+      .filter(url => url.startsWith('/api/calendar/events'));
+    expect(eventUrls).toHaveLength(2);
+    expect(eventUrls[0]).not.toContain('refresh=1');
+    expect(eventUrls[1]).toContain('refresh=1');
+  });
+
   it('refetches when the tab becomes visible on a stale local day', async () => {
     vi.setSystemTime(new Date(2026, 4, 1, 10, 0, 0));
     mockedApiFetchJson.mockResolvedValue({

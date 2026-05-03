@@ -183,7 +183,14 @@ export default function FocusMode({
     return count;
   }, [sessionsData]);
 
-  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents({
+  const {
+    events,
+    isLoading: isLoadingEvents,
+    isRefreshing: isRefreshingEvents,
+    isConnected: isCalendarConnected,
+    error: calendarError,
+    refetch: refreshCalendarEvents,
+  } = useCalendarEvents({
     accountMode: 'allConnected',
     respectSavedFilters: false,
   });
@@ -506,10 +513,20 @@ export default function FocusMode({
           <div className="flex flex-col items-center justify-center h-full text-center gap-2">
             <p className="text-sm text-text-muted">No events scheduled.</p>
             <button
-              onClick={() => setCurrentView('Integrations')}
-              className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              type="button"
+              onClick={refreshCalendarEvents}
+              disabled={isRefreshingEvents}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              If you expected events, reconnect Google →
+              <span className={`material-symbols-outlined text-[15px] ${isRefreshingEvents ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
+              {isRefreshingEvents ? 'Refreshing...' : 'Refresh calendar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentView('Integrations')}
+              className="text-[11px] text-text-muted hover:text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            >
+              Manage Google connection
             </button>
           </div>
         )}
@@ -592,10 +609,24 @@ export default function FocusMode({
         <section className="w-3/5 h-full flex flex-col relative glass-panel rounded-xl overflow-hidden flex-none">
           <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-background-dark/85 to-transparent z-20 pointer-events-none rounded-t-xl"></div>
           <div className="p-6 pb-2 z-30 bg-background-elevated/50 backdrop-blur-md border-b border-white/5">
-            <h2 className="font-heading text-2xl font-semibold text-slate-100">Timeline</h2>
-            <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">
-              Today
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-heading text-2xl font-semibold text-slate-100">Timeline</h2>
+                <p className="text-xs text-text-muted uppercase tracking-widest mt-1 font-semibold">
+                  Today
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={refreshCalendarEvents}
+                disabled={isLoadingEvents || isRefreshingEvents}
+                aria-label="Refresh calendar events"
+                className="tooltip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-text-muted transition-colors hover:border-primary/25 hover:bg-primary/10 hover:text-primary disabled:cursor-wait disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                data-tooltip={isRefreshingEvents ? 'Refreshing' : 'Refresh Calendar'}
+              >
+                <span className={`material-symbols-outlined text-[18px] ${isRefreshingEvents ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto relative px-6 py-12">
             <div className="timeline-line"></div>
