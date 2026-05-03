@@ -32,6 +32,16 @@ function pastEvent(): CalendarEvent {
   };
 }
 
+function staleYesterdayEvent(): CalendarEvent {
+  return {
+    id: 'yesterday',
+    summary: 'Yesterday',
+    start: { dateTime: '2026-05-02T18:00:00-04:00' },
+    end: { dateTime: '2026-05-02T21:30:00-04:00' },
+    htmlLink: 'https://calendar.test/yesterday',
+  };
+}
+
 async function flushPromises() {
   await act(async () => {
     await Promise.resolve();
@@ -125,6 +135,20 @@ describe('useCalendarEvents', () => {
     expect(mockedApiFetchJson).toHaveBeenCalledTimes(1);
     expect(result.current.mode).toBe('today');
     expect(result.current.events.map(event => event.id)).toEqual(['past']);
+  });
+
+  it('drops stale events returned for a previous local day', async () => {
+    vi.setSystemTime(new Date('2026-05-03T02:22:00-04:00'));
+    mockedApiFetchJson.mockResolvedValue({
+      ok: true,
+      data: { events: [staleYesterdayEvent()] },
+    });
+
+    const { result } = renderHook(() => useCalendarEvents());
+    await flushPromises();
+
+    expect(String(mockedApiFetchJson.mock.calls[0][0])).toContain('day=2026-05-03');
+    expect(result.current.events).toEqual([]);
   });
 
   it('clears stale saved calendar filters so readable calendars are not skipped', async () => {

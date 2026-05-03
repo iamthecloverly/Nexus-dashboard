@@ -3,6 +3,7 @@ import { CalendarEvent } from '../types/calendar';
 import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { markSyncStatus } from '../lib/dashboardFeatures';
+import { calendarEventOverlapsLocalDay } from '../lib/calendarDisplay';
 
 const CALENDAR_VISIBLE_REFRESH_MS = 60_000;
 const CALENDAR_SELECTION_VERSION = '2';
@@ -44,11 +45,11 @@ function msUntilNextLocalDay(now = new Date()): number {
   return Math.max(1_000, next.getTime() - now.getTime());
 }
 
-function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}): string {
+function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}, date = new Date()): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!tz) return '/api/calendar/events';
-    const day = calendarDayInTimeZone(tz);
+    const day = calendarDayInTimeZone(tz, date);
     if (!day) return '/api/calendar/events';
     const q = new URLSearchParams({ day, tz });
     if (opts.accountId) q.set('accountId', opts.accountId);
@@ -159,7 +160,8 @@ export function useCalendarEvents(): CalendarState {
 
   const refetch = useCallback(async () => {
     const requestId = ++requestSeqRef.current;
-    const requestDayStamp = localCalendarDayStamp();
+    const requestNow = new Date();
+    const requestDayStamp = localCalendarDayStamp(requestNow);
     const isStale = () => requestId !== requestSeqRef.current;
     setIsLoading(true);
     setError(null);
@@ -168,7 +170,7 @@ export function useCalendarEvents(): CalendarState {
         accountId,
         calendarIds: includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined),
       };
-      const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts), { timeoutMs: 15_000 });
+      const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts, requestNow), { timeoutMs: 15_000 });
       if (isStale()) return;
       lastFetchedDayRef.current = requestDayStamp;
       if ('error' in result) {
@@ -200,7 +202,7 @@ export function useCalendarEvents(): CalendarState {
           setError('fetch_error');
         }
       } else {
-        const todays = result.data.events ?? [];
+        const todays = (result.data.events ?? []).filter(event => calendarEventOverlapsLocalDay(event, requestNow));
         setEvents(todays);
         setIsConnected(true);
         markSyncStatus('calendar', 'ok');

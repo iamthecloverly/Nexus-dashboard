@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  calendarEventOverlapsLocalDay,
   formatCalendarEventTime,
   getCalendarEventDisplayState,
   splitCalendarEvents,
@@ -58,6 +59,22 @@ describe('calendar display helpers', () => {
 
     expect(getCalendarEventDisplayState(future, now)).toBe('upcoming');
     expect(splitCalendarEvents([future], now).upcoming.map(item => item.event.id)).toEqual(['future']);
+  });
+
+  it('excludes stale events from previous local days', () => {
+    const sundayEarly = new Date('2026-05-03T02:22:00-04:00');
+    const saturdayShift = timedEvent('saturday-shift', '2026-05-02T18:00:00-04:00', '2026-05-02T21:30:00-04:00');
+
+    expect(calendarEventOverlapsLocalDay(saturdayShift, sundayEarly)).toBe(false);
+    expect(splitCalendarEvents([saturdayShift], sundayEarly).displayable).toEqual([]);
+  });
+
+  it('keeps overnight events that overlap the current local day', () => {
+    const sundayEarly = new Date('2026-05-03T02:22:00-04:00');
+    const overnight = timedEvent('overnight', '2026-05-02T23:00:00-04:00', '2026-05-03T03:00:00-04:00');
+
+    expect(calendarEventOverlapsLocalDay(overnight, sundayEarly)).toBe(true);
+    expect(splitCalendarEvents([overnight], sundayEarly).current.map(item => item.event.id)).toEqual(['overnight']);
   });
 
   it('keeps all-day events visible for today', () => {

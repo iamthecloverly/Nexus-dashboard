@@ -32,6 +32,15 @@ function parseCalendarDate(value?: string): Date | null {
   return isValid(parsed) ? parsed : null;
 }
 
+function localDayBounds(now: Date): { start: Date; end: Date } | null {
+  if (!isValid(now)) return null;
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
 function isAllDayEvent(event: CalendarEvent): boolean {
   return !!event.start?.date && !event.start?.dateTime;
 }
@@ -44,6 +53,24 @@ export function getCalendarEventDateKey(event: CalendarEvent): string | null {
   if (event.start?.date) return event.start.date;
   const start = parseCalendarDate(event.start?.dateTime);
   return start ? format(start, 'yyyy-MM-dd') : null;
+}
+
+export function calendarEventOverlapsLocalDay(event: CalendarEvent, now: Date): boolean {
+  const bounds = localDayBounds(now);
+  if (!bounds) return false;
+
+  if (isAllDayEvent(event)) {
+    const start = parseCalendarDate(event.start.date);
+    if (!start) return false;
+    const end = parseCalendarDate(event.end?.date);
+    const effectiveEnd = end ?? new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return effectiveEnd.getTime() > bounds.start.getTime() && start.getTime() < bounds.end.getTime();
+  }
+
+  const start = parseCalendarDate(event.start?.dateTime);
+  const end = parseCalendarDate(event.end?.dateTime);
+  if (!start || !end || end.getTime() <= start.getTime()) return false;
+  return end.getTime() > bounds.start.getTime() && start.getTime() < bounds.end.getTime();
 }
 
 export function getCalendarEventDisplayItem(event: CalendarEvent, now: Date): CalendarDisplayItem | null {
@@ -98,8 +125,12 @@ export function splitCalendarEvents(events: CalendarEvent[], now: Date): SplitCa
 
   for (const event of events) {
     const item = getCalendarEventDisplayItem(event, now);
-    if (item) displayable.push(item);
-    else invalidCount += 1;
+    if (!item) {
+      invalidCount += 1;
+      continue;
+    }
+    if (!calendarEventOverlapsLocalDay(event, now)) continue;
+    displayable.push(item);
   }
 
   displayable.sort(byScheduleOrder);
