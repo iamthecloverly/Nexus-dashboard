@@ -46,8 +46,8 @@ function staleYesterdayEvent(): CalendarEvent {
   return {
     id: 'yesterday',
     summary: 'Yesterday',
-    start: { dateTime: '2026-05-02T18:00:00-04:00' },
-    end: { dateTime: '2026-05-02T21:30:00-04:00' },
+    start: { dateTime: '2026-05-02T18:00:00' },
+    end: { dateTime: '2026-05-02T21:30:00' },
     htmlLink: 'https://calendar.test/yesterday',
   };
 }
@@ -148,7 +148,7 @@ describe('useCalendarEvents', () => {
   });
 
   it('drops stale events returned for a previous local day', async () => {
-    vi.setSystemTime(new Date('2026-05-03T02:22:00-04:00'));
+    vi.setSystemTime(new Date(2026, 4, 3, 2, 22, 0));
     mockedApiFetchJson.mockResolvedValue({
       ok: true,
       data: { events: [staleYesterdayEvent()] },

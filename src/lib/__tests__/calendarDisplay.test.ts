@@ -62,8 +62,8 @@ describe('calendar display helpers', () => {
   });
 
   it('excludes stale events from previous local days', () => {
-    const sundayEarly = new Date('2026-05-03T02:22:00-04:00');
-    const saturdayShift = timedEvent('saturday-shift', '2026-05-02T18:00:00-04:00', '2026-05-02T21:30:00-04:00');
+    const sundayEarly = new Date(2026, 4, 3, 2, 22, 0);
+    const saturdayShift = timedEvent('saturday-shift', '2026-05-02T18:00:00', '2026-05-02T21:30:00');
 
     expect(calendarEventOverlapsLocalDay(saturdayShift, sundayEarly)).toBe(false);
     expect(splitCalendarEvents([saturdayShift], sundayEarly).displayable).toEqual([]);
