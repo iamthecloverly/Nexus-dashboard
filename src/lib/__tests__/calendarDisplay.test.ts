@@ -44,6 +44,15 @@ describe('calendar display helpers', () => {
     expect(splitCalendarEvents([current], now).current.map(item => item.event.id)).toEqual(['current']);
   });
 
+  it('keeps an evening event current until its end time', () => {
+    const eveningNow = new Date('2026-05-02T21:18:00-04:00');
+    const shift = timedEvent('assistant-building-manager', '2026-05-02T18:00:00-04:00', '2026-05-02T21:30:00-04:00');
+    const split = splitCalendarEvents([shift], eveningNow);
+
+    expect(getCalendarEventDisplayState(shift, eveningNow)).toBe('current');
+    expect(split.current.map(item => item.event.id)).toEqual(['assistant-building-manager']);
+  });
+
   it('puts a future timed event in upcoming', () => {
     const future = timedEvent('future', '2026-05-01T16:00:00', '2026-05-01T16:30:00');
 

@@ -19,6 +19,8 @@ export const STORAGE_KEYS = {
   calendarMainId: 'dashboard_calendar_main_id',
   /** JSON string array of calendar IDs to include (optional). */
   calendarIncludedIds: 'dashboard_calendar_included_ids',
+  /** Version marker for client-side calendar account/filter preferences. */
+  calendarSelectionVersion: 'dashboard_calendar_selection_version',
   /** JSON object of dashboard panel IDs to visible/hidden booleans. */
   dashboardPanelVisibility: 'dashboard_panel_visibility',
   /** JSON array of recent local notification records. */

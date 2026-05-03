@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetchJson } from '../../lib/apiFetch';
 import { useCalendarEvents } from '../useCalendarEvents';
 import type { CalendarEvent } from '../../types/calendar';
+import { STORAGE_KEYS } from '../../constants/storageKeys';
 
 vi.mock('../../lib/apiFetch', () => ({
   apiFetchJson: vi.fn(),
@@ -72,6 +73,22 @@ describe('useCalendarEvents', () => {
     expect(mockedApiFetchJson).toHaveBeenCalledTimes(2);
   });
 
+  it('refetches periodically while the tab is visible', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 21, 0, 0));
+
+    renderHook(() => useCalendarEvents());
+    await flushPromises();
+    expect(mockedApiFetchJson).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_001);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedApiFetchJson).toHaveBeenCalledTimes(2);
+  });
+
   it('refetches when the tab becomes visible on a stale local day', async () => {
     vi.setSystemTime(new Date(2026, 4, 1, 10, 0, 0));
     mockedApiFetchJson.mockResolvedValue({
@@ -108,5 +125,19 @@ describe('useCalendarEvents', () => {
     expect(mockedApiFetchJson).toHaveBeenCalledTimes(1);
     expect(result.current.mode).toBe('today');
     expect(result.current.events.map(event => event.id)).toEqual(['past']);
+  });
+
+  it('clears stale saved calendar filters so readable calendars are not skipped', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['old-academic-calendar']));
+    localStorage.setItem(`${STORAGE_KEYS.calendarMainId}_primary`, 'old-main-calendar');
+
+    renderHook(() => useCalendarEvents());
+    await flushPromises();
+
+    const requestedUrl = String(mockedApiFetchJson.mock.calls[0][0]);
+    expect(requestedUrl).not.toContain('calendarIds=');
+    expect(localStorage.getItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`)).toBeNull();
+    expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBeNull();
   });
 });

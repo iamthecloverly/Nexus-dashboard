@@ -100,6 +100,17 @@ function addDaysKey(day: string, deltaDays: number): string {
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
 }
 
+function defaultCalendarIdsFromList(
+  items: Array<{ id?: string | null; hidden?: boolean | null; deleted?: boolean | null; selected?: boolean | null }>,
+): string[] {
+  const ids = items
+    .filter(c => c.hidden !== true)
+    .filter(c => c.deleted !== true)
+    .map(c => c.id)
+    .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+  return Array.from(new Set(['primary', ...ids]));
+}
+
 /** RFC3339 bounds for one calendar day (client tz when provided). */
 function resolveCalendarBounds(req: express.Request): {
   timeMin: string;
@@ -216,12 +227,7 @@ calendarRouter.get('/events', async (req, res) => {
           const { timeZone } = bounds;
           const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
           const items = calListRes.data.items ?? [];
-          const autoIds = (items ?? [])
-            .filter(c => c.hidden !== true)
-            .filter(c => c.selected !== false)
-            .map(c => c.id!)
-            .filter(Boolean);
-          const ids = Array.from(new Set(calendarIdsRequested?.length ? calendarIdsRequested : ['primary', ...(autoIds.length ? autoIds : ['primary'])]));
+          const ids = calendarIdsRequested?.length ? calendarIdsRequested : defaultCalendarIdsFromList(items);
 
           // Fetch wider window so we still capture events that overlap today but start before timeMin.
           const debugFetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
@@ -314,19 +320,14 @@ calendarRouter.get('/events', async (req, res) => {
       const fetchMin = new Date(bounds.dayStartUtcMs - 24 * 60 * 60 * 1000).toISOString();
       const fetchMax = new Date(bounds.dayEndUtcMs + 24 * 60 * 60 * 1000).toISOString();
 
-      // Fetch all accessible calendars (cached), then query each in parallel
+      // Fetch all readable, non-hidden calendars (cached), then query each in parallel.
+      // Google Calendar's `selected` flag is only the sidebar checkbox state;
+      // relying on it can silently omit subscription/work calendars.
       const listCacheKey = tokenKey(tokens.refresh_token ?? tokensCookie, 'calendar:list');
       const calendarIds = await cacheGet(listCacheKey, CALENDAR_LIST_TTL_MS, async () => {
         const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' });
         const items = (calListRes.data.items ?? []);
-        const ids = items
-          .filter(c => c.hidden !== true)
-          .filter(c => c.selected !== false)
-          .map(c => c.id!)
-          .filter(Boolean);
-        // Always include primary, even if not in the list for some reason.
-        const uniq = Array.from(new Set(['primary', ...ids]));
-        return uniq.length ? uniq : ['primary'];
+        return defaultCalendarIdsFromList(items);
       });
 
       const idsToQuery = Array.from(new Set(calendarIdsRequested?.length ? calendarIdsRequested : calendarIds));
@@ -569,3 +570,7 @@ calendarRouter.get('/debug', async (req, res) => {
     res.status(500).json({ error: error instanceof Error ? error.message : 'debug_failed' });
   }
 });
+
+export const __testOnly = {
+  defaultCalendarIdsFromList,
+};

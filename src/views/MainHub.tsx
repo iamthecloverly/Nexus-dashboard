@@ -1084,9 +1084,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                             className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-foreground/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                             aria-label="Select calendar to view"
                           >
-                            <option value="">All selected calendars</option>
+                            <option value="">All visible calendars</option>
                             {calendarList
-                              .filter(c => !c.hidden && c.selected)
+                              .filter(c => !c.hidden)
                               .map(c => (
                                 <option key={c.id} value={c.id}>
                                   {c.primary ? '★ ' : ''}{(c.summary ?? c.id).slice(0, 40)}
@@ -1117,7 +1117,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                           </p>
                           <div className="flex flex-col gap-2 max-h-[220px] overflow-auto pr-1 custom-scrollbar">
                             {calendarList
-                              .filter(c => !c.hidden && c.selected)
+                              .filter(c => !c.hidden)
                               .slice(0, 20)
                               .map(c => {
                                 const checked = (includedCalendarIds ?? []).includes(c.id);
@@ -1130,7 +1130,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                                       onChange={(e) => {
                                         const nextChecked = e.target.checked;
                                         const base = includedCalendarIds == null
-                                          ? calendarList.filter(x => !x.hidden && x.selected).map(x => x.id)
+                                          ? calendarList.filter(x => !x.hidden).map(x => x.id)
                                           : includedCalendarIds;
                                         const next = nextChecked
                                           ? Array.from(new Set([...(base ?? []), c.id]))

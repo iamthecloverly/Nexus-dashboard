@@ -4,6 +4,9 @@ import { apiFetchJson } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { markSyncStatus } from '../lib/dashboardFeatures';
 
+const CALENDAR_VISIBLE_REFRESH_MS = 60_000;
+const CALENDAR_SELECTION_VERSION = '2';
+
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
 function calendarDayInTimeZone(timeZone: string, date = new Date()): string {
   const dtf = new Intl.DateTimeFormat('en-CA', {
@@ -102,7 +105,22 @@ function includedIdsKey(id: 'primary' | 'secondary') {
   return `${STORAGE_KEYS.calendarIncludedIds}_${id}`;
 }
 
+function migrateCalendarSelectionStorage() {
+  try {
+    if (localStorage.getItem(STORAGE_KEYS.calendarSelectionVersion) === CALENDAR_SELECTION_VERSION) return;
+    for (const id of ['primary', 'secondary'] as const) {
+      localStorage.removeItem(mainIdKey(id));
+      localStorage.removeItem(includedIdsKey(id));
+    }
+    localStorage.setItem(STORAGE_KEYS.calendarSelectionVersion, CALENDAR_SELECTION_VERSION);
+  } catch {
+    // Storage can be unavailable in private contexts; fall back to runtime defaults.
+  }
+}
+
 export function useCalendarEvents(): CalendarState {
+  migrateCalendarSelectionStorage();
+
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
@@ -199,6 +217,15 @@ export function useCalendarEvents(): CalendarState {
   }, [accountId, includedCalendarIds, mainCalendarId]);
 
   useEffect(() => { refetch(); }, [refetch]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const intervalId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      refetch();
+    }, CALENDAR_VISIBLE_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [refetch]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;

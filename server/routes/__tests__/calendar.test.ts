@@ -4,7 +4,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 
 import { SESSION_SECRET } from '../../config';
-import { calendarRouter } from '../calendar';
+import { __testOnly, calendarRouter } from '../calendar';
 
 function makeApp() {
   const app = express();
@@ -16,6 +16,15 @@ function makeApp() {
 }
 
 describe('Calendar routes', () => {
+  it('defaults to readable non-hidden calendars even when Google marks them unselected', () => {
+    expect(__testOnly.defaultCalendarIdsFromList([
+      { id: 'primary', selected: true },
+      { id: 'work-shifts', selected: false },
+      { id: 'hidden-calendar', hidden: true },
+      { id: 'deleted-calendar', deleted: true },
+    ])).toEqual(['primary', 'work-shifts']);
+  });
+
   describe('GET /api/calendar/events', () => {
     it('returns 401 without tokens cookie', async () => {
       const res = await request(makeApp()).get('/api/calendar/events');
@@ -41,4 +50,3 @@ describe('Calendar routes', () => {
     });
   });
 });
-
