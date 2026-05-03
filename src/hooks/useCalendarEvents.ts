@@ -6,7 +6,7 @@ import { markSyncStatus } from '../lib/dashboardFeatures';
 import { calendarEventOverlapsLocalDay } from '../lib/calendarDisplay';
 
 const CALENDAR_VISIBLE_REFRESH_MS = 60_000;
-const CALENDAR_SELECTION_VERSION = '2';
+const CALENDAR_SELECTION_VERSION = '3';
 type CalendarAccountId = 'primary' | 'secondary';
 type CalendarFetchReason = 'initial' | 'manual' | 'background';
 
@@ -14,6 +14,7 @@ export type CalendarAccountMode = 'selected' | 'allConnected';
 
 interface UseCalendarEventsOptions {
   accountMode?: CalendarAccountMode;
+  respectSavedFilters?: boolean;
 }
 
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
@@ -223,6 +224,7 @@ function normalizeAccountEvent(event: CalendarEvent, accountId: CalendarAccountI
 
 export function useCalendarEvents(options: UseCalendarEventsOptions = {}): CalendarState {
   const accountMode = options.accountMode ?? 'selected';
+  const respectSavedFilters = options.respectSavedFilters ?? true;
   const [initialCalendarState] = useState(readInitialCalendarState);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -286,7 +288,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
       const accountResults = await Promise.all(accountsToFetch.map(async (fetchAccountId) => {
         const opts = {
           accountId: fetchAccountId,
-          calendarIds: fetchAccountId === accountId
+          calendarIds: respectSavedFilters && fetchAccountId === accountId
             ? includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined)
             : undefined,
         };
@@ -335,7 +337,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
         setIsRefreshing(false);
       }
     }
-  }, [accountId, accountMode, connectedAccountIds, includedCalendarIds, mainCalendarId]);
+  }, [accountId, accountMode, connectedAccountIds, includedCalendarIds, mainCalendarId, respectSavedFilters]);
 
   useEffect(() => {
     hasLoadedRef.current = false;
@@ -399,6 +401,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
 }
 
 export const __testOnly = {
+  CALENDAR_SELECTION_VERSION,
   calendarDayInTimeZone,
   localCalendarDayStamp,
   msUntilNextLocalDay,

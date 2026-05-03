@@ -142,7 +142,10 @@ export default function FocusMode({
     return count;
   }, [sessionsData]);
 
-  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents({ accountMode: 'allConnected' });
+  const { events, isLoading: isLoadingEvents, isConnected: isCalendarConnected, error: calendarError } = useCalendarEvents({
+    accountMode: 'allConnected',
+    respectSavedFilters: false,
+  });
   useCalendarNotifications(events, isCalendarConnected);
   const [currentTime, setCurrentTime] = useState(new Date());
 

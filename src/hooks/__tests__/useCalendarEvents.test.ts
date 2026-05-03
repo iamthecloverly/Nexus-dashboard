@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetchJson } from '../../lib/apiFetch';
-import { useCalendarEvents } from '../useCalendarEvents';
+import { __testOnly, useCalendarEvents } from '../useCalendarEvents';
 import type { CalendarEvent } from '../../types/calendar';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 
@@ -169,10 +169,25 @@ describe('useCalendarEvents', () => {
     renderHook(() => useCalendarEvents());
     await flushPromises();
 
-    const requestedUrl = String(mockedApiFetchJson.mock.calls[0][0]);
+    const requestedUrl = String(mockedApiFetchJson.mock.calls.find(([input]) => String(input).startsWith('/api/calendar/events'))?.[0]);
     expect(requestedUrl).not.toContain('calendarIds=');
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`)).toBeNull();
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBeNull();
+  });
+
+  it('can ignore saved calendar filters for full-day surfaces like Focus Mode', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    localStorage.setItem(STORAGE_KEYS.calendarSelectionVersion, __testOnly.CALENDAR_SELECTION_VERSION);
+    localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['old-main-calendar']));
+    localStorage.setItem(`${STORAGE_KEYS.calendarMainId}_primary`, 'old-main-calendar');
+
+    renderHook(() => useCalendarEvents({ accountMode: 'allConnected', respectSavedFilters: false }));
+    await flushPromises();
+
+    const requestedUrl = String(mockedApiFetchJson.mock.calls.find(([input]) => String(input).startsWith('/api/calendar/events'))?.[0]);
+    expect(requestedUrl).not.toContain('calendarIds=');
+    expect(localStorage.getItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`)).toBe(JSON.stringify(['old-main-calendar']));
+    expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBe('old-main-calendar');
   });
 
   it('merges today events from all connected Google accounts', async () => {
