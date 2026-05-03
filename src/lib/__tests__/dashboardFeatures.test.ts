@@ -111,6 +111,15 @@ describe('dashboard feature helpers', () => {
     expect(conflicts[0][1].event.id).toBe('b');
   });
 
+  it('ignores calendar conflicts from a different local day', () => {
+    const conflicts = findCalendarConflicts([
+      event('yesterday-a', '2026-04-30T16:00:00', '2026-04-30T17:00:00'),
+      event('yesterday-b', '2026-04-30T16:30:00', '2026-04-30T17:30:00'),
+    ], now);
+
+    expect(conflicts).toHaveLength(0);
+  });
+
   it('builds a mixed today timeline from calendar, tasks, and emails', () => {
     const calendarItems = splitCalendarEvents([
       event('standup', '2026-05-01T15:30:00', '2026-05-01T16:00:00'),

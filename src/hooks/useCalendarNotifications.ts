@@ -5,6 +5,11 @@ import { addNotificationLog } from '../lib/dashboardFeatures';
 
 const NOTIFY_BEFORE_SECONDS = 5 * 60;
 
+function notificationKey(event: CalendarEvent): string | null {
+  if (!event.start.dateTime) return null;
+  return `${event.id}:${event.start.dateTime}`;
+}
+
 /**
  * Watches `events` and fires a Notification API alert 5 minutes before each
  * upcoming event.
@@ -35,36 +40,38 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
     const fired = firedRef.current;
 
     // Cancel timeouts for events that have been removed from the list.
-    const liveIds = new Set(events.map(e => e.id));
-    for (const [eventId, timeoutId] of ids) {
-      if (!liveIds.has(eventId)) {
+    const liveIds = new Set(events.map(notificationKey).filter((key): key is string => key != null));
+    for (const [eventKey, timeoutId] of ids) {
+      if (!liveIds.has(eventKey)) {
         window.clearTimeout(timeoutId);
-        ids.delete(eventId);
+        ids.delete(eventKey);
       }
     }
 
     events.forEach(event => {
-      if (!event.start.dateTime) return;
-      if (fired.has(event.id)) return;
+      const eventKey = notificationKey(event);
+      const startDateTime = event.start.dateTime;
+      if (!eventKey || !startDateTime) return;
+      if (fired.has(eventKey)) return;
 
-      const startMs = parseISO(event.start.dateTime).getTime();
+      const startMs = parseISO(startDateTime).getTime();
       const notifyAt = startMs - NOTIFY_BEFORE_SECONDS * 1000;
       const delayMs = notifyAt - now;
 
       if (delayMs < 0 || delayMs > 24 * 60 * 60 * 1000) return;
 
       // Cancel any existing timeout for this event before rescheduling.
-      const existing = ids.get(event.id);
+      const existing = ids.get(eventKey);
       if (existing !== undefined) window.clearTimeout(existing);
 
       const timeoutId = window.setTimeout(() => {
-        ids.delete(event.id);
-        fired.add(event.id);
+        ids.delete(eventKey);
+        fired.add(eventKey);
 
         if (Notification.permission !== 'granted') return;
 
         const minutesBefore = Math.round(
-          differenceInSeconds(parseISO(event.start.dateTime!), new Date()) / 60,
+          differenceInSeconds(parseISO(startDateTime), new Date()) / 60,
         );
         const body = minutesBefore > 0
           ? `Starting in ${minutesBefore} minute${minutesBefore !== 1 ? 's' : ''}`
@@ -75,7 +82,7 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
           const n = new Notification(event.summary ?? 'Calendar Event', {
             body,
             icon: '/favicon.ico',
-            tag: `cal-${event.id}`,
+            tag: `cal-${eventKey}`,
             requireInteraction: false,
           });
           setTimeout(() => n.close(), 8000);
@@ -84,7 +91,7 @@ export function useCalendarNotifications(events: CalendarEvent[], enabled = true
         }
       }, delayMs);
 
-      ids.set(event.id, timeoutId);
+      ids.set(eventKey, timeoutId);
     });
 
     return () => {

@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CalendarEvent } from '../types/calendar';
-import { apiFetchJson } from '../lib/apiFetch';
+import type { CalendarEvent } from '../types/calendar';
+import { apiFetchJson, type ApiError } from '../lib/apiFetch';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { markSyncStatus } from '../lib/dashboardFeatures';
 import { calendarEventOverlapsLocalDay } from '../lib/calendarDisplay';
 
 const CALENDAR_VISIBLE_REFRESH_MS = 60_000;
 const CALENDAR_SELECTION_VERSION = '2';
+type CalendarAccountId = 'primary' | 'secondary';
+type CalendarFetchReason = 'initial' | 'manual' | 'background';
+
+export type CalendarAccountMode = 'selected' | 'allConnected';
+
+interface UseCalendarEventsOptions {
+  accountMode?: CalendarAccountMode;
+}
 
 /** Today's date as YYYY-MM-DD in the given IANA timezone (aligns with server calendar window). */
 function calendarDayInTimeZone(timeZone: string, date = new Date()): string {
@@ -45,7 +53,7 @@ function msUntilNextLocalDay(now = new Date()): number {
   return Math.max(1_000, next.getTime() - now.getTime());
 }
 
-function calendarEventsUrl(opts: { accountId?: 'primary' | 'secondary'; calendarIds?: string[] } = {}, date = new Date()): string {
+function calendarEventsUrl(opts: { accountId?: CalendarAccountId; calendarIds?: string[] } = {}, date = new Date()): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!tz) return '/api/calendar/events';
@@ -74,17 +82,29 @@ export type CalendarError =
 interface CalendarState {
   events: CalendarEvent[];
   isLoading: boolean;
+  isRefreshing: boolean;
   isConnected: boolean;
   error: CalendarError | null;
   mode: 'today';
-  accountId: 'primary' | 'secondary';
+  accountId: CalendarAccountId;
   mainCalendarId: string | null;
   includedCalendarIds: string[] | null;
-  setAccountId: (id: 'primary' | 'secondary') => void;
+  setAccountId: (id: CalendarAccountId) => void;
   setMainCalendarId: (id: string | null) => void;
   setIncludedCalendarIds: (ids: string[] | null) => void;
   refetch: () => void;
 }
+
+type GoogleAccountsResponse = {
+  accounts?: Array<{ accountId: CalendarAccountId; connected?: boolean }>;
+};
+
+type InitialCalendarState = {
+  accountId: CalendarAccountId;
+  mainCalendarId: string | null;
+  includedCalendarIds: string[] | null;
+  needsSelectionMigration: boolean;
+};
 
 function readJsonArray(key: string): string[] | null {
   try {
@@ -99,11 +119,48 @@ function readJsonArray(key: string): string[] | null {
   }
 }
 
-function mainIdKey(id: 'primary' | 'secondary') {
+function mainIdKey(id: CalendarAccountId) {
   return `${STORAGE_KEYS.calendarMainId}_${id}`;
 }
-function includedIdsKey(id: 'primary' | 'secondary') {
+function includedIdsKey(id: CalendarAccountId) {
   return `${STORAGE_KEYS.calendarIncludedIds}_${id}`;
+}
+
+function isSelectionVersionCurrent(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.calendarSelectionVersion) === CALENDAR_SELECTION_VERSION;
+  } catch {
+    return true;
+  }
+}
+
+function readCalendarFilters(id: CalendarAccountId, selectionVersionCurrent = isSelectionVersionCurrent()) {
+  if (!selectionVersionCurrent) return { mainCalendarId: null, includedCalendarIds: null };
+  try {
+    const v = localStorage.getItem(mainIdKey(id));
+    return {
+      mainCalendarId: v && v.trim() ? v : null,
+      includedCalendarIds: readJsonArray(includedIdsKey(id)),
+    };
+  } catch {
+    return { mainCalendarId: null, includedCalendarIds: null };
+  }
+}
+
+function readInitialCalendarState(): InitialCalendarState {
+  const account = (() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.calendarAccount) === 'secondary' ? 'secondary' : 'primary';
+    } catch {
+      return 'primary';
+    }
+  })();
+  const selectionVersionCurrent = isSelectionVersionCurrent();
+  return {
+    accountId: account,
+    ...readCalendarFilters(account, selectionVersionCurrent),
+    needsSelectionMigration: !selectionVersionCurrent,
+  };
 }
 
 function migrateCalendarSelectionStorage() {
@@ -119,34 +176,80 @@ function migrateCalendarSelectionStorage() {
   }
 }
 
-export function useCalendarEvents(): CalendarState {
-  migrateCalendarSelectionStorage();
+function calendarErrorState(err: ApiError): Pick<CalendarState, 'isConnected' | 'error'> {
+  if (err.status === 401) {
+    const code = err.code ?? '';
+    const msg = err.error ?? '';
+    return {
+      isConnected: false,
+      error: code === 'LOGIN_REQUIRED' || msg.toLowerCase().includes('login required')
+        ? 'login_required'
+        : 'not_connected',
+    };
+  }
 
+  if (err.status === 403) {
+    const code = err.code ?? '';
+    const msg = err.error ?? '';
+    if (code === 'CALENDAR_FORBIDDEN') return { isConnected: true, error: 'calendar_access_denied' };
+    if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) {
+      return { isConnected: false, error: 'not_allowlisted' };
+    }
+    if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) {
+      return { isConnected: false, error: 'google_profile_missing' };
+    }
+    return { isConnected: false, error: 'forbidden' };
+  }
+
+  if (err.status === 503) {
+    return { isConnected: true, error: err.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error' };
+  }
+
+  return { isConnected: true, error: 'fetch_error' };
+}
+
+function rankCalendarError(err: ApiError): number {
+  if (err.code === 'LOGIN_REQUIRED') return 0;
+  if (err.status === 403) return 1;
+  if (err.status === 503) return 2;
+  if (err.status === 401) return 3;
+  return 4;
+}
+
+function normalizeAccountEvent(event: CalendarEvent, accountId: CalendarAccountId, prefixId: boolean): CalendarEvent {
+  if (!prefixId) return event;
+  return { ...event, id: `${accountId}:${event.id}` };
+}
+
+export function useCalendarEvents(options: UseCalendarEventsOptions = {}): CalendarState {
+  const accountMode = options.accountMode ?? 'selected';
+  const [initialCalendarState] = useState(readInitialCalendarState);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<CalendarError | null>(null);
   const requestSeqRef = useRef(0);
   const lastFetchedDayRef = useRef<string | null>(null);
+  const hasLoadedRef = useRef(false);
+  const [needsSelectionMigration, setNeedsSelectionMigration] = useState(initialCalendarState.needsSelectionMigration);
 
-  const initAccountId: 'primary' | 'secondary' = (() => {
-    const v = localStorage.getItem(STORAGE_KEYS.calendarAccount);
-    return v === 'secondary' ? 'secondary' : 'primary';
-  })();
+  const [accountId, setAccountIdState] = useState<CalendarAccountId>(initialCalendarState.accountId);
+  const [mainCalendarId, setMainCalendarId] = useState<string | null>(initialCalendarState.mainCalendarId);
+  const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(initialCalendarState.includedCalendarIds);
 
-  const [accountId, setAccountIdState] = useState<'primary' | 'secondary'>(initAccountId);
-  const [mainCalendarId, setMainCalendarId] = useState<string | null>(() => {
-    const v = localStorage.getItem(mainIdKey(initAccountId));
-    return v && v.trim() ? v : null;
-  });
-  const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(() => readJsonArray(includedIdsKey(initAccountId)));
-
-  const setAccountId = useCallback((id: 'primary' | 'secondary') => {
+  const setAccountId = useCallback((id: CalendarAccountId) => {
     setAccountIdState(id);
-    const v = localStorage.getItem(mainIdKey(id));
-    setMainCalendarId(v && v.trim() ? v : null);
-    setIncludedCalendarIds(readJsonArray(includedIdsKey(id)));
+    const filters = readCalendarFilters(id);
+    setMainCalendarId(filters.mainCalendarId);
+    setIncludedCalendarIds(filters.includedCalendarIds);
   }, []);
+
+  useEffect(() => {
+    if (!needsSelectionMigration) return;
+    migrateCalendarSelectionStorage();
+    setNeedsSelectionMigration(false);
+  }, [needsSelectionMigration]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.calendarAccount, accountId); }, [accountId]);
   useEffect(() => {
@@ -158,54 +261,66 @@ export function useCalendarEvents(): CalendarState {
     else localStorage.removeItem(includedIdsKey(accountId));
   }, [includedCalendarIds, accountId]);
 
-  const refetch = useCallback(async () => {
+  const connectedAccountIds = useCallback(async (): Promise<CalendarAccountId[]> => {
+    if (accountMode === 'selected') return [accountId];
+    const result = await apiFetchJson<GoogleAccountsResponse>('/api/auth/google/accounts', { timeoutMs: 5_000 });
+    if ('error' in result) return [accountId];
+    const connected = (result.data.accounts ?? [])
+      .filter(account => account.connected)
+      .map(account => account.accountId)
+      .filter((id): id is CalendarAccountId => id === 'primary' || id === 'secondary');
+    return connected.length ? Array.from(new Set(connected)) : [accountId];
+  }, [accountId, accountMode]);
+
+  const refetch = useCallback(async (reason: CalendarFetchReason = 'manual') => {
     const requestId = ++requestSeqRef.current;
     const requestNow = new Date();
     const requestDayStamp = localCalendarDayStamp(requestNow);
     const isStale = () => requestId !== requestSeqRef.current;
-    setIsLoading(true);
+    const showBlockingLoader = !hasLoadedRef.current || reason === 'initial';
+    if (showBlockingLoader) setIsLoading(true);
+    else setIsRefreshing(true);
     setError(null);
     try {
-      const opts = {
-        accountId,
-        calendarIds: includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined),
-      };
-      const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts, requestNow), { timeoutMs: 15_000 });
+      const accountsToFetch = await connectedAccountIds();
+      const accountResults = await Promise.all(accountsToFetch.map(async (fetchAccountId) => {
+        const opts = {
+          accountId: fetchAccountId,
+          calendarIds: fetchAccountId === accountId
+            ? includedCalendarIds ?? (mainCalendarId ? [mainCalendarId] : undefined)
+            : undefined,
+        };
+        const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts, requestNow), { timeoutMs: 15_000 });
+        return { accountId: fetchAccountId, result };
+      }));
       if (isStale()) return;
       lastFetchedDayRef.current = requestDayStamp;
-      if ('error' in result) {
-        const err = result.error;
-        markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
-        if (err.status === 401) {
-          const code = err.code ?? '';
-          const msg = err.error ?? '';
-          setIsConnected(false);
-          if (code === 'LOGIN_REQUIRED' || msg.toLowerCase().includes('login required')) setError('login_required');
-          else setError('not_connected');
-        } else if (err.status === 403) {
-          const code = err.code ?? '';
-          const msg = err.error ?? '';
-          if (code === 'CALENDAR_FORBIDDEN') {
-            setIsConnected(true);
-            setError('calendar_access_denied');
-          } else {
-            setIsConnected(false);
-            if (code === 'GOOGLE_NOT_ALLOWLISTED' || msg.toLowerCase().includes('not allowed')) setError('not_allowlisted');
-            else if (code === 'GOOGLE_PROFILE_MISSING' || msg.toLowerCase().includes('not connected')) setError('google_profile_missing');
-            else setError('forbidden');
-          }
-        } else if (err.status === 503) {
-          setIsConnected(true);
-          setError(err.code === 'API_DISABLED' ? 'api_disabled' : 'fetch_error');
-        } else {
-          setIsConnected(true);
-          setError('fetch_error');
-        }
-      } else {
-        const todays = (result.data.events ?? []).filter(event => calendarEventOverlapsLocalDay(event, requestNow));
+
+      const successes = accountResults.filter((accountResult): accountResult is {
+        accountId: CalendarAccountId;
+        result: { ok: true; data: { events?: CalendarEvent[] } };
+      } => !('error' in accountResult.result));
+
+      if (successes.length > 0) {
+        const prefixIds = accountMode === 'allConnected' && successes.length > 1;
+        const todays = successes
+          .flatMap(({ accountId: eventAccountId, result }) =>
+            (result.data.events ?? []).map(event => normalizeAccountEvent(event, eventAccountId, prefixIds)),
+          )
+          .filter(event => calendarEventOverlapsLocalDay(event, requestNow));
         setEvents(todays);
         setIsConnected(true);
         markSyncStatus('calendar', 'ok');
+      } else {
+        const errors = accountResults
+          .map(accountResult => ('error' in accountResult.result ? accountResult.result.error : null))
+          .filter((err): err is ApiError => err != null)
+          .sort((a, b) => rankCalendarError(a) - rankCalendarError(b));
+        const err = errors[0] ?? { status: 500, error: 'Unknown calendar error' };
+        markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
+        const state = calendarErrorState(err);
+        setIsConnected(state.isConnected);
+        setError(state.error);
       }
     } catch {
       if (isStale()) return;
@@ -214,17 +329,24 @@ export function useCalendarEvents(): CalendarState {
       setError('network_error');
       markSyncStatus('calendar', 'error', 'Network error');
     } finally {
-      if (!isStale()) setIsLoading(false);
+      if (!isStale()) {
+        hasLoadedRef.current = true;
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
-  }, [accountId, includedCalendarIds, mainCalendarId]);
+  }, [accountId, accountMode, connectedAccountIds, includedCalendarIds, mainCalendarId]);
 
-  useEffect(() => { refetch(); }, [refetch]);
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    void refetch('initial');
+  }, [refetch]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const intervalId = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      refetch();
+      void refetch('background');
     }, CALENDAR_VISIBLE_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [refetch]);
@@ -235,7 +357,7 @@ export function useCalendarEvents(): CalendarState {
 
     const scheduleNextRollover = () => {
       timeoutId = window.setTimeout(() => {
-        refetch();
+        void refetch('background');
         scheduleNextRollover();
       }, msUntilNextLocalDay());
     };
@@ -252,7 +374,7 @@ export function useCalendarEvents(): CalendarState {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       const fetchedDay = lastFetchedDayRef.current;
-      if (fetchedDay && fetchedDay !== localCalendarDayStamp()) refetch();
+      if (fetchedDay && fetchedDay !== localCalendarDayStamp()) void refetch('background');
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -262,6 +384,7 @@ export function useCalendarEvents(): CalendarState {
   return {
     events,
     isLoading,
+    isRefreshing,
     isConnected,
     error,
     mode: 'today',

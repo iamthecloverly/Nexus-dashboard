@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import type { calendar_v3 } from 'googleapis';
 
 import { SESSION_SECRET } from '../../config';
 import { __testOnly, calendarRouter } from '../calendar';
@@ -23,6 +24,38 @@ describe('Calendar routes', () => {
       { id: 'hidden-calendar', hidden: true },
       { id: 'deleted-calendar', deleted: true },
     ])).toEqual(['primary', 'work-shifts']);
+  });
+
+  it('pages through calendar event results instead of stopping at the first page', async () => {
+    const list = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: 'first', start: { dateTime: '2026-05-01T08:00:00' }, end: { dateTime: '2026-05-01T09:00:00' } }],
+          nextPageToken: 'page-2',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: 'second', start: { dateTime: '2026-05-01T10:00:00' }, end: { dateTime: '2026-05-01T11:00:00' } }],
+        },
+      });
+
+    const events = await __testOnly.listCalendarEvents({
+      events: { list },
+    } as unknown as calendar_v3.Calendar, {
+      calendarId: 'primary',
+      timeMin: '2026-05-01T00:00:00Z',
+      timeMax: '2026-05-02T00:00:00Z',
+      timeZone: 'America/New_York',
+    });
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(list.mock.calls[1][0]).toMatchObject({ pageToken: 'page-2' });
+    expect(events.map(event => event.id)).toEqual(['first', 'second']);
+  });
+
+  it('keeps auto calendar list cache short so new shared calendars appear quickly', () => {
+    expect(__testOnly.CALENDAR_LIST_TTL_MS).toBe(5 * 60 * 1000);
   });
 
   describe('GET /api/calendar/events', () => {

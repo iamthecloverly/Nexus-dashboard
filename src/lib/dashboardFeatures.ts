@@ -4,7 +4,7 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import type { CalendarEvent } from '../types/calendar';
 import type { Email } from '../types/email';
 import type { Task } from '../types/task';
-import { getCalendarEventDisplayItem, type CalendarDisplayItem } from './calendarDisplay';
+import { calendarEventOverlapsLocalDay, getCalendarEventDisplayItem, type CalendarDisplayItem } from './calendarDisplay';
 
 export type DashboardPanelId =
   | 'digest'
@@ -213,6 +213,7 @@ export function findFollowUpEmails(emails: Email[], now = new Date()): Email[] {
 
 export function findCalendarConflicts(events: CalendarEvent[], now = new Date()): Array<[CalendarDisplayItem, CalendarDisplayItem]> {
   const timed = events
+    .filter(event => calendarEventOverlapsLocalDay(event, now))
     .map(event => getCalendarEventDisplayItem(event, now))
     .filter((item): item is CalendarDisplayItem => !!item && item.state !== 'allDay' && item.state !== 'past' && !!item.end)
     .sort((a, b) => a.start.getTime() - b.start.getTime());

@@ -22,6 +22,16 @@ function futureEvent(start: string, end: string): CalendarEvent {
   };
 }
 
+function timedEvent(id: string, start: string, end: string): CalendarEvent {
+  return {
+    id,
+    summary: id,
+    start: { dateTime: start },
+    end: { dateTime: end },
+    htmlLink: `https://calendar.test/${id}`,
+  };
+}
+
 function pastEvent(): CalendarEvent {
   return {
     id: 'past',
@@ -163,5 +173,78 @@ describe('useCalendarEvents', () => {
     expect(requestedUrl).not.toContain('calendarIds=');
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`)).toBeNull();
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBeNull();
+  });
+
+  it('merges today events from all connected Google accounts', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    mockedApiFetchJson.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/auth/google/accounts') {
+        return {
+          ok: true,
+          data: {
+            accounts: [
+              { accountId: 'primary', connected: true },
+              { accountId: 'secondary', connected: true },
+            ],
+          },
+        };
+      }
+      if (url.includes('accountId=secondary')) {
+        return {
+          ok: true,
+          data: { events: [timedEvent('secondary-now', '2026-05-01T11:30:00', '2026-05-01T12:30:00')] },
+        };
+      }
+      return {
+        ok: true,
+        data: { events: [timedEvent('primary-next', '2026-05-01T13:00:00', '2026-05-01T13:30:00')] },
+      };
+    });
+
+    const { result } = renderHook(() => useCalendarEvents({ accountMode: 'allConnected' }));
+    await flushPromises();
+
+    expect(mockedApiFetchJson).toHaveBeenCalledWith('/api/auth/google/accounts', { timeoutMs: 5_000 });
+    expect(result.current.events.map(event => event.id).sort()).toEqual([
+      'primary:primary-next',
+      'secondary:secondary-now',
+    ]);
+  });
+
+  it('uses refreshing state instead of blocking loading for visible-tab refreshes', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    let resolveRefresh: ((value: Awaited<ReturnType<typeof apiFetchJson<{ events?: CalendarEvent[] }>>>) => void) | null = null;
+    mockedApiFetchJson
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { events: [timedEvent('first', '2026-05-01T13:00:00', '2026-05-01T13:30:00')] },
+      })
+      .mockImplementationOnce(() => new Promise(resolve => { resolveRefresh = resolve; }));
+
+    const { result } = renderHook(() => useCalendarEvents());
+    await flushPromises();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isRefreshing).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_001);
+      await Promise.resolve();
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isRefreshing).toBe(true);
+
+    await act(async () => {
+      resolveRefresh?.({
+        ok: true,
+        data: { events: [timedEvent('second', '2026-05-01T14:00:00', '2026-05-01T14:30:00')] },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.isRefreshing).toBe(false);
+    expect(result.current.events.map(event => event.id)).toEqual(['second']);
   });
 });

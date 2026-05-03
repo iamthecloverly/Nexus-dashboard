@@ -29,5 +29,18 @@ export default defineConfig(() => {
         'dash.sribalaji.eu.org'
       ]
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('/react/') || id.includes('/react-dom/')) return 'vendor-react';
+            if (id.includes('/date-fns/')) return 'vendor-date';
+            if (id.includes('/react-window/') || id.includes('/react-virtualized-auto-sizer/')) return 'vendor-virtual-list';
+            return 'vendor';
+          },
+        },
+      },
+    },
   };
 });

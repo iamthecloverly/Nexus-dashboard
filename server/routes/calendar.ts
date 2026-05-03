@@ -1,5 +1,5 @@
 import express from 'express';
-import { google } from 'googleapis';
+import { google, type calendar_v3 } from 'googleapis';
 
 import { ENABLE_DEBUG_ENDPOINTS, isProduction } from '../config.ts';
 import { getSignedCookie, parseJsonCookie } from '../lib/cookies.ts';
@@ -11,8 +11,9 @@ import { logger } from '../lib/logger.ts';
 // Cache calendar events for 45 s — short enough to feel live, long enough to
 // avoid hammering the N+1 Google API calls on every page load / refresh.
 const CALENDAR_TTL_MS = 45_000;
-// Calendar list changes rarely; cache the IDs longer to avoid an extra API call per refresh.
-const CALENDAR_LIST_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Keep this short enough that newly-added shared/work calendars appear quickly.
+const CALENDAR_LIST_TTL_MS = 5 * 60 * 1000;
+const CALENDAR_EVENTS_PAGE_SIZE = 2500;
 
 export const calendarRouter = express.Router();
 
@@ -197,6 +198,36 @@ function eventInRangeOrOverlaps(
   return endMs > dayStartUtcMs && startMs < dayEndUtcMs;
 }
 
+async function listCalendarEvents(
+  calendar: calendar_v3.Calendar,
+  opts: {
+    calendarId: string;
+    timeMin: string;
+    timeMax: string;
+    timeZone: string;
+  },
+): Promise<calendar_v3.Schema$Event[]> {
+  const events: calendar_v3.Schema$Event[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await calendar.events.list({
+      calendarId: opts.calendarId,
+      timeMin: opts.timeMin,
+      timeMax: opts.timeMax,
+      timeZone: opts.timeZone,
+      maxResults: CALENDAR_EVENTS_PAGE_SIZE,
+      singleEvents: true,
+      orderBy: 'startTime',
+      pageToken,
+    });
+    events.push(...(response.data.items ?? []));
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return events;
+}
+
 calendarRouter.get('/events', async (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
   const auth = getGoogleTokensFromCookie(req, accountId);
@@ -235,18 +266,15 @@ calendarRouter.get('/events', async (req, res) => {
 
           const settled = await Promise.allSettled(
             ids.map(calendarId =>
-              calendar.events.list({
+              listCalendarEvents(calendar, {
                 calendarId,
                 timeMin: debugFetchMin,
                 timeMax: debugFetchMax,
                 timeZone,
-                maxResults: 50,
-                singleEvents: true,
-                orderBy: 'startTime',
               }),
             ),
           );
-          const eventArrays = settled.flatMap(s => (s.status === 'fulfilled' ? (s.value.data.items ?? []) : []));
+          const eventArrays = settled.flatMap(s => (s.status === 'fulfilled' ? s.value : []));
           const seen = new Set<string>();
           const events = eventArrays
             .filter(e => e != null)
@@ -281,7 +309,7 @@ calendarRouter.get('/events', async (req, res) => {
               const e = s.reason as { message?: string; response?: { status?: number } };
               return { calendarId, meta, error: e?.message ?? String(s.reason), status: e?.response?.status };
             }
-            const evs = (s.value.data.items ?? []).filter(e => eventInRangeOrOverlaps(e, bounds));
+            const evs = s.value.filter(e => eventInRangeOrOverlaps(e, bounds));
             return {
               calendarId,
               meta,
@@ -334,14 +362,11 @@ calendarRouter.get('/events', async (req, res) => {
 
       const settled = await Promise.allSettled(
         idsToQuery.map(calId =>
-          calendar.events.list({
+          listCalendarEvents(calendar, {
             calendarId: calId,
             timeMin: fetchMin,
             timeMax: fetchMax,
             timeZone,
-            maxResults: 50,
-            singleEvents: true,
-            orderBy: 'startTime',
           }),
         ),
       );
@@ -358,7 +383,7 @@ calendarRouter.get('/events', async (req, res) => {
       if (allRejected) throw (settled[0] as PromiseRejectedResult).reason;
 
       const eventArrays = settled.flatMap(s =>
-        s.status === 'fulfilled' ? (s.value.data.items ?? []) : [],
+        s.status === 'fulfilled' ? s.value : [],
       );
 
       // Dedupe when Google gives stable ids; don't drop events missing both id and iCalUID.
@@ -485,16 +510,12 @@ calendarRouter.get('/debug', async (req, res) => {
 
     const perCalendar = await Promise.all(uniqueIds.map(async (calendarId) => {
       try {
-        const r = await calendar.events.list({
+        const evs = await listCalendarEvents(calendar, {
           calendarId,
           timeMin,
           timeMax,
           timeZone,
-          maxResults: 50,
-          singleEvents: true,
-          orderBy: 'startTime',
         });
-        const evs = r.data.items ?? [];
         const sample = evs.slice(0, 5).map(e => ({
           id: e.id,
           iCalUID: e.iCalUID,
@@ -573,4 +594,6 @@ calendarRouter.get('/debug', async (req, res) => {
 
 export const __testOnly = {
   defaultCalendarIdsFromList,
+  listCalendarEvents,
+  CALENDAR_LIST_TTL_MS,
 };

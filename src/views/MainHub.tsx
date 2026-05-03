@@ -273,7 +273,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     includedCalendarIds,
     setIncludedCalendarIds,
     refetch: fetchEvents,
-  } = useCalendarEvents();
+  } = useCalendarEvents({ accountMode: 'allConnected' });
 
   const [googleAccounts, setGoogleAccounts] = useState<{ primary: boolean; secondary: boolean }>({ primary: true, secondary: false });
   const [calendarList, setCalendarList] = useState<Array<{ id: string; summary: string | null; primary: boolean; selected: boolean; hidden: boolean }>>([]);
