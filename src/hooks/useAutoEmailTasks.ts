@@ -4,8 +4,10 @@ import { useTaskContext } from '../contexts/taskContext';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import type { GmailAccountId } from '../types/email';
 
 const MAX_STORED_IDS = 400; // cap to avoid localStorage bloat
+const ACCOUNTS: GmailAccountId[] = ['primary', 'secondary'];
 
 function loadProcessedIds(): Set<string> {
   try {
@@ -23,36 +25,42 @@ function saveProcessedIds(ids: Set<string>) {
 }
 
 export function useAutoEmailTasks() {
-  const { state: { emailsByAccount } } = useEmailContext();
+  const { state: { emailsByAccount, connectedByAccount, emailsLoadingByAccount } } = useEmailContext();
   const { actions: { addTask } } = useTaskContext();
   const { showToast } = useToast();
 
   // Persisted set of email IDs already processed by auto-extraction
   const processedRef = useRef<Set<string>>(loadProcessedIds());
+  // Each account has its own initial sync; existing unread mail should not be auto-converted.
+  const initializedAccountsRef = useRef<Set<GmailAccountId>>(new Set());
   // Prevent concurrent runs
   const isProcessingRef = useRef(false);
-  // First render flag — mark existing emails as seen without processing them
-  const isFirstLoadRef = useRef(true);
 
   useEffect(() => {
-    const allEmails = [...emailsByAccount.primary, ...emailsByAccount.secondary];
-    if (allEmails.length === 0) return;
+    let initializedThisPass = false;
+    for (const accountId of ACCOUNTS) {
+      if (initializedAccountsRef.current.has(accountId)) continue;
+      if (emailsLoadingByAccount[accountId]) continue;
+      if (!connectedByAccount[accountId] && emailsByAccount[accountId].length === 0) continue;
 
-    // On first load, mark all currently visible emails as already seen
-    // so we only process genuinely new emails arriving after this point
-    if (isFirstLoadRef.current) {
-      isFirstLoadRef.current = false;
-      allEmails.forEach(e => processedRef.current.add(`${e.accountId}:${e.id}`));
+      emailsByAccount[accountId].forEach(e => processedRef.current.add(`${e.accountId}:${e.id}`));
+      initializedAccountsRef.current.add(accountId);
+      initializedThisPass = true;
+    }
+
+    if (initializedThisPass) {
       saveProcessedIds(processedRef.current);
-      return;
     }
 
     if (isProcessingRef.current) return;
 
-    const newEmails = allEmails.filter(e => {
-      const key = `${e.accountId}:${e.id}`;
-      return !e.archived && !e.deleted && e.unread && !processedRef.current.has(key);
-    });
+    const newEmails = ACCOUNTS
+      .filter(accountId => initializedAccountsRef.current.has(accountId))
+      .flatMap(accountId => emailsByAccount[accountId])
+      .filter(e => {
+        const key = `${e.accountId}:${e.id}`;
+        return !e.archived && !e.deleted && e.unread && !processedRef.current.has(key);
+      });
 
     if (newEmails.length === 0) return;
 
@@ -108,5 +116,5 @@ export function useAutoEmailTasks() {
         isProcessingRef.current = false;
       }
     })();
-  }, [emailsByAccount, addTask, showToast]);
+  }, [emailsByAccount, connectedByAccount, emailsLoadingByAccount, addTask, showToast]);
 }

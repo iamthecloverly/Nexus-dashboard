@@ -2,6 +2,13 @@ import { useEffect, useRef } from 'react';
 import type { Task } from '../types/task';
 import { addNotificationLog } from '../lib/dashboardFeatures';
 
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Fires a desktop notification for tasks that are due today and not yet
  * completed. Each task is notified at most once per browser session
@@ -15,7 +22,7 @@ export function useTaskNotifications(tasks: Task[], enabled = true) {
     if (!enabled) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
 
     tasks.forEach(task => {
       if (task.completed) return;

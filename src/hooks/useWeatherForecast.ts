@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import {
@@ -38,10 +38,15 @@ async function fetchWeatherDirect(lat: number, lon: number): Promise<WeatherPayl
 /** Open-Meteo via `/api/weather`, then browser direct fallback (no API key). */
 export function useWeatherForecast(enabled: boolean, intervalMs = 15 * 60 * 1000) {
   const [data, setData] = useState<WeatherPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const fetchWeather = useCallback(async () => {
+    if (!mountedRef.current) return;
+    const requestId = ++requestSeqRef.current;
+    const isCurrent = () => mountedRef.current && requestSeqRef.current === requestId;
     const { lat, lon } = loadCoords();
     setLoading(true);
     setError(null);
@@ -67,25 +72,43 @@ export function useWeatherForecast(enabled: boolean, intervalMs = 15 * 60 * 1000
         }
       }
       if (parsed) {
+        if (!isCurrent()) return;
         setData(parsed);
         setError(null);
       } else {
+        if (!isCurrent()) return;
         setData(null);
         setError('Unavailable');
       }
     } catch {
+      if (!isCurrent()) return;
       setData(null);
       setError('Unavailable');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestSeqRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) {
+      requestSeqRef.current += 1;
+      setLoading(false);
+      return;
+    }
     fetchWeather();
     const id = window.setInterval(fetchWeather, intervalMs);
-    return () => window.clearInterval(id);
+    return () => {
+      requestSeqRef.current += 1;
+      window.clearInterval(id);
+    };
   }, [enabled, intervalMs, fetchWeather]);
 
   return { data, loading, error, refresh: fetchWeather };

@@ -8,12 +8,14 @@ export type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'un
  */
 export function useNotificationPermission() {
   const [permission, setPermission] = useState<NotificationPermissionState>(() => {
-    if (!('Notification' in window)) return 'unsupported';
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     return Notification.permission as NotificationPermissionState;
   });
 
   useEffect(() => {
     if (!('Notification' in window)) return;
+    let permissionStatus: PermissionStatus | null = null;
+    let cancelled = false;
 
     // Some browsers support permission change events
     const handleChange = () => {
@@ -22,30 +24,37 @@ export function useNotificationPermission() {
 
     // Try to listen for permission changes (not widely supported)
     try {
-      navigator.permissions?.query({ name: 'notifications' as PermissionName }).then(status => {
+      void navigator.permissions?.query({ name: 'notifications' as PermissionName }).then(status => {
+        if (cancelled) return;
+        permissionStatus = status;
         status.addEventListener('change', handleChange);
-        return () => status.removeEventListener('change', handleChange);
       }).catch(() => {
         // Permission API not available or query failed
       });
     } catch {
       // Permission API not supported
     }
+
+    return () => {
+      cancelled = true;
+      permissionStatus?.removeEventListener('change', handleChange);
+    };
   }, []);
 
   const requestPermission = useCallback(async (): Promise<NotificationPermissionState> => {
-    if (!('Notification' in window)) return 'unsupported';
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
 
     try {
       const result = await Notification.requestPermission();
       setPermission(result as NotificationPermissionState);
       return result as NotificationPermissionState;
     } catch {
+      setPermission('denied');
       return 'denied';
     }
   }, []);
 
-  const isSupported = 'Notification' in window;
+  const isSupported = typeof window !== 'undefined' && 'Notification' in window;
 
   return {
     permission,
