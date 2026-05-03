@@ -272,6 +272,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     setMainCalendarId,
     includedCalendarIds,
     setIncludedCalendarIds,
+    filtersActive: calendarFiltersActive,
     refetch: fetchEvents,
   } = useCalendarEvents({ accountMode: 'allConnected' });
 
@@ -788,16 +789,33 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           return null;
         }
       })();
+      const clearCalendarFilters = () => {
+        setMainCalendarId(null);
+        setIncludedCalendarIds(null);
+      };
       return (
         <div className={`flex flex-col items-center justify-center text-center gap-2 ${wrapClass}`}>
           <span className="material-symbols-outlined text-3xl text-text-muted/70" aria-hidden="true">event_available</span>
           <p className="text-sm text-foreground/90 font-medium">No events today</p>
-          <button
-            onClick={goIntegrations}
-            className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-          >
-            If you expect events, reconnect Google →
-          </button>
+          {calendarFiltersActive ? (
+            <>
+              <p className="max-w-[240px] text-xs text-text-muted">Calendar filters are active.</p>
+              <button
+                type="button"
+                onClick={clearCalendarFilters}
+                className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+              >
+                Show all calendars →
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={goIntegrations}
+              className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            >
+              If you expect events, reconnect Google →
+            </button>
+          )}
           {import.meta.env.DEV && debugHref && (
             <a
               href={debugHref}
@@ -849,6 +867,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     fetchEvents,
     renderScheduleSection,
     renderEarlierSection,
+    calendarFiltersActive,
+    setMainCalendarId,
+    setIncludedCalendarIds,
     setCurrentView,
     setShowSchedule,
   ]);

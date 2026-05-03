@@ -6,7 +6,7 @@ import { markSyncStatus } from '../lib/dashboardFeatures';
 import { calendarEventOverlapsLocalDay } from '../lib/calendarDisplay';
 
 const CALENDAR_VISIBLE_REFRESH_MS = 60_000;
-const CALENDAR_SELECTION_VERSION = '3';
+const CALENDAR_SELECTION_VERSION = '4';
 type CalendarAccountId = 'primary' | 'secondary';
 type CalendarFetchReason = 'initial' | 'manual' | 'background';
 
@@ -90,6 +90,7 @@ interface CalendarState {
   accountId: CalendarAccountId;
   mainCalendarId: string | null;
   includedCalendarIds: string[] | null;
+  filtersActive: boolean;
   setAccountId: (id: CalendarAccountId) => void;
   setMainCalendarId: (id: string | null) => void;
   setIncludedCalendarIds: (ids: string[] | null) => void;
@@ -224,7 +225,7 @@ function normalizeAccountEvent(event: CalendarEvent, accountId: CalendarAccountI
 
 export function useCalendarEvents(options: UseCalendarEventsOptions = {}): CalendarState {
   const accountMode = options.accountMode ?? 'selected';
-  const respectSavedFilters = options.respectSavedFilters ?? accountMode === 'selected';
+  const respectSavedFilters = options.respectSavedFilters ?? true;
   const [initialCalendarState] = useState(readInitialCalendarState);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -239,6 +240,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
   const [accountId, setAccountIdState] = useState<CalendarAccountId>(initialCalendarState.accountId);
   const [mainCalendarId, setMainCalendarId] = useState<string | null>(initialCalendarState.mainCalendarId);
   const [includedCalendarIds, setIncludedCalendarIds] = useState<string[] | null>(initialCalendarState.includedCalendarIds);
+  const filtersActive = mainCalendarId != null || (includedCalendarIds?.length ?? 0) > 0;
 
   const setAccountId = useCallback((id: CalendarAccountId) => {
     setAccountIdState(id);
@@ -403,6 +405,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
     accountId,
     mainCalendarId,
     includedCalendarIds,
+    filtersActive,
     setAccountId,
     setMainCalendarId,
     setIncludedCalendarIds,

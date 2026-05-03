@@ -166,11 +166,12 @@ describe('useCalendarEvents', () => {
     localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['old-academic-calendar']));
     localStorage.setItem(`${STORAGE_KEYS.calendarMainId}_primary`, 'old-main-calendar');
 
-    renderHook(() => useCalendarEvents());
+    const { result } = renderHook(() => useCalendarEvents());
     await flushPromises();
 
     const requestedUrl = String(mockedApiFetchJson.mock.calls.find(([input]) => String(input).startsWith('/api/calendar/events'))?.[0]);
     expect(requestedUrl).not.toContain('calendarIds=');
+    expect(result.current.filtersActive).toBe(false);
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`)).toBeNull();
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBeNull();
   });
@@ -190,11 +191,10 @@ describe('useCalendarEvents', () => {
     expect(localStorage.getItem(`${STORAGE_KEYS.calendarMainId}_primary`)).toBe('old-main-calendar');
   });
 
-  it('ignores saved calendar filters by default when fetching all connected accounts', async () => {
+  it('respects current calendar filters when fetching all connected accounts', async () => {
     vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
     localStorage.setItem(STORAGE_KEYS.calendarSelectionVersion, __testOnly.CALENDAR_SELECTION_VERSION);
-    localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['old-main-calendar']));
-    localStorage.setItem(`${STORAGE_KEYS.calendarMainId}_primary`, 'old-main-calendar');
+    localStorage.setItem(`${STORAGE_KEYS.calendarIncludedIds}_primary`, JSON.stringify(['shift-calendar']));
     mockedApiFetchJson.mockImplementation(async (input) => {
       const url = String(input);
       if (url === '/api/auth/google/accounts') {
@@ -210,7 +210,8 @@ describe('useCalendarEvents', () => {
     await flushPromises();
 
     const requestedUrl = String(mockedApiFetchJson.mock.calls.find(([input]) => String(input).startsWith('/api/calendar/events'))?.[0]);
-    expect(requestedUrl).not.toContain('calendarIds=');
+    expect(requestedUrl).toContain('calendarIds=shift-calendar');
+    expect(result.current.filtersActive).toBe(true);
     expect(result.current.events.map(event => event.id)).toEqual(['shift']);
   });
 
