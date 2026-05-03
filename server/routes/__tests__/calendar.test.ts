@@ -120,6 +120,36 @@ describe('Calendar routes', () => {
     ]);
   });
 
+  it('keeps fallback busy events after deduping and range filtering', () => {
+    const bounds = {
+      timeMin: '2026-05-03T04:00:00.000Z',
+      timeMax: '2026-05-04T04:00:00.000Z',
+      timeZone: 'America/New_York',
+      dayStartUtcMs: Date.parse('2026-05-03T04:00:00.000Z'),
+      dayEndUtcMs: Date.parse('2026-05-04T04:00:00.000Z'),
+      mode: 'day' as const,
+    };
+
+    const events = __testOnly.dedupeAndSortEvents([
+      {
+        id: 'freebusy:w2w:2026-05-03T12:00:00-04:00:2026-05-03T15:00:00-04:00',
+        summary: 'Busy',
+        start: { dateTime: '2026-05-03T12:00:00-04:00' },
+        end: { dateTime: '2026-05-03T15:00:00-04:00' },
+      },
+      {
+        id: 'yesterday',
+        summary: 'Yesterday',
+        start: { dateTime: '2026-05-02T12:00:00-04:00' },
+        end: { dateTime: '2026-05-02T15:00:00-04:00' },
+      },
+    ], bounds);
+
+    expect(events.map(event => event.id)).toEqual([
+      'freebusy:w2w:2026-05-03T12:00:00-04:00:2026-05-03T15:00:00-04:00',
+    ]);
+  });
+
   it('keeps auto calendar list cache short so new shared calendars appear quickly', () => {
     expect(__testOnly.CALENDAR_LIST_TTL_MS).toBe(5 * 60 * 1000);
   });

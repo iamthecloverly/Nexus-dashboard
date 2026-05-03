@@ -437,10 +437,6 @@ calendarRouter.get('/events', async (req, res) => {
         }
       }
 
-      const allRejected =
-        settled.length > 0 && settled.every((x): x is PromiseRejectedResult => x.status === 'rejected');
-      if (allRejected) throw (settled[0] as PromiseRejectedResult).reason;
-
       const eventArrays = settled.flatMap(s =>
         s.status === 'fulfilled' ? s.value : [],
       );
@@ -448,6 +444,8 @@ calendarRouter.get('/events', async (req, res) => {
       const detailedEvents = dedupeAndSortEvents(eventArrays, bounds);
       let fallbackEvents: calendar_v3.Schema$Event[] = [];
       const rejectedIds = settled.flatMap((s, idx) => (s.status === 'rejected' ? [idsToQuery[idx]!] : []));
+      const allRejected =
+        settled.length > 0 && settled.every((x): x is PromiseRejectedResult => x.status === 'rejected');
       if (rejectedIds.length > 0 || detailedEvents.length === 0) {
         const fallbackIds = detailedEvents.length === 0 ? idsToQuery : rejectedIds;
         fallbackEvents = await listFreeBusyFallbackEvents(calendar, {
@@ -462,6 +460,7 @@ calendarRouter.get('/events', async (req, res) => {
       }
 
       const allEvents = dedupeAndSortEvents([...detailedEvents, ...fallbackEvents], bounds);
+      if (allRejected && allEvents.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
 
       return { events: allEvents };
     });
