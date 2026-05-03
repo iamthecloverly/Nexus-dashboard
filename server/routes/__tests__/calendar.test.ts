@@ -19,11 +19,13 @@ function makeApp() {
 describe('Calendar routes', () => {
   it('defaults to readable non-hidden calendars even when Google marks them unselected', () => {
     expect(__testOnly.defaultCalendarIdsFromList([
-      { id: 'primary', selected: true },
-      { id: 'work-shifts', selected: false },
-      { id: 'hidden-calendar', hidden: true },
-      { id: 'deleted-calendar', deleted: true },
-    ])).toEqual(['primary', 'work-shifts']);
+      { id: 'primary', selected: true, accessRole: 'owner' },
+      { id: 'work-shifts', selected: false, accessRole: 'reader' },
+      { id: 'busy-only', selected: false, accessRole: 'freeBusyReader' },
+      { id: 'hidden-calendar', hidden: true, accessRole: 'reader' },
+      { id: 'deleted-calendar', deleted: true, accessRole: 'reader' },
+      { id: 'no-access-calendar', accessRole: 'none' },
+    ])).toEqual(['primary', 'work-shifts', 'busy-only']);
   });
 
   it('pages through calendar event results instead of stopping at the first page', async () => {
@@ -73,9 +75,49 @@ describe('Calendar routes', () => {
     } as unknown as calendar_v3.Calendar);
 
     expect(list).toHaveBeenCalledTimes(2);
-    expect(list.mock.calls[0][0]).toMatchObject({ maxResults: 250, minAccessRole: 'reader' });
+    expect(list.mock.calls[0][0]).toMatchObject({ maxResults: 250 });
     expect(list.mock.calls[1][0]).toMatchObject({ pageToken: 'page-2' });
     expect(calendars.map(calendar => calendar.id)).toEqual(['primary', 'w2w-schedule']);
+  });
+
+  it('builds fallback busy events from FreeBusy blocks', async () => {
+    const query = vi.fn().mockResolvedValue({
+      data: {
+        calendars: {
+          'w2w-schedule': {
+            busy: [
+              { start: '2026-05-03T12:00:00-04:00', end: '2026-05-03T15:00:00-04:00' },
+            ],
+          },
+        },
+      },
+    });
+
+    const events = await __testOnly.listFreeBusyFallbackEvents({
+      freebusy: { query },
+    } as unknown as calendar_v3.Calendar, {
+      calendarIds: ['w2w-schedule'],
+      timeMin: '2026-05-03T04:00:00.000Z',
+      timeMax: '2026-05-04T04:00:00.000Z',
+      timeZone: 'America/New_York',
+    });
+
+    expect(query).toHaveBeenCalledWith({
+      requestBody: {
+        timeMin: '2026-05-03T04:00:00.000Z',
+        timeMax: '2026-05-04T04:00:00.000Z',
+        timeZone: 'America/New_York',
+        items: [{ id: 'w2w-schedule' }],
+      },
+    });
+    expect(events).toEqual([
+      expect.objectContaining({
+        id: 'freebusy:w2w-schedule:2026-05-03T12:00:00-04:00:2026-05-03T15:00:00-04:00',
+        summary: 'Busy',
+        start: { dateTime: '2026-05-03T12:00:00-04:00' },
+        end: { dateTime: '2026-05-03T15:00:00-04:00' },
+      }),
+    ]);
   });
 
   it('keeps auto calendar list cache short so new shared calendars appear quickly', () => {

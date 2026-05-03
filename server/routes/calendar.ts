@@ -102,11 +102,12 @@ function addDaysKey(day: string, deltaDays: number): string {
 }
 
 function defaultCalendarIdsFromList(
-  items: Array<{ id?: string | null; hidden?: boolean | null; deleted?: boolean | null; selected?: boolean | null }>,
+  items: Array<{ id?: string | null; hidden?: boolean | null; deleted?: boolean | null; selected?: boolean | null; accessRole?: string | null }>,
 ): string[] {
   const ids = items
     .filter(c => c.hidden !== true)
     .filter(c => c.deleted !== true)
+    .filter(c => c.accessRole !== 'none')
     .map(c => c.id)
     .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
   return Array.from(new Set(['primary', ...ids]));
@@ -118,7 +119,6 @@ async function listReadableCalendars(calendar: calendar_v3.Calendar): Promise<ca
 
   do {
     const response = await calendar.calendarList.list({
-      minAccessRole: 'reader',
       maxResults: 250,
       pageToken,
     });
@@ -245,6 +245,65 @@ async function listCalendarEvents(
   return events;
 }
 
+function dedupeAndSortEvents(
+  events: calendar_v3.Schema$Event[],
+  bounds: ReturnType<typeof resolveCalendarBounds>,
+): calendar_v3.Schema$Event[] {
+  const seen = new Set<string>();
+  return events
+    .filter(e => e != null)
+    .filter(e => eventInRangeOrOverlaps(e, bounds))
+    .filter(e => {
+      const key = e.iCalUID ?? e.id;
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const aTime = a.start?.dateTime ?? a.start?.date ?? '';
+      const bTime = b.start?.dateTime ?? b.start?.date ?? '';
+      return aTime.localeCompare(bTime);
+    });
+}
+
+async function listFreeBusyFallbackEvents(
+  calendar: calendar_v3.Calendar,
+  opts: {
+    calendarIds: string[];
+    timeMin: string;
+    timeMax: string;
+    timeZone: string;
+  },
+): Promise<calendar_v3.Schema$Event[]> {
+  if (opts.calendarIds.length === 0) return [];
+  const response = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: opts.timeMin,
+      timeMax: opts.timeMax,
+      timeZone: opts.timeZone,
+      items: opts.calendarIds.map(id => ({ id })),
+    },
+  });
+
+  const calendars = response.data.calendars ?? {};
+  const events: calendar_v3.Schema$Event[] = [];
+  for (const calendarId of opts.calendarIds) {
+    const busy = calendars[calendarId]?.busy ?? [];
+    for (const block of busy) {
+      if (!block.start || !block.end) continue;
+      events.push({
+        id: `freebusy:${calendarId}:${block.start}:${block.end}`,
+        summary: 'Busy',
+        start: { dateTime: block.start },
+        end: { dateTime: block.end },
+        htmlLink: 'https://calendar.google.com/calendar/r',
+      });
+    }
+  }
+  return events;
+}
+
 calendarRouter.get('/events', async (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
   const auth = getGoogleTokensFromCookie(req, accountId);
@@ -291,22 +350,7 @@ calendarRouter.get('/events', async (req, res) => {
             ),
           );
           const eventArrays = settled.flatMap(s => (s.status === 'fulfilled' ? s.value : []));
-          const seen = new Set<string>();
-          const events = eventArrays
-            .filter(e => e != null)
-            .filter(e => eventInRangeOrOverlaps(e, bounds))
-            .filter(e => {
-              const key = e.iCalUID ?? e.id;
-              if (!key) return true;
-              if (seen.has(key)) return false;
-              seen.add(key);
-              return true;
-            })
-            .sort((a, b) => {
-              const aTime = a.start?.dateTime ?? a.start?.date ?? '';
-              const bTime = b.start?.dateTime ?? b.start?.date ?? '';
-              return aTime.localeCompare(bTime);
-            });
+          const events = dedupeAndSortEvents(eventArrays, bounds);
 
           const perCalendar = settled.map((s, idx) => {
             const calendarId = ids[idx]!;
@@ -401,23 +445,23 @@ calendarRouter.get('/events', async (req, res) => {
         s.status === 'fulfilled' ? s.value : [],
       );
 
-      // Dedupe when Google gives stable ids; don't drop events missing both id and iCalUID.
-      const seen = new Set<string>();
-      const allEvents = eventArrays
-        .filter(e => e != null)
-        .filter(e => eventInRangeOrOverlaps(e, bounds))
-        .filter(e => {
-          const key = e.iCalUID ?? e.id;
-          if (!key) return true;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-        .sort((a, b) => {
-          const aTime = a.start?.dateTime ?? a.start?.date ?? '';
-          const bTime = b.start?.dateTime ?? b.start?.date ?? '';
-          return aTime.localeCompare(bTime);
+      const detailedEvents = dedupeAndSortEvents(eventArrays, bounds);
+      let fallbackEvents: calendar_v3.Schema$Event[] = [];
+      const rejectedIds = settled.flatMap((s, idx) => (s.status === 'rejected' ? [idsToQuery[idx]!] : []));
+      if (rejectedIds.length > 0 || detailedEvents.length === 0) {
+        const fallbackIds = detailedEvents.length === 0 ? idsToQuery : rejectedIds;
+        fallbackEvents = await listFreeBusyFallbackEvents(calendar, {
+          calendarIds: fallbackIds,
+          timeMin: bounds.timeMin,
+          timeMax: bounds.timeMax,
+          timeZone,
+        }).catch(error => {
+          logger.warn({ error, fallbackIds }, 'calendar.freebusy fallback failed');
+          return [];
         });
+      }
+
+      const allEvents = dedupeAndSortEvents([...detailedEvents, ...fallbackEvents], bounds);
 
       return { events: allEvents };
     });
@@ -607,6 +651,8 @@ calendarRouter.get('/debug', async (req, res) => {
 
 export const __testOnly = {
   defaultCalendarIdsFromList,
+  dedupeAndSortEvents,
+  listFreeBusyFallbackEvents,
   listReadableCalendars,
   listCalendarEvents,
   CALENDAR_LIST_TTL_MS,
