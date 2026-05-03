@@ -252,6 +252,57 @@ describe('useCalendarEvents', () => {
     ]);
   });
 
+  it('probes the secondary account when the registry misses it and primary has no events', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    mockedApiFetchJson.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/auth/google/accounts') {
+        return {
+          ok: true,
+          data: { accounts: [{ accountId: 'primary', connected: true }] },
+        };
+      }
+      if (url.includes('accountId=secondary')) {
+        return {
+          ok: true,
+          data: { events: [timedEvent('secondary-shift', '2026-05-01T11:30:00', '2026-05-01T12:30:00')] },
+        };
+      }
+      return { ok: true, data: { events: [] } };
+    });
+
+    const { result } = renderHook(() => useCalendarEvents({ accountMode: 'allConnected' }));
+    await flushPromises();
+
+    expect(result.current.events.map(event => event.id)).toEqual(['secondary:secondary-shift']);
+    expect(result.current.isConnected).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('ignores an optional secondary 401 when primary is connected and simply has no events', async () => {
+    vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
+    mockedApiFetchJson.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/auth/google/accounts') {
+        return {
+          ok: true,
+          data: { accounts: [{ accountId: 'primary', connected: true }] },
+        };
+      }
+      if (url.includes('accountId=secondary')) {
+        return { ok: false, error: { status: 401, error: 'Not authenticated' } };
+      }
+      return { ok: true, data: { events: [] } };
+    });
+
+    const { result } = renderHook(() => useCalendarEvents({ accountMode: 'allConnected' }));
+    await flushPromises();
+
+    expect(result.current.events).toEqual([]);
+    expect(result.current.isConnected).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
   it('surfaces a connected account error instead of hiding it behind an empty account', async () => {
     vi.setSystemTime(new Date(2026, 4, 1, 12, 0, 0));
     mockedApiFetchJson.mockImplementation(async (input) => {

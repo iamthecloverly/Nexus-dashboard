@@ -101,6 +101,23 @@ type GoogleAccountsResponse = {
   accounts?: Array<{ accountId: CalendarAccountId; connected?: boolean }>;
 };
 
+type CalendarAccountFetchPlan = {
+  required: CalendarAccountId[];
+  optional: CalendarAccountId[];
+};
+
+type CalendarEventsFetchResult = {
+  accountId: CalendarAccountId;
+  required: boolean;
+  result: Awaited<ReturnType<typeof apiFetchJson<{ events?: CalendarEvent[] }>>>;
+};
+
+type SuccessfulCalendarEventsFetch = {
+  accountId: CalendarAccountId;
+  required: boolean;
+  result: { ok: true; data: { events?: CalendarEvent[] } };
+};
+
 type InitialCalendarState = {
   accountId: CalendarAccountId;
   mainCalendarId: string | null;
@@ -223,6 +240,32 @@ function normalizeAccountEvent(event: CalendarEvent, accountId: CalendarAccountI
   return { ...event, id: `${accountId}:${event.id}` };
 }
 
+function uniqueAccountIds(ids: CalendarAccountId[]): CalendarAccountId[] {
+  return Array.from(new Set(ids));
+}
+
+function otherAccountIds(ids: CalendarAccountId[]): CalendarAccountId[] {
+  return (['primary', 'secondary'] as const).filter(id => !ids.includes(id));
+}
+
+function successfulFetches(results: CalendarEventsFetchResult[]): SuccessfulCalendarEventsFetch[] {
+  return results.filter((accountResult): accountResult is SuccessfulCalendarEventsFetch => !('error' in accountResult.result));
+}
+
+function todayEventsFromResults(
+  results: CalendarEventsFetchResult[],
+  accountMode: CalendarAccountMode,
+  now: Date,
+): CalendarEvent[] {
+  const successes = successfulFetches(results);
+  const prefixIds = accountMode === 'allConnected' && successes.length > 1;
+  return successes
+    .flatMap(({ accountId: eventAccountId, result }) =>
+      (result.data.events ?? []).map(event => normalizeAccountEvent(event, eventAccountId, prefixIds)),
+    )
+    .filter(event => calendarEventOverlapsLocalDay(event, now));
+}
+
 export function useCalendarEvents(options: UseCalendarEventsOptions = {}): CalendarState {
   const accountMode = options.accountMode ?? 'selected';
   const respectSavedFilters = options.respectSavedFilters ?? true;
@@ -265,15 +308,21 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
     else localStorage.removeItem(includedIdsKey(accountId));
   }, [includedCalendarIds, accountId]);
 
-  const connectedAccountIds = useCallback(async (): Promise<CalendarAccountId[]> => {
-    if (accountMode === 'selected') return [accountId];
+  const calendarAccountFetchPlan = useCallback(async (): Promise<CalendarAccountFetchPlan> => {
+    if (accountMode === 'selected') return { required: [accountId], optional: [] };
     const result = await apiFetchJson<GoogleAccountsResponse>('/api/auth/google/accounts', { timeoutMs: 5_000 });
-    if ('error' in result) return [accountId];
+    if ('error' in result) {
+      return { required: [accountId], optional: otherAccountIds([accountId]) };
+    }
     const connected = (result.data.accounts ?? [])
       .filter(account => account.connected)
       .map(account => account.accountId)
       .filter((id): id is CalendarAccountId => id === 'primary' || id === 'secondary');
-    return connected.length ? Array.from(new Set(connected)) : [accountId];
+    const required = connected.length ? uniqueAccountIds(connected) : [accountId];
+    return {
+      required,
+      optional: otherAccountIds(required),
+    };
   }, [accountId, accountMode]);
 
   const refetch = useCallback(async (reason: CalendarFetchReason = 'manual') => {
@@ -286,8 +335,8 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
     else setIsRefreshing(true);
     setError(null);
     try {
-      const accountsToFetch = await connectedAccountIds();
-      const accountResults = await Promise.all(accountsToFetch.map(async (fetchAccountId) => {
+      const fetchPlan = await calendarAccountFetchPlan();
+      const fetchAccountEvents = async (fetchAccountId: CalendarAccountId, required: boolean): Promise<CalendarEventsFetchResult> => {
         const opts = {
           accountId: fetchAccountId,
           calendarIds: respectSavedFilters && fetchAccountId === accountId
@@ -295,28 +344,33 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
             : undefined,
         };
         const result = await apiFetchJson<{ events?: CalendarEvent[] }>(calendarEventsUrl(opts, requestNow), { timeoutMs: 15_000 });
-        return { accountId: fetchAccountId, result };
-      }));
+        return { accountId: fetchAccountId, required, result };
+      };
+
+      let accountResults = await Promise.all(fetchPlan.required.map(fetchAccountId => fetchAccountEvents(fetchAccountId, true)));
       if (isStale()) return;
+
+      if (
+        accountMode === 'allConnected' &&
+        fetchPlan.optional.length > 0 &&
+        todayEventsFromResults(accountResults, accountMode, requestNow).length === 0
+      ) {
+        const optionalResults = await Promise.all(fetchPlan.optional.map(fetchAccountId => fetchAccountEvents(fetchAccountId, false)));
+        if (isStale()) return;
+        accountResults = [...accountResults, ...optionalResults];
+      }
+
       lastFetchedDayRef.current = requestDayStamp;
 
-      const successes = accountResults.filter((accountResult): accountResult is {
-        accountId: CalendarAccountId;
-        result: { ok: true; data: { events?: CalendarEvent[] } };
-      } => !('error' in accountResult.result));
+      const successes = successfulFetches(accountResults);
 
       const errors = accountResults
-        .map(accountResult => ('error' in accountResult.result ? accountResult.result.error : null))
+        .map(accountResult => ('error' in accountResult.result && accountResult.required ? accountResult.result.error : null))
         .filter((err): err is ApiError => err != null)
         .sort((a, b) => rankCalendarError(a) - rankCalendarError(b));
 
       if (successes.length > 0) {
-        const prefixIds = accountMode === 'allConnected' && successes.length > 1;
-        const todays = successes
-          .flatMap(({ accountId: eventAccountId, result }) =>
-            (result.data.events ?? []).map(event => normalizeAccountEvent(event, eventAccountId, prefixIds)),
-          )
-          .filter(event => calendarEventOverlapsLocalDay(event, requestNow));
+        const todays = todayEventsFromResults(accountResults, accountMode, requestNow);
         if (todays.length === 0 && errors.length > 0) {
           const err = errors[0]!;
           markSyncStatus('calendar', 'error', err.error ?? `HTTP ${err.status}`);
@@ -349,7 +403,7 @@ export function useCalendarEvents(options: UseCalendarEventsOptions = {}): Calen
         setIsRefreshing(false);
       }
     }
-  }, [accountId, accountMode, connectedAccountIds, includedCalendarIds, mainCalendarId, respectSavedFilters]);
+  }, [accountId, accountMode, calendarAccountFetchPlan, includedCalendarIds, mainCalendarId, respectSavedFilters]);
 
   useEffect(() => {
     hasLoadedRef.current = false;
