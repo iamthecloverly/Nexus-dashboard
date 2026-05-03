@@ -24,26 +24,34 @@ const PRESETS = [
 
 const POMODORO_KEY = 'dashboard_pomodoro_sessions';
 
-const FOCUS_EVENT_META: Record<CalendarDisplayItem['state'], { label: string; dot: string; pill: string }> = {
+const FOCUS_EVENT_META: Record<CalendarDisplayItem['state'], { label: string; dot: string; pill: string; card: string; title: string }> = {
   allDay: {
     label: 'All day',
     dot: 'bg-sky-300/70 border border-sky-200/40',
     pill: 'border-sky-300/20 bg-sky-300/10 text-sky-200',
+    card: 'border-sky-300/15 bg-sky-300/[0.045] hover:bg-sky-300/[0.07]',
+    title: 'text-sky-50',
   },
   current: {
     label: 'Now',
     dot: 'bg-primary shadow-[0_0_10px_rgba(56,189,248,0.45)]',
     pill: 'border-primary/25 bg-primary/10 text-primary',
+    card: 'border-primary/35 bg-primary/[0.075] shadow-[0_18px_55px_rgba(6,182,212,0.09)]',
+    title: 'text-white',
   },
   upcoming: {
     label: 'Next',
     dot: 'bg-white/15 border border-white/25',
     pill: 'border-white/10 bg-white/[0.04] text-text-muted',
+    card: 'border-white/10 bg-white/[0.035] hover:border-white/16 hover:bg-white/[0.06]',
+    title: 'text-slate-100',
   },
   past: {
     label: 'Done',
     dot: 'bg-white/10 border border-white/15',
     pill: 'border-white/10 bg-white/[0.03] text-text-muted/80',
+    card: 'border-white/[0.07] bg-white/[0.018]',
+    title: 'text-slate-500',
   },
 };
 
@@ -77,6 +85,39 @@ function loadFocusSessionEntries(): FocusSessionEntry[] {
 
 function saveFocusSessionEntries(entries: FocusSessionEntry[]) {
   try { localStorage.setItem(STORAGE_KEYS.focusSessions, JSON.stringify(entries.slice(0, 20))); } catch { /* quota */ }
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function eventProgressPercent(item: CalendarDisplayItem, now: Date): number {
+  if (!item.end) return 0;
+  const startMs = item.start.getTime();
+  const endMs = item.end.getTime();
+  if (endMs <= startMs) return 0;
+  return clampPercent(((now.getTime() - startMs) / (endMs - startMs)) * 100);
+}
+
+function formatMinutesLabel(minutes: number, suffix: string): string {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  if (safeMinutes < 1) return suffix === 'left' ? 'ending now' : 'just ended';
+  if (safeMinutes < 60) return `${safeMinutes} min ${suffix}`;
+  const hours = Math.floor(safeMinutes / 60);
+  const mins = safeMinutes % 60;
+  return `${hours}h${mins ? ` ${mins}m` : ''} ${suffix}`;
+}
+
+function eventRelativeLabel(item: CalendarDisplayItem, now: Date): string | null {
+  if (item.state === 'allDay') return 'all day';
+  if (!item.end) return null;
+  if (item.state === 'current') {
+    return formatMinutesLabel((item.end.getTime() - now.getTime()) / 60_000, 'left');
+  }
+  if (item.state === 'upcoming') {
+    return formatMinutesLabel((item.start.getTime() - now.getTime()) / 60_000, 'away');
+  }
+  return formatMinutesLabel((now.getTime() - item.end.getTime()) / 60_000, 'ago');
 }
 
 /** Plays a short triple-beep completion sound via the Web Audio API. */
@@ -269,45 +310,85 @@ export default function FocusMode({
 
   const scheduleGroups = useMemo(() => splitCalendarEvents(events, currentTime), [events, currentTime]);
 
+  const renderTimelineSectionHeader = (label: string, count: number, tone: 'muted' | 'active' | 'next' = 'muted') => {
+    const toneClass = tone === 'active'
+      ? 'text-primary border-primary/20 bg-primary/[0.06]'
+      : tone === 'next'
+        ? 'text-slate-200 border-white/12 bg-white/[0.035]'
+        : 'text-text-muted border-white/[0.08] bg-white/[0.02]';
+    return (
+      <div className="relative z-10 mb-3 flex items-center gap-3 pl-14">
+        <div className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${toneClass}`}>
+          {label}
+        </div>
+        <span className="text-[11px] font-mono text-text-muted/70">{count}</span>
+        <div className="h-px flex-1 bg-white/[0.07]" />
+      </div>
+    );
+  };
+
   const renderTimelineEvent = (item: CalendarDisplayItem) => {
     const meta = FOCUS_EVENT_META[item.state];
     const isCurrent = item.state === 'current';
     const isPast = item.state === 'past';
     const timeLabel = formatCalendarEventTime(item, 'today');
+    const relativeLabel = eventRelativeLabel(item, currentTime);
 
     if (isCurrent) {
+      const progress = eventProgressPercent(item, currentTime);
       return (
-        <div key={item.event.id} className="relative pl-12 mb-10">
-          <div className={`absolute left-[20px] top-1.5 w-2 h-2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
-          <div className="mb-2 flex items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
-            <span className="text-xs text-primary/80 font-mono">{timeLabel}</span>
-          </div>
-          <div className="p-6 rounded-xl bg-primary/[0.08] border border-primary/25 relative overflow-hidden group transition-colors duration-300 hover:bg-primary/[0.12]">
-            <h3 className="font-heading text-2xl font-bold text-white leading-tight tracking-tight">{item.title}</h3>
-            <a
-              href={item.event.htmlLink}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-flex items-center gap-2 text-xs text-primary/70 hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-            >
-              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">open_in_new</span>
-              View in Calendar
-            </a>
+        <div key={item.event.id} className="relative z-10 mb-7 pl-14">
+          <div className={`absolute left-[42px] top-[19px] h-3 w-3 -translate-x-1/2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
+          <div className={`group relative overflow-hidden rounded-xl border p-5 transition-colors duration-300 ${meta.card}`}>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(56,189,248,0.16),transparent_36%)]" aria-hidden="true" />
+            <div className="relative flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
+              <span className="font-mono text-xs font-semibold text-primary/90">{timeLabel}</span>
+              {relativeLabel && <span className="text-xs text-text-muted">· {relativeLabel}</span>}
+            </div>
+
+            <div className="relative mt-4 flex items-start justify-between gap-5">
+              <div className="min-w-0">
+                <h3 className="font-heading text-[1.55rem] font-bold leading-tight tracking-normal text-white break-words">{item.title}</h3>
+                {item.end && (
+                  <p className="mt-2 text-xs text-text-muted">
+                    Ends at <span className="font-mono text-slate-300">{format(item.end, 'h:mm a')}</span>
+                  </p>
+                )}
+              </div>
+              <a
+                href={item.event.htmlLink}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open ${item.title} in Google Calendar`}
+                className="tooltip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary/80 transition-colors hover:bg-primary/16 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                data-tooltip="View in Calendar"
+              >
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">open_in_new</span>
+              </a>
+            </div>
+
+            <div className="relative mt-5 h-1.5 overflow-hidden rounded-full bg-white/[0.08]" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-primary shadow-[0_0_14px_rgba(56,189,248,0.42)] transition-[width] duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
         </div>
       );
     }
 
     return (
-      <div key={item.event.id} className={`relative pl-12 mb-8 ${isPast ? 'opacity-65' : ''}`}>
-        <div className={`absolute left-[20px] top-1.5 w-2 h-2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
-          <span className="text-xs text-text-muted font-mono">{timeLabel}</span>
-        </div>
-        <div className={`p-4 rounded-lg border ${isPast ? 'bg-white/[0.025] border-white/8' : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.07] transition-colors group'}`}>
-          <h3 className={`font-medium ${isPast ? 'text-slate-400' : 'text-slate-100 group-hover:text-white transition-colors'}`}>
+      <div key={item.event.id} className={`relative z-10 mb-3 pl-14 ${isPast ? 'opacity-65' : ''}`}>
+        <div className={`absolute left-[42px] top-5 h-2.5 w-2.5 -translate-x-1/2 rounded-full z-10 ${meta.dot}`} aria-hidden="true" />
+        <div className={`group rounded-lg border px-4 py-3 transition-colors ${meta.card}`}>
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${meta.pill}`}>{meta.label}</span>
+            <span className={`font-mono text-xs ${isPast ? 'text-slate-500' : 'text-slate-300'}`}>{timeLabel}</span>
+            {relativeLabel && <span className="text-xs text-text-muted/80">· {relativeLabel}</span>}
+          </div>
+          <h3 className={`font-medium leading-snug tracking-normal break-words transition-colors ${meta.title} ${!isPast ? 'group-hover:text-white' : ''}`}>
             {item.title}
           </h3>
         </div>
@@ -402,20 +483,20 @@ export default function FocusMode({
       ...[...scheduleGroups.allDay].sort((a, b) => a.sortMs - b.sortMs),
     ];
     const nextItems = scheduleGroups.upcoming;
-    const hasInsertedIndicator = scheduleGroups.displayable.length > 0;
+    const hasTimelineItems = scheduleGroups.displayable.length > 0;
 
     return (
       <>
         {scheduleGroups.earlier.length > 0 && (
-          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Done</div>
+          renderTimelineSectionHeader('Done', scheduleGroups.earlier.length)
         )}
         {scheduleGroups.earlier.map(renderTimelineEvent)}
 
-        {hasInsertedIndicator && (
-          <div className="relative pl-12 mb-8 flex items-center gap-3">
-            <div className="absolute left-[16px] w-4 h-4 rounded-full bg-primary z-10 shadow-[0_0_12px_rgba(56,189,248,0.35)]"></div>
-            <div className="flex-1 h-px bg-primary/40 ml-4"></div>
-            <span className="text-[11px] font-bold text-primary bg-primary/10 border border-primary/25 px-2 py-1 rounded shrink-0">
+        {hasTimelineItems && (
+          <div className="relative z-10 mb-5 flex items-center gap-3 pl-14">
+            <div className="absolute left-[42px] h-4 w-4 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_14px_rgba(56,189,248,0.5)]" aria-hidden="true" />
+            <div className="h-px flex-1 bg-gradient-to-r from-primary/55 via-primary/20 to-transparent" />
+            <span className="shrink-0 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1 font-mono text-[11px] font-bold text-primary">
               {format(currentTime, 'h:mm a')}
             </span>
           </div>
@@ -434,20 +515,18 @@ export default function FocusMode({
         )}
 
         {nowItems.length > 0 && (
-          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">Now</div>
+          renderTimelineSectionHeader('Now', nowItems.length, 'active')
         )}
         {nowItems.map(renderTimelineEvent)}
 
         {nextItems.length > 0 && (
-          <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-text-muted/80">
-            Next
-          </div>
+          renderTimelineSectionHeader('Next', nextItems.length, 'next')
         )}
         {nextItems.map(renderTimelineEvent)}
 
-        <div className="relative pl-12 mt-4 mb-8 opacity-40">
-          <div className="absolute left-[16px] top-1 w-4 h-4 rounded-full border-2 border-dashed border-white/40 bg-transparent z-10"></div>
-          <div className="text-xs text-text-muted italic font-medium">
+        <div className="relative z-10 mb-4 mt-6 pl-14 opacity-45">
+          <div className="absolute left-[42px] top-1 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-dashed border-white/35 bg-background-dark z-10" aria-hidden="true" />
+          <div className="text-xs italic font-medium text-text-muted">
             End of scheduled day
           </div>
         </div>
