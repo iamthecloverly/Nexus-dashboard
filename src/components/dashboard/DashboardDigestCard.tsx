@@ -33,6 +33,18 @@ type DigestProps = {
   aiConfigured: boolean;
 };
 
+type BriefErrorKind = 'key_missing' | 'key_invalid' | string;
+
+function briefErrorFromResponse(status: number, data: { code?: unknown; error?: unknown }): BriefErrorKind {
+  const code = typeof data.code === 'string' ? data.code : '';
+  if (code === 'NO_AI_KEY') return 'key_missing';
+  if (code === 'INVALID_KEY') return 'key_invalid';
+  if (code === 'LOGIN_REQUIRED') return 'Session expired. Log in again to generate your brief.';
+  return typeof data.error === 'string' && data.error.trim()
+    ? data.error
+    : `Failed to generate brief${status ? ` (HTTP ${status})` : ''}`;
+}
+
 export function DashboardDigestCard({
   setCurrentView,
   gmailConnected,
@@ -84,14 +96,7 @@ export function DashboardDigestCard({
       });
       const data = await res.json();
       if (!res.ok) {
-        const code = data.code;
-        if (code === 'NO_AI_KEY') {
-          setBriefError('key_missing');
-        } else if (code === 'INVALID_KEY' || res.status === 401) {
-          setBriefError('key_invalid');
-        } else {
-          setBriefError(data.error ?? 'Failed to generate brief');
-        }
+        setBriefError(briefErrorFromResponse(res.status, data));
       } else {
         const text = data.brief ?? '';
         setBrief(text);
@@ -297,3 +302,5 @@ export function DashboardDigestCard({
     </section>
   );
 }
+
+export const __testOnly = { briefErrorFromResponse };
