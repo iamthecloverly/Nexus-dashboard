@@ -30,7 +30,7 @@ export const extractTasksSchema = z.object({
 
 export const extractTasksBulkSchema = z.object({
   emailIds: z.array(gmailIdSchema).min(1, 'At least one email ID required').max(10, 'Maximum 10 emails at once'),
-  mode: z.enum(['manual', 'auto']).optional(),
+  mode: z.enum(['manual', 'auto', 'starred']).optional(),
 });
 
 export const dailyBriefSchema = z.object({

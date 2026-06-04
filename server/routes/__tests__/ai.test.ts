@@ -181,6 +181,23 @@ describe('AI Routes helpers', () => {
 
       expect(tasks).toEqual([]);
     });
+
+    it('keeps low-confidence fallback tasks in starred mode', () => {
+      const tasks = normalizeAiTasks([{
+        title: 'Review starred email from Sam',
+        confidence: 'low',
+        tags: ['starred', 'review'],
+        dueDate: '2026-06-09',
+      }], 'email-1', 'starred');
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toEqual(expect.objectContaining({
+        title: 'Review starred email from Sam',
+        confidence: 'low',
+        tags: ['starred', 'review'],
+        dueDate: '2026-06-09',
+      }));
+    });
   });
 });
 

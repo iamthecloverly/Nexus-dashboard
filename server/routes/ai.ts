@@ -78,6 +78,20 @@ Be very conservative. When in doubt, return no tasks.
 Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "medium|high", "reason": "..."}]}
 Max 3 tasks. Return {"tasks": []} if nothing is clearly actionable.`;
 
+/** Starred mode: the user explicitly signaled that this email should become a task. */
+const AI_PROMPT_STARRED = `You are a task extraction assistant. The user starred this email, so treat it as explicit intent to create a task.
+Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "low|medium|high", "reason": "..."}]}
+Rules:
+- Prefer specific actionable tasks directly requested in the email.
+- If there is no explicit ask, create one useful follow-up or review task from the subject and sender.
+- title: concise, starts with a verb, and does not include "starred email".
+- priority: "Critical" only for a hard deadline/blocker; "Priority" for important starred follow-up; otherwise "Normal".
+- group: "now" for urgent/today/deadline work; otherwise "next".
+- dueDate: ISO local date if an explicit or strongly implied deadline exists; otherwise null.
+- tags: include 1-4 short lowercase labels; include "starred" when appropriate.
+- confidence can be low for fallback follow-up/review tasks, but explain why in reason.
+- Return 1-3 tasks.`;
+
 type AiTask = {
   id: string;
   emailId: string;
@@ -100,6 +114,7 @@ type RawAiTask = {
   confidence?: unknown;
   reason?: unknown;
 };
+type AiTaskMode = 'manual' | 'auto' | 'starred';
 
 const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
 type Priority = (typeof PRIORITIES)[number];
@@ -149,7 +164,7 @@ function normalizeTags(value: unknown): string[] | undefined {
   return tags.length ? tags : undefined;
 }
 
-function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: 'manual' | 'auto'): AiTask[] {
+function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: AiTaskMode): AiTask[] {
   const seen = new Set<string>();
   const out: AiTask[] = [];
   for (const raw of rawTasks) {
@@ -187,7 +202,7 @@ async function extractTasksFromEmail(
   gmail: ReturnType<typeof google.gmail>,
   openai: OpenAI,
   emailId: string,
-  mode: 'manual' | 'auto' = 'manual',
+  mode: AiTaskMode = 'manual',
 ): Promise<AiTask[]> {
   const [meta, full] = await Promise.all([
     gmail.users.messages.get({ userId: 'me', id: emailId, format: 'metadata', metadataHeaders: ['From', 'Subject'] }),
@@ -199,12 +214,17 @@ async function extractTasksFromEmail(
   const from    = headers.find(h => h.name === 'From')?.value ?? '';
   const body    = cleanEmailBodyForAi(extractGmailBody(full.data.payload)).slice(0, 5000);
 
+  const prompt = mode === 'starred'
+    ? AI_PROMPT_STARRED
+    : mode === 'auto'
+      ? AI_PROMPT_AUTO
+      : AI_PROMPT_MANUAL;
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     temperature: mode === 'auto' ? 0 : 0.15,
     messages: [
-      { role: 'system', content: mode === 'auto' ? AI_PROMPT_AUTO : AI_PROMPT_MANUAL },
+      { role: 'system', content: prompt },
       { role: 'user', content: `Today: ${todayKey()}\nFrom: ${from}\nSubject: ${subject}\n\n${body}` },
     ],
   });

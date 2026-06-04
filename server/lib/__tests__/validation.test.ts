@@ -140,6 +140,7 @@ describe('Validation Schemas', () => {
     it('accepts optional mode field', () => {
       expect(extractTasksBulkSchema.safeParse({ emailIds: ['abc123'], mode: 'manual' }).success).toBe(true);
       expect(extractTasksBulkSchema.safeParse({ emailIds: ['abc123'], mode: 'auto' }).success).toBe(true);
+      expect(extractTasksBulkSchema.safeParse({ emailIds: ['abc123'], mode: 'starred' }).success).toBe(true);
     });
 
     it('rejects empty emailIds array', () => {

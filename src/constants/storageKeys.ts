@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   ytPositions: 'dashboard_yt_positions',
   ytResumeEnabled: 'dashboard_yt_resume_enabled',
   autoProcessedEmailIds: 'auto_processed_email_ids',
+  autoProcessedStarredEmailIds: 'auto_processed_starred_email_ids',
   /** JSON `{ "lat": number, "lon": number }` for Open-Meteo `/api/weather` */
   weatherCoords: 'dashboard_weather_coords',
   notificationsEnabled: 'dashboard_notifications_enabled',
