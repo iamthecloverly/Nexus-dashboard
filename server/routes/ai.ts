@@ -45,11 +45,14 @@ function extractGmailBody(payload: gmail_v1.Schema$MessagePart | null | undefine
 
 /** Manual mode: thorough extraction shown in review modal before adding */
 const AI_PROMPT_MANUAL = `You are a productivity assistant. Read the email and extract every actionable task the recipient needs to do.
-Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
+Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "low|medium|high", "reason": "..."}]}
 Rules:
 - title: concise, starts with a verb (e.g. "Review proposal", "Reply to John", "Schedule meeting")
 - priority: "Critical" = hard deadline or blocker; "Priority" = important but flexible; "Normal" = nice to have
 - group: "now" = due today or very urgent; "next" = can be done later
+- dueDate: ISO local date if an explicit or strongly implied deadline exists; otherwise null
+- tags: 1-4 short lowercase labels such as reply, review, schedule, finance, docs, school, work
+- confidence: high only when the task is directly supported by the email
 - reason: one short sentence explaining why this task was extracted
 - max 5 tasks per email
 - if no actionable tasks exist, return {"tasks": []}`;
@@ -72,7 +75,7 @@ EXCLUDE entirely:
 - Anything where taking action is optional
 
 Be very conservative. When in doubt, return no tasks.
-Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "reason": "..."}]}
+Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "medium|high", "reason": "..."}]}
 Max 3 tasks. Return {"tasks": []} if nothing is clearly actionable.`;
 
 type AiTask = {
@@ -81,6 +84,9 @@ type AiTask = {
   title: string;
   priority: 'Normal' | 'Priority' | 'Critical';
   group: 'now' | 'next';
+  dueDate?: string;
+  tags?: string[];
+  confidence: 'low' | 'medium' | 'high';
   reason: string;
   accepted: boolean;
 };
@@ -89,8 +95,92 @@ type RawAiTask = {
   title?: unknown;
   priority?: unknown;
   group?: unknown;
+  dueDate?: unknown;
+  tags?: unknown;
+  confidence?: unknown;
   reason?: unknown;
 };
+
+const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
+type Priority = (typeof PRIORITIES)[number];
+const CONFIDENCE = ['low', 'medium', 'high'] as const;
+type Confidence = (typeof CONFIDENCE)[number];
+
+function todayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function cleanEmailBodyForAi(body: string): string {
+  let cleaned = body
+    .replace(/\r\n/g, '\n')
+    .replace(/\n>.*(?:\n>.*)*/g, '\n');
+  for (const marker of [
+    /\nOn .+ wrote:\n/i,
+    /\n-{2,}\s*Original Message\s*-{2,}/i,
+    /\nFrom:\s.+\nSent:\s.+\n/i,
+  ]) {
+    cleaned = cleaned.split(marker)[0] ?? cleaned;
+  }
+  return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!?]+$/g, '')
+    .trim()
+    .slice(0, 140);
+}
+
+function normalizeDueDate(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+}
+
+function normalizeTags(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const tags = Array.from(new Set(value
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map(tag => tag.toLowerCase().replace(/[^a-z0-9- ]/g, '').replace(/\s+/g, '-').trim())
+    .filter(tag => tag.length >= 2 && tag.length <= 24)
+    .slice(0, 4)));
+  return tags.length ? tags : undefined;
+}
+
+function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: 'manual' | 'auto'): AiTask[] {
+  const seen = new Set<string>();
+  const out: AiTask[] = [];
+  for (const raw of rawTasks) {
+    if (typeof raw.title !== 'string') continue;
+    const title = normalizeTitle(raw.title);
+    if (!title) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const priority: Priority = PRIORITIES.includes(raw.priority as Priority) ? (raw.priority as Priority) : 'Normal';
+    const confidence: Confidence = CONFIDENCE.includes(raw.confidence as Confidence) ? (raw.confidence as Confidence) : 'medium';
+    if (mode === 'auto' && confidence === 'low') continue;
+
+    const dueDate = normalizeDueDate(raw.dueDate);
+    const tags = normalizeTags(raw.tags);
+    out.push({
+      id: randomUUID(),
+      emailId,
+      title,
+      priority,
+      group: raw.group === 'next' ? 'next' : 'now',
+      ...(dueDate ? { dueDate } : {}),
+      ...(tags ? { tags } : {}),
+      confidence,
+      reason: typeof raw.reason === 'string' ? raw.reason.trim().slice(0, 240) : '',
+      accepted: true,
+    });
+  }
+  return out;
+}
 
 /** Shared logic: fetch one email's metadata + body, call GPT-4o-mini, return suggestions */
 async function extractTasksFromEmail(
@@ -107,41 +197,30 @@ async function extractTasksFromEmail(
   const headers = meta.data.payload?.headers ?? [];
   const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
   const from    = headers.find(h => h.name === 'From')?.value ?? '';
-  const body    = extractGmailBody(full.data.payload).slice(0, 3000);
+  const body    = cleanEmailBodyForAi(extractGmailBody(full.data.payload)).slice(0, 5000);
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
-    temperature: 0.2,
+    temperature: mode === 'auto' ? 0 : 0.15,
     messages: [
       { role: 'system', content: mode === 'auto' ? AI_PROMPT_AUTO : AI_PROMPT_MANUAL },
-      { role: 'user', content: `From: ${from}\nSubject: ${subject}\n\n${body}` },
+      { role: 'user', content: `Today: ${todayKey()}\nFrom: ${from}\nSubject: ${subject}\n\n${body}` },
     ],
   });
 
   const raw = parseAiTasksJson(completion.choices?.[0]?.message?.content);
-  const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
-  type Priority = (typeof PRIORITIES)[number];
-  return raw.tasks
-    .filter((t: RawAiTask) => typeof t.title === 'string' && t.title.trim())
-    .map((t: RawAiTask) => {
-      const priority: Priority = PRIORITIES.includes(t.priority as Priority) ? (t.priority as Priority) : 'Normal';
-      return {
-        id: randomUUID(),
-        emailId,
-        title: (t.title as string).trim(),
-        priority,
-        group: t.group === 'next' ? 'next' : 'now',
-        reason: typeof t.reason === 'string' ? t.reason.trim() : '',
-        accepted: true,
-      };
-    });
+  return normalizeAiTasks(raw.tasks, emailId, mode);
 }
 
 export function parseAiTasksJson(content: unknown): { tasks: RawAiTask[] } {
   if (typeof content !== 'string' || !content.trim()) return { tasks: [] };
+  const cleaned = content.trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '');
   try {
-    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const parsed = JSON.parse(cleaned) as Record<string, unknown> | RawAiTask[];
+    if (Array.isArray(parsed)) return { tasks: parsed as RawAiTask[] };
     if (!parsed || typeof parsed !== 'object') return { tasks: [] };
     const tasks = Array.isArray(parsed.tasks) ? (parsed.tasks as RawAiTask[]) : [];
     return { tasks };
@@ -342,4 +421,4 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   }
 });
 
-export const __testOnly = { extractGmailBody };
+export const __testOnly = { cleanEmailBodyForAi, extractGmailBody, normalizeAiTasks };

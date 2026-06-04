@@ -6,6 +6,9 @@ export interface TaskSuggestion {
   title: string;
   priority: 'Normal' | TaskPriority;
   group: 'now' | 'next';
+  dueDate?: string;
+  tags?: string[];
+  confidence?: 'low' | 'medium' | 'high';
   reason: string;
   accepted: boolean;
 }

@@ -16,6 +16,13 @@ const priorityStyle = (p: TaskSuggestion['priority']) => {
   return 'text-text-muted border-white/10 bg-white/5';
 };
 
+function formatDueDate(dueDate?: string): string | null {
+  if (!dueDate) return null;
+  const date = new Date(`${dueDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dueDate;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 export default function TaskSuggestionModal({ suggestions: initial, context, onAdd, onClose }: Props) {
   const [items, setItems] = useState<TaskSuggestion[]>(initial);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,6 +153,24 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                     >
                       {item.group === 'now' ? '⚡ Now' : '→ Next'}
                     </button>
+                    {formatDueDate(item.dueDate) && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-300/20 bg-amber-300/10 text-amber-200">
+                        Due {formatDueDate(item.dueDate)}
+                      </span>
+                    )}
+                    {item.confidence && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.035] text-text-muted">
+                        {item.confidence}
+                      </span>
+                    )}
+                    {(item.tags ?? []).slice(0, 3).map(tag => (
+                      <span
+                        key={tag}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.035] text-text-muted"
+                      >
+                        {tag}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>

@@ -464,15 +464,17 @@ function InboxPane({
       const priority: TaskPriority | undefined = VALID_PRIORITIES.has(s.priority as TaskPriority)
         ? (s.priority as TaskPriority)
         : undefined;
+      const tags = Array.from(new Set(['email', ...(s.tags ?? [])])).slice(0, 5);
       addTask({
         id: s.id,
         title: s.title,
         priority,
+        dueDate: s.dueDate,
         completed: false,
         group: s.group,
         source: { type: 'email', id: s.emailId, label: 'AI suggestion' },
         createdAt: new Date().toISOString(),
-        tags: ['email'],
+        tags,
       });
     }
     showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');

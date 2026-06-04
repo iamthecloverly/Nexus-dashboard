@@ -98,15 +98,17 @@ export function useAutoEmailTasks() {
           if (!data.suggestions?.length) return;
 
           for (const s of data.suggestions) {
+            const tags = Array.from(new Set(['email', ...((Array.isArray(s.tags) ? s.tags : []) as string[])])).slice(0, 5);
             addTask({
               id: s.id,
               title: s.title,
               priority: s.priority === 'Normal' ? undefined : s.priority,
+              dueDate: typeof s.dueDate === 'string' ? s.dueDate : undefined,
               completed: false,
               group: s.group,
               source: { type: 'email', id: s.emailId, label: 'AI auto extraction' },
               createdAt: new Date().toISOString(),
-              tags: ['email'],
+              tags,
             });
           }
           totalAdded += data.suggestions.length;

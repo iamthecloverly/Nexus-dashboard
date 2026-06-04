@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { SESSION_SECRET } from '../../config';
 import { aiRouter, parseAiTasksJson, __testOnly } from '../ai';
 
-const { extractGmailBody } = __testOnly;
+const { cleanEmailBodyForAi, extractGmailBody, normalizeAiTasks } = __testOnly;
 
 // Note: this test app intentionally omits CSRF middleware — it tests the AI route handler in isolation.
 function makeApp() {
@@ -52,6 +52,11 @@ describe('AI Routes helpers', () => {
       const json = '{"tasks":[{"title":"A"},{"title":"B"},{"title":"C"}]}';
       const result = parseAiTasksJson(json);
       expect(result.tasks).toHaveLength(3);
+    });
+
+    it('accepts fenced JSON and array-only model output', () => {
+      expect(parseAiTasksJson('```json\n{"tasks":[{"title":"Review deck"}]}\n```').tasks[0]?.title).toBe('Review deck');
+      expect(parseAiTasksJson('[{"title":"Reply to Sam"}]').tasks[0]?.title).toBe('Reply to Sam');
     });
   });
 
@@ -133,6 +138,48 @@ describe('AI Routes helpers', () => {
         ],
       });
       expect(result).toBe(text);
+    });
+  });
+
+  describe('cleanEmailBodyForAi', () => {
+    it('removes quoted replies before prompting the model', () => {
+      const body = 'Please review the contract.\n\nOn Tue, Alex wrote:\nOld thread text';
+
+      expect(cleanEmailBodyForAi(body)).toBe('Please review the contract.');
+    });
+  });
+
+  describe('normalizeAiTasks', () => {
+    it('dedupes, trims, and preserves due dates/tags/confidence', () => {
+      const tasks = normalizeAiTasks([
+        {
+          title: '  Review the launch brief!!!  ',
+          priority: 'Priority',
+          group: 'next',
+          dueDate: '2026-06-08',
+          tags: ['Review', 'Launch Plan', 'bad!tag'],
+          confidence: 'high',
+          reason: 'The sender requested review.',
+        },
+        { title: 'Review the launch brief', priority: 'Critical' },
+      ], 'email-1', 'manual');
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toEqual(expect.objectContaining({
+        emailId: 'email-1',
+        title: 'Review the launch brief',
+        priority: 'Priority',
+        group: 'next',
+        dueDate: '2026-06-08',
+        tags: ['review', 'launch-plan', 'badtag'],
+        confidence: 'high',
+      }));
+    });
+
+    it('drops low-confidence tasks in auto mode', () => {
+      const tasks = normalizeAiTasks([{ title: 'Maybe read newsletter', confidence: 'low' }], 'email-1', 'auto');
+
+      expect(tasks).toEqual([]);
     });
   });
 });

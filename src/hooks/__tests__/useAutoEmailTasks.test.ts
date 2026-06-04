@@ -74,6 +74,8 @@ describe('useAutoEmailTasks', () => {
         priority: 'Normal',
         group: 'next',
         emailId: 's-new',
+        dueDate: '2026-06-08',
+        tags: ['reply', 'school'],
       }],
     }), { status: 200 })));
 
@@ -137,6 +139,8 @@ describe('useAutoEmailTasks', () => {
     expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain('accountId=secondary');
     expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
       id: 'task-from-email',
+      dueDate: '2026-06-08',
+      tags: ['email', 'reply', 'school'],
       source: { type: 'email', id: 's-new', label: 'AI auto extraction' },
     }));
     expect(showToast).toHaveBeenCalledWith('1 task added from new email', 'success');
