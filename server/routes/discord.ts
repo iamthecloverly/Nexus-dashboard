@@ -32,7 +32,7 @@ discordRouter.get('/status', (req, res) => {
   res.json({ connected: !!getSignedCookie(req, 'discord_webhook') });
 });
 
-discordRouter.post('/disconnect', (req, res) => {
+discordRouter.post('/disconnect', (_req, res) => {
   clearAppCookie(res, 'discord_webhook', true);
   res.json({ success: true });
 });

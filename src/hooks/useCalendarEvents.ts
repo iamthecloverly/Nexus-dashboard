@@ -10,7 +10,7 @@ const CALENDAR_SELECTION_VERSION = '4';
 type CalendarAccountId = 'primary' | 'secondary';
 type CalendarFetchReason = 'initial' | 'manual' | 'background';
 
-export type CalendarAccountMode = 'selected' | 'allConnected';
+type CalendarAccountMode = 'selected' | 'allConnected';
 
 interface UseCalendarEventsOptions {
   accountMode?: CalendarAccountMode;
@@ -70,7 +70,7 @@ function calendarEventsUrl(opts: { accountId?: CalendarAccountId; calendarIds?: 
   }
 }
 
-export type CalendarError =
+type CalendarError =
   | 'login_required'
   | 'not_connected'
   | 'not_allowlisted'

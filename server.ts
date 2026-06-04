@@ -29,10 +29,8 @@ const PORT = 3001;
 // When self-hosting behind a reverse proxy, this ensures req.protocol reflects x-forwarded-proto.
 app.set('trust proxy', 1);
 
-// Pino HTTP logging middleware
 app.use(pinoHttp({ logger }));
 
-// Compression middleware - gzip/deflate responses
 app.use(compression());
 
 app.use(helmet({ contentSecurityPolicy: isProduction ? undefined : false })); // CSP disabled in dev — Vite injects inline scripts
@@ -79,13 +77,11 @@ app.get('/api/health', async (_req, res) => {
   const checks: Record<string, string> = {};
   let overallStatus: 'ok' | 'degraded' | 'error' = 'ok';
 
-  // Check if environment variables are set
   checks.google_oauth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? 'ok' : 'error';
   checks.session = SESSION_SECRET ? 'ok' : 'error';
   checks.openai_api = process.env.OPENAI_API_KEY ? 'ok' : 'not_configured';
   checks.github_api = process.env.GITHUB_TOKEN ? 'ok' : 'not_configured';
 
-  // Determine overall status
   if (checks.google_oauth === 'error' || checks.session === 'error') {
     overallStatus = 'error';
   } else if (Object.values(checks).includes('error')) {
@@ -107,7 +103,6 @@ app.use('/api', weatherRouter);
 app.use('/api', systemRouter);
 
 async function startServer() {
-  // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -117,7 +112,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

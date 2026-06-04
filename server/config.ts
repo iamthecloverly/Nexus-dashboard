@@ -49,7 +49,7 @@ export const DASHBOARD_SESSION_COOKIE_OPTS: CookieOptions = {
 // CSRF: double-submit token (cookie + header). Cookie is readable by JS; header must match.
 export const CSRF_COOKIE = 'csrf_token';
 export const CSRF_HEADER = 'x-csrf-token';
-export const CSRF_COOKIE_OPTS: CookieOptions = {
+const CSRF_COOKIE_OPTS: CookieOptions = {
   httpOnly: false,
   secure: isProduction,
   sameSite: 'lax',

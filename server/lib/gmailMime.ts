@@ -6,7 +6,7 @@ function decodeBase64Url(data: string): string {
 }
 
 /** Strip tags/styles like the legacy plain-text extractor — used when only HTML exists. */
-export function htmlToPlainText(html: string): string {
+function htmlToPlainText(html: string): string {
   let h = html;
   let prev: string;
   do {
@@ -32,7 +32,7 @@ function headerVal(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, nam
 /**
  * Pull best-effort text/plain and raw text/html from a Gmail MIME tree.
  */
-export function extractBodiesFromPayload(
+function extractBodiesFromPayload(
   payload: gmail_v1.Schema$MessagePart | null | undefined,
 ): { plain: string; htmlRaw: string | null } {
   if (!payload) return { plain: '', htmlRaw: null };
@@ -89,7 +89,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function collectCidParts(
+function collectCidParts(
   part: gmail_v1.Schema$MessagePart | null | undefined,
   acc: CidPart[] = [],
 ): CidPart[] {
@@ -114,7 +114,7 @@ export function collectCidParts(
 /**
  * Replace cid: references in HTML with data URLs (embedded images).
  */
-export async function inlineCidImages(
+async function inlineCidImages(
   gmail: gmail_v1.Gmail,
   messageId: string,
   html: string,
@@ -192,7 +192,7 @@ const SANITIZE_OPTS: sanitizeHtml.IOptions = {
   },
 };
 
-export function sanitizeEmailHtml(html: string): string | null {
+function sanitizeEmailHtml(html: string): string | null {
   const cleaned = sanitizeHtml(html, SANITIZE_OPTS).trim();
   return cleaned.length > 0 ? cleaned : null;
 }

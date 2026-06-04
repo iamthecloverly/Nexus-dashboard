@@ -288,7 +288,7 @@ aiRouter.get('/status', (req, res) => {
   res.json({ configured: !!(decryptedKey ?? envKey), source });
 });
 
-aiRouter.post('/disconnect', (req, res) => {
+aiRouter.post('/disconnect', (_req, res) => {
   clearAppCookie(res, 'openai_key', true);
   res.json({ success: true });
 });

@@ -10,7 +10,7 @@ export interface EmailState {
   serverErrorByAccount: Record<GmailAccountId, boolean>;
 }
 
-export interface EmailActions {
+interface EmailActions {
   /** e is optional so all actions can be called programmatically without a fake MouseEvent */
   toggleRead: (accountId: GmailAccountId, id: string, e?: React.MouseEvent) => void;
   archiveEmail: (accountId: GmailAccountId, id: string, e?: React.MouseEvent) => void;
@@ -33,4 +33,3 @@ export function useEmailContext() {
   if (!ctx) throw new Error('useEmailContext must be used within EmailProvider');
   return ctx;
 }
-

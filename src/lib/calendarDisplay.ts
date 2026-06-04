@@ -49,12 +49,6 @@ function getEventTitle(event: CalendarEvent): string {
   return event.summary?.trim() || 'Busy';
 }
 
-export function getCalendarEventDateKey(event: CalendarEvent): string | null {
-  if (event.start?.date) return event.start.date;
-  const start = parseCalendarDate(event.start?.dateTime);
-  return start ? format(start, 'yyyy-MM-dd') : null;
-}
-
 export function calendarEventOverlapsLocalDay(event: CalendarEvent, now: Date): boolean {
   const bounds = localDayBounds(now);
   if (!bounds) return false;

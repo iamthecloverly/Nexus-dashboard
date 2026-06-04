@@ -38,7 +38,7 @@ githubRouter.get('/status', (req, res) => {
   res.json({ connected: !!getConfiguredGithubToken(req) });
 });
 
-githubRouter.post('/disconnect', (req, res) => {
+githubRouter.post('/disconnect', (_req, res) => {
   clearAppCookie(res, 'github_token', true);
   res.json({ success: true });
 });

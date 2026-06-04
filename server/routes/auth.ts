@@ -246,7 +246,7 @@ authRouter.post('/google/disconnect', (req, res) => {
   res.json({ success: true });
 });
 
-authRouter.post('/disconnect', (req, res) => {
+authRouter.post('/disconnect', (_req, res) => {
   clearAppCookie(res, 'google_tokens', true);
   clearAppCookie(res, 'google_profile', true);
   res.json({ success: true });

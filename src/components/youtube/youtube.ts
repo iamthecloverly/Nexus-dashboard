@@ -1,4 +1,4 @@
-export const YT_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+const YT_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
 
 /** Matches YouTube video IDs from all known URL formats */
 const YT_URL_RE = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/;
@@ -17,4 +17,3 @@ export function formatTimeSeconds(s: number) {
   const sec = Math.floor(safe % 60);
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
-

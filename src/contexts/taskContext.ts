@@ -1,11 +1,11 @@
 import { createContext, useContext } from 'react';
 import type { Task } from '../types/task';
 
-export interface TaskState {
+interface TaskState {
   tasks: Task[];
 }
 
-export interface TaskActions {
+interface TaskActions {
   toggleTask: (id: string) => void;
   addTask: (task: Task) => void;
   deleteTask: (id: string) => void;
@@ -25,4 +25,3 @@ export function useTaskContext() {
   if (!ctx) throw new Error('useTaskContext must be used within TaskProvider');
   return ctx;
 }
-

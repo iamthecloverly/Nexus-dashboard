@@ -77,7 +77,7 @@ export interface GithubTimelineSource {
   updatedAt: string;
 }
 
-export function localDateKey(date = new Date()): string {
+function localDateKey(date = new Date()): string {
   return format(date, 'yyyy-MM-dd');
 }
 
@@ -181,7 +181,7 @@ export function tomorrowKey(now = new Date()): string {
   return localDateKey(addDays(now, 1));
 }
 
-export function isTaskDueToday(task: Task, now = new Date()): boolean {
+function isTaskDueToday(task: Task, now = new Date()): boolean {
   const due = parseLocalDate(task.dueDate);
   return !!due && isSameDay(due, now);
 }
