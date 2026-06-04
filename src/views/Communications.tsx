@@ -12,6 +12,7 @@ import type { TaskPriority } from '../types/task';
 import { csrfHeaders } from '../lib/csrf';
 import type { SetViewFn } from '../config/navigation';
 import { buildTaskFromEmail, isFollowUpEmail } from '../lib/dashboardFeatures';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 interface ComposeState {
   to: string;
@@ -562,10 +563,11 @@ function InboxPane({
 
     setIsAnalyzingDetail(true);
     try {
-      const res = await fetch('/api/ai/extract-tasks-bulk', {
+      const res = await fetchWithTimeout('/api/ai/extract-tasks-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ emailIds: [detail.id] }),
+        timeoutMs: 30_000,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -595,10 +597,11 @@ function InboxPane({
     if (ids.length === 0) { showToast('No unread emails to analyze', 'info'); return; }
     setIsAnalyzingAll(true);
     try {
-      const res = await fetch('/api/ai/extract-tasks-bulk', {
+      const res = await fetchWithTimeout('/api/ai/extract-tasks-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ emailIds: ids }),
+        timeoutMs: 30_000,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -641,7 +644,7 @@ function InboxPane({
     bodyPrefetchInflightRef.current.add(emailId);
 
     const run = () => {
-      fetch(`/api/gmail/message/${emailId}?accountId=${encodeURIComponent(accountId)}`)
+      fetchWithTimeout(`/api/gmail/message/${emailId}?accountId=${encodeURIComponent(accountId)}`, { timeoutMs: 15_000 })
         .then(r => r.ok ? r.json() : null)
         .then((data: unknown) => {
           const d = data as { body?: unknown; bodyHtml?: unknown } | null;
@@ -718,7 +721,7 @@ function InboxPane({
       } : prev);
     } else {
       try {
-        const res = await fetch(`/api/gmail/message/${email.id}?accountId=${encodeURIComponent(accountId)}`);
+        const res = await fetchWithTimeout(`/api/gmail/message/${email.id}?accountId=${encodeURIComponent(accountId)}`, { timeoutMs: 15_000 });
         if (res.ok) {
           const data = await res.json();
           const body = typeof data.body === 'string' ? data.body : '';
@@ -840,10 +843,11 @@ function InboxPane({
     }
     setCompose(c => c ? { ...c, sending: true, error: null } : null);
     try {
-      const res = await fetch(`/api/gmail/send?accountId=${encodeURIComponent(accountId)}`, {
+      const res = await fetchWithTimeout(`/api/gmail/send?accountId=${encodeURIComponent(accountId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ to: compose.to, subject: compose.subject, body: compose.body }),
+        timeoutMs: 20_000,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);

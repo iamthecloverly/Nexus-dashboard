@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -21,6 +21,40 @@ function makeApp() {
 }
 
 describe('Auth Routes (Google multi-account)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  describe('GET /api/auth/google/url', () => {
+    it('sets a signed OAuth state cookie and embeds a nonce in the auth URL state', async () => {
+      vi.stubEnv('GOOGLE_CLIENT_ID', 'client-id');
+      vi.stubEnv('GOOGLE_CLIENT_SECRET', 'client-secret');
+
+      const res = await request(makeApp()).get('/api/auth/google/url?accountId=secondary');
+
+      expect(res.status).toBe(200);
+      const setCookie = res.headers['set-cookie'] ?? [];
+      const joined = Array.isArray(setCookie) ? setCookie.join('\n') : String(setCookie);
+      expect(joined).toContain('oauth_state_secondary=');
+
+      const authUrl = new URL(res.body.url);
+      const state = JSON.parse(authUrl.searchParams.get('state') ?? '{}') as { accountId?: string; nonce?: string };
+      expect(state.accountId).toBe('secondary');
+      expect(typeof state.nonce).toBe('string');
+      expect(state.nonce?.length).toBeGreaterThan(20);
+    });
+  });
+
+  describe('GET /api/auth/google/callback', () => {
+    it('rejects callbacks without a matching OAuth state cookie', async () => {
+      const state = encodeURIComponent(JSON.stringify({ accountId: 'primary', nonce: 'nonce-from-attacker' }));
+      const res = await request(makeApp()).get(`/api/auth/google/callback?code=abc&state=${state}`);
+
+      expect(res.status).toBe(400);
+      expect(res.text).toBe('Invalid OAuth state');
+    });
+  });
+
   describe('GET /api/auth/google/accounts', () => {
     it('returns both accounts disconnected by default', async () => {
       const res = await request(makeApp()).get('/api/auth/google/accounts');

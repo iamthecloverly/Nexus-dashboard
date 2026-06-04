@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { csrfHeaders } from '../lib/csrf';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 type SessionStatus = {
   loggedIn: boolean;
@@ -16,7 +17,7 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/session/status');
+      const res = await fetchWithTimeout('/api/session/status', { timeoutMs: 8_000 });
       if (!res.ok) return;
       const json = (await res.json()) as SessionStatus;
       setStatus(json);
@@ -60,10 +61,11 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch('/api/session/login', {
+      const res = await fetchWithTimeout('/api/session/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ passcode }),
+        timeoutMs: 10_000,
       });
       if (!res.ok) {
         const raw = await res.text();
@@ -92,7 +94,7 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
     setError(null);
     setConnectingGoogle(true);
     try {
-      const response = await fetch('/api/auth/google/url?accountId=primary');
+      const response = await fetchWithTimeout('/api/auth/google/url?accountId=primary', { timeoutMs: 10_000 });
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.error || 'Failed to get Google auth URL');

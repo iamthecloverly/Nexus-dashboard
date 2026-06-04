@@ -3,6 +3,7 @@ import { STORAGE_KEYS } from '../../constants/storageKeys';
 import { csrfHeaders } from '../../lib/csrf';
 import type { SetViewFn } from '../../config/navigation';
 import type { CalendarEvent } from '../../types/calendar';
+import { fetchWithTimeout } from '../../lib/fetchWithTimeout';
 
 /** GitHub logo — avoids pulling in an extra icon/font dependency. */
 function GithubMark({ className }: { className?: string }) {
@@ -71,7 +72,7 @@ export function DashboardDigestCard({
         start: e.start.dateTime ?? e.start.date ?? '',
         end: e.end.dateTime ?? e.end.date ?? '',
       }));
-      const res = await fetch('/api/ai/daily-brief', {
+      const res = await fetchWithTimeout('/api/ai/daily-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({
@@ -79,6 +80,7 @@ export function DashboardDigestCard({
           unreadEmailCount: unreadCount,
           activeTaskCount: remainingTasks,
         }),
+        timeoutMs: 20_000,
       });
       const data = await res.json();
       if (!res.ok) {

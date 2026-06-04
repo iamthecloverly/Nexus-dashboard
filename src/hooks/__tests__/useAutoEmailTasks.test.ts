@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEmailContext, type EmailContextValue, type EmailState } from '../../contexts/emailContext';
 import { useTaskContext, type TaskContextValue } from '../../contexts/taskContext';
 import { useToast } from '../../components/Toast';
+import { STORAGE_KEYS } from '../../constants/storageKeys';
 import type { Email, GmailAccountId } from '../../types/email';
 import { useAutoEmailTasks } from '../useAutoEmailTasks';
 
@@ -139,5 +140,35 @@ describe('useAutoEmailTasks', () => {
       source: { type: 'email', id: 's-new', label: 'AI auto extraction' },
     }));
     expect(showToast).toHaveBeenCalledWith('1 task added from new email', 'success');
+  });
+
+  it('leaves failed auto-extraction emails retryable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: 'OpenAI API key not configured',
+      code: 'NO_AI_KEY',
+    }), { status: 503 })));
+
+    const oldEmail = email('primary', 'p-old');
+    const newEmail = email('primary', 'p-new');
+    emailState = state({
+      emailsByAccount: { primary: [oldEmail], secondary: [] },
+      connectedByAccount: { primary: true, secondary: false },
+    });
+
+    const { rerender } = renderHook(() => useAutoEmailTasks());
+    await flushPromises();
+
+    emailState = state({
+      emailsByAccount: { primary: [oldEmail, newEmail], secondary: [] },
+      connectedByAccount: { primary: true, secondary: false },
+    });
+    rerender();
+    await flushPromises();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const processed = JSON.parse(localStorage.getItem(STORAGE_KEYS.autoProcessedEmailIds) ?? '[]') as string[];
+    expect(processed).toContain('primary:p-old');
+    expect(processed).not.toContain('primary:p-new');
+    expect(addTask).not.toHaveBeenCalled();
   });
 });

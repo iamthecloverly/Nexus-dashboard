@@ -1,8 +1,9 @@
 import express from 'express';
 import { google } from 'googleapis';
+import { randomBytes, timingSafeEqual } from 'crypto';
 
-import { ALLOWED_GOOGLE_EMAILS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
-import { clearAppCookie, getSignedCookie, parseJsonCookie } from '../lib/cookies.ts';
+import { ALLOWED_GOOGLE_EMAILS, COOKIE_OPTS, ENABLE_DEBUG_ENDPOINTS, getBaseUrl, isProduction } from '../config.ts';
+import { clearAppCookie, getSignedCookie, parseJsonCookie, setSignedCookie } from '../lib/cookies.ts';
 import { getOAuth2Client } from '../lib/googleOAuth.ts';
 import {
   createAuthedGoogleClient,
@@ -15,6 +16,16 @@ import { logger } from '../lib/logger.ts';
 
 export const authRouter = express.Router();
 
+function oauthStateCookieName(accountId: ReturnType<typeof parseAccountId>) {
+  return accountId === 'primary' ? 'oauth_state' : 'oauth_state_secondary';
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const aa = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return aa.length === bb.length && timingSafeEqual(aa, bb);
+}
+
 authRouter.get('/google/url', (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return res.status(500).json({ error: 'Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.' });
@@ -22,6 +33,7 @@ authRouter.get('/google/url', (req, res) => {
 
   const oauth2Client = getOAuth2Client(req);
   const accountId = parseAccountId(req.query.accountId);
+  const nonce = randomBytes(24).toString('base64url');
   const scopes = [
     // Needed to fetch/set google_profile (email/name) for allowlist checks.
     'https://www.googleapis.com/auth/userinfo.email',
@@ -37,9 +49,13 @@ authRouter.get('/google/url', (req, res) => {
     access_type: 'offline',
     scope: scopes,
     prompt: 'consent',
-    state: JSON.stringify({ accountId }),
+    state: JSON.stringify({ accountId, nonce }),
   });
 
+  setSignedCookie(res, oauthStateCookieName(accountId), nonce, {
+    ...COOKIE_OPTS,
+    maxAge: 10 * 60 * 1000,
+  });
   res.json({ url });
 });
 
@@ -56,6 +72,21 @@ authRouter.get('/google/callback', async (req, res) => {
       return 'primary' as const;
     }
   })();
+  const expectedNonce = getSignedCookie(req, oauthStateCookieName(accountId));
+  clearAppCookie(res, oauthStateCookieName(accountId), true);
+  const presentedNonce = (() => {
+    const { state } = req.query;
+    if (!state || typeof state !== 'string') return null;
+    try {
+      const parsed = JSON.parse(state) as { nonce?: unknown };
+      return typeof parsed?.nonce === 'string' ? parsed.nonce : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (!expectedNonce || !presentedNonce || !safeEqual(presentedNonce, expectedNonce)) {
+    return res.status(400).send('Invalid OAuth state');
+  }
 
   try {
     const oauth2Client = getOAuth2Client(req);

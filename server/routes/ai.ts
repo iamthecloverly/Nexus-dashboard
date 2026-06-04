@@ -231,9 +231,6 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
 });
 
 aiRouter.post('/daily-brief', aiLimiter, async (req, res) => {
-  const auth = getGoogleTokensFromCookie(req);
-  if (!auth) return res.status(401).json({ error: 'Not authenticated with Google' });
-
   const validation = dailyBriefSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.issues[0]?.message || 'Invalid input' });

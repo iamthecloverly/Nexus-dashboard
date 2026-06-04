@@ -173,5 +173,15 @@ describe('AI Routes — HTTP endpoints', () => {
       expect(res.headers['set-cookie']).toBeDefined();
     });
   });
-});
 
+  describe('POST /api/ai/daily-brief', () => {
+    it('does not require a Google token before reporting missing OpenAI configuration', async () => {
+      const res = await request(makeApp())
+        .post('/api/ai/daily-brief')
+        .send({ calendarEvents: [], unreadEmailCount: 0, activeTaskCount: 0 });
+
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('NO_AI_KEY');
+    });
+  });
+});

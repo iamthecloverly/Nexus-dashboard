@@ -25,6 +25,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { useViewportDesktopGate } from './hooks/useViewportDesktopGate';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { downloadLocalDashboardData } from './lib/dashboardFeatures';
+import { fetchWithTimeout } from './lib/fetchWithTimeout';
 
 /** Mounts the auto email→task hook inside the provider tree. Renders nothing. */
 function AutoEmailTaskProcessor() {
@@ -257,7 +258,7 @@ function AppContent() {
 
   const checkSession = useCallback(async () => {
     try {
-      const res = await fetch('/api/session/status');
+      const res = await fetchWithTimeout('/api/session/status', { timeoutMs: 8_000 });
       if (!res.ok) return;
       const json = (await res.json()) as { loggedIn?: boolean; allowlisted?: boolean; googleEmail?: string | null };
       // Align SPA gate with server gate (requireDashboardAccess)

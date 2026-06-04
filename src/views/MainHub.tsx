@@ -290,7 +290,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [isRefreshingCalendarList, setIsRefreshingCalendarList] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/auth/google/accounts')
+    fetchWithTimeout('/api/auth/google/accounts', { timeoutMs: 8_000 })
       .then(r => r.ok ? r.json() : null)
       .then((d: unknown) => {
         const data = d as { accounts?: Array<{ accountId: 'primary' | 'secondary'; connected?: boolean }> } | null;
@@ -316,7 +316,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     if (forceRefresh) params.set('refresh', '1');
     if (forceRefresh) setIsRefreshingCalendarList(true);
     try {
-      const response = await fetch(`/api/calendar/calendars?${params.toString()}`, { signal });
+      const response = await fetchWithTimeout(`/api/calendar/calendars?${params.toString()}`, { signal, timeoutMs: 15_000 });
       const data = response.ok ? await response.json() as { calendars?: CalendarListItem[] } : null;
       if (!data?.calendars) return;
       const list = Array.isArray(data.calendars) ? data.calendars : [];
@@ -359,7 +359,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [aiConfigured, setAiConfigured] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/ai/status')
+    fetchWithTimeout('/api/ai/status', { timeoutMs: 8_000 })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d?.configured) setAiConfigured(true); })
       .catch(() => {});

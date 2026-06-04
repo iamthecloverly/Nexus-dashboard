@@ -5,6 +5,7 @@ import { useSystemMetrics } from '../contexts/SystemMetricsProvider';
 import { useMusicContext } from '../contexts/musicContext';
 import { useNotificationPermission } from '../hooks/useNotificationPermission';
 import { csrfHeaders } from '../lib/csrf';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import type { SetViewFn } from '../config/navigation';
 import {
@@ -83,10 +84,10 @@ export default function Settings({
   useEffect(() => {
     const fetchStatuses = async () => {
       const [googleRes, githubRes, discordRes, aiRes] = await Promise.allSettled([
-        fetch('/api/auth/status').then(r => r.json()),
-        fetch('/api/github/status').then(r => r.json()),
-        fetch('/api/discord/status').then(r => r.json()),
-        fetch('/api/ai/status').then(r => r.json()),
+        fetchWithTimeout('/api/auth/status', { timeoutMs: 8_000 }).then(r => r.json()),
+        fetchWithTimeout('/api/github/status', { timeoutMs: 8_000 }).then(r => r.json()),
+        fetchWithTimeout('/api/discord/status', { timeoutMs: 8_000 }).then(r => r.json()),
+        fetchWithTimeout('/api/ai/status', { timeoutMs: 8_000 }).then(r => r.json()),
       ]);
       setConnections({
         google: googleRes.status === 'fulfilled' ? googleRes.value.connected : false,
@@ -103,10 +104,11 @@ export default function Settings({
     if (!aiKeyDraft.trim()) { showToast('Please enter an API key', 'error'); return; }
     setAiKeySaving(true);
     try {
-      const res = await fetch('/api/ai/key', {
+      const res = await fetchWithTimeout('/api/ai/key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ key: aiKeyDraft.trim() }),
+        timeoutMs: 10_000,
       });
       if (res.ok) { setAiConfigured(true); setAiSource('cookie'); setAiKeyDraft(''); showToast('OpenAI key saved', 'success'); }
       else showToast('Failed to save key', 'error');
@@ -115,9 +117,9 @@ export default function Settings({
   };
 
   const disconnectAi = async () => {
-    await fetch('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders() });
+    await fetchWithTimeout('/api/ai/disconnect', { method: 'POST', headers: csrfHeaders(), timeoutMs: 10_000 });
     // Re-fetch status: clearing the cookie may fall back to the env key.
-    const statusData = await fetch('/api/ai/status').then(r => r.json()).catch(() => ({ configured: false, source: null }));
+    const statusData = await fetchWithTimeout('/api/ai/status', { timeoutMs: 8_000 }).then(r => r.json()).catch(() => ({ configured: false, source: null }));
     setAiConfigured(!!statusData.configured);
     setAiSource(statusData.source ?? null);
     if (statusData.source === 'env') {

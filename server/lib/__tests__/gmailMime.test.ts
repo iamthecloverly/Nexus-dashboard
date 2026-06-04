@@ -16,4 +16,12 @@ describe('sanitizeEmailHtml', () => {
 
     expect(html).toContain('data:image/png;base64,AAAA');
   });
+
+  it('strips raw-text payloads that can smuggle executable markup', () => {
+    const html = sanitizeEmailHtml('<p>Hi</p><xmp><img src=x onerror=alert(1)></xmp>');
+
+    expect(html).toContain('<p>Hi</p>');
+    expect(html).not.toContain('onerror');
+    expect(html).not.toContain('<xmp>');
+  });
 });

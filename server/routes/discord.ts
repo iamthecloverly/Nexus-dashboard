@@ -6,6 +6,7 @@ import { clearAppCookie, getSignedCookie, setSignedCookie } from '../lib/cookies
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
 import { discordWebhookSchema, discordSendSchema } from '../lib/validation.ts';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout.ts';
 
 export const discordRouter = express.Router();
 
@@ -52,10 +53,11 @@ discordRouter.post('/send', discordSendLimiter, async (req, res) => {
   const { content } = validation.data;
 
   try {
-    const response = await fetch(webhook, {
+    const response = await fetchWithTimeout(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
+      timeoutMs: 10_000,
     });
     if (!response.ok) return res.status(response.status).json({ error: 'Discord webhook error' });
     logger.info('Discord message sent');

@@ -133,10 +133,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/gmail/messages/${id}/mark-read?${accountParam(accountId)}`, {
+        const res = await fetchWithTimeout(`/api/gmail/messages/${id}/mark-read?${accountParam(accountId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
           body: JSON.stringify({ read: originalUnread }),
+          timeoutMs: 15_000,
         });
         if (res.ok) return; // success — optimistic state is correct
         const msg = await readApiErrorMessage(res);
@@ -182,9 +183,10 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/gmail/messages/${id}/archive?${accountParam(accountId)}`, {
+        const res = await fetchWithTimeout(`/api/gmail/messages/${id}/archive?${accountParam(accountId)}`, {
           method: 'POST',
           headers: csrfHeaders(),
+          timeoutMs: 15_000,
         });
         if (res.ok) return;
         const msg = await readApiErrorMessage(res);
@@ -222,9 +224,10 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/gmail/messages/${id}/trash?${accountParam(accountId)}`, {
+        const res = await fetchWithTimeout(`/api/gmail/messages/${id}/trash?${accountParam(accountId)}`, {
           method: 'POST',
           headers: csrfHeaders(),
+          timeoutMs: 15_000,
         });
         if (res.ok) return;
         const msg = await readApiErrorMessage(res);
@@ -265,10 +268,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
     Promise.all(
       unreadIds.map(id =>
-        fetch(`/api/gmail/messages/${id}/mark-read?${accountParam(accountId)}`, {
+        fetchWithTimeout(`/api/gmail/messages/${id}/mark-read?${accountParam(accountId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
           body: JSON.stringify({ read: true }),
+          timeoutMs: 15_000,
         }),
       ),
     )

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import type { SetViewFn } from '../config/navigation';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 interface IntegrationStatus {
   googlePrimary: boolean;
@@ -67,9 +68,9 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   const checkAllStatuses = async () => {
     setIsLoading(true);
     const [accountsRes, githubRes, discordRes] = await Promise.allSettled([
-      fetch('/api/auth/google/accounts').then(r => r.json()),
-      fetch('/api/github/status').then(r => r.json()).catch(() => ({ connected: false })),
-      fetch('/api/discord/status').then(r => r.json()).catch(() => ({ connected: false })),
+      fetchWithTimeout('/api/auth/google/accounts', { timeoutMs: 8_000 }).then(r => r.json()),
+      fetchWithTimeout('/api/github/status', { timeoutMs: 8_000 }).then(r => r.json()).catch(() => ({ connected: false })),
+      fetchWithTimeout('/api/discord/status', { timeoutMs: 8_000 }).then(r => r.json()).catch(() => ({ connected: false })),
     ]);
     type GoogleAccountsResponse = { accounts?: Array<{ accountId: 'primary' | 'secondary'; connected?: boolean; email?: string | null }> };
     const accounts = accountsRes.status === 'fulfilled' ? ((accountsRes.value as GoogleAccountsResponse).accounts ?? []) : [];
@@ -91,7 +92,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   // Google Calendar
   const handleConnectGoogle = async (accountId: 'primary' | 'secondary') => {
     try {
-      const response = await fetch(`/api/auth/google/url?accountId=${encodeURIComponent(accountId)}`);
+      const response = await fetchWithTimeout(`/api/auth/google/url?accountId=${encodeURIComponent(accountId)}`, { timeoutMs: 10_000 });
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.error || 'Failed to get auth URL');
@@ -107,14 +108,14 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
 
   const handleDisconnectGoogle = async (accountId: 'primary' | 'secondary') => {
     if (accountId === 'secondary') {
-      await fetch('/api/auth/google/disconnect?accountId=secondary', { method: 'POST', headers: csrfHeaders() });
+      await fetchWithTimeout('/api/auth/google/disconnect?accountId=secondary', { method: 'POST', headers: csrfHeaders(), timeoutMs: 10_000 });
       setStatus(s => ({ ...s, googleSecondary: false }));
       setGoogleSecondaryEmail(null);
       showToast('Secondary Google account disconnected', 'info');
       return;
     }
     // Primary (existing behavior)
-    await fetch('/api/auth/disconnect', { method: 'POST', headers: csrfHeaders() });
+    await fetchWithTimeout('/api/auth/disconnect', { method: 'POST', headers: csrfHeaders(), timeoutMs: 10_000 });
     setStatus(s => ({ ...s, googlePrimary: false }));
     setGooglePrimaryEmail(null);
     showToast('Google disconnected', 'info');
@@ -126,10 +127,11 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
     setGithubSaving(true);
     setGithubError('');
     try {
-      const res = await fetch('/api/github/token', {
+      const res = await fetchWithTimeout('/api/github/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ token: githubPat }),
+        timeoutMs: 10_000,
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
       setStatus(s => ({ ...s, github: true }));
@@ -144,7 +146,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   };
 
   const handleDisconnectGithub = async () => {
-    await fetch('/api/github/disconnect', { method: 'POST', headers: csrfHeaders() });
+    await fetchWithTimeout('/api/github/disconnect', { method: 'POST', headers: csrfHeaders(), timeoutMs: 10_000 });
     setStatus(s => ({ ...s, github: false }));
     setShowGithubInput(false);
     showToast('GitHub disconnected', 'info');
@@ -156,10 +158,11 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
     setDiscordSaving(true);
     setDiscordError('');
     try {
-      const res = await fetch('/api/discord/webhook', {
+      const res = await fetchWithTimeout('/api/discord/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ url: discordUrl }),
+        timeoutMs: 10_000,
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
       setStatus(s => ({ ...s, discord: true }));
@@ -174,7 +177,7 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   };
 
   const handleDisconnectDiscord = async () => {
-    await fetch('/api/discord/disconnect', { method: 'POST', headers: csrfHeaders() });
+    await fetchWithTimeout('/api/discord/disconnect', { method: 'POST', headers: csrfHeaders(), timeoutMs: 10_000 });
     setStatus(s => ({ ...s, discord: false }));
     setShowDiscordInput(false);
     showToast('Discord disconnected', 'info');
@@ -183,10 +186,11 @@ export default function Integrations({ setCurrentView }: { setCurrentView: SetVi
   const handleTestDiscord = async () => {
     setDiscordTesting(true);
     try {
-      const res = await fetch('/api/discord/send', {
+      const res = await fetchWithTimeout('/api/discord/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ content: '✅ Nexus Dashboard is connected!' }),
+        timeoutMs: 15_000,
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed');
       showToast('Test message sent!', 'success');

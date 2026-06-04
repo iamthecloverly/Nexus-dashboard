@@ -6,6 +6,7 @@ import { cacheGet, tokenKey } from '../lib/apiCache.ts';
 import { logger } from '../lib/logger.ts';
 import { encrypt, safeDecrypt } from '../lib/encryption.ts';
 import { githubTokenSchema } from '../lib/validation.ts';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout.ts';
 
 // Cache GitHub notifications for 90 s — client already polls every 5 min,
 // this just prevents duplicate calls on page load / tab focus.
@@ -50,12 +51,13 @@ githubRouter.get('/notifications', async (req, res) => {
     const cacheKey = tokenKey(token, 'github:notifications');
 
     const result = await cacheGet(cacheKey, GITHUB_TTL_MS, async () => {
-      const response = await fetch('https://api.github.com/notifications?per_page=15&all=false', {
+      const response = await fetchWithTimeout('https://api.github.com/notifications?per_page=15&all=false', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'NexusDashboard/1.0',
         },
+        timeoutMs: 10_000,
       });
       if (response.status === 401) throw Object.assign(new Error('Invalid GitHub token'), { status: 401 });
       if (!response.ok) throw Object.assign(new Error('GitHub API error'), { status: response.status });
