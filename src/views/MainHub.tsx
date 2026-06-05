@@ -62,7 +62,7 @@ function ClockDisplay() {
   }).format(now), [now]);
   return (
     <>
-      <h1 className="text-foreground font-heading tracking-tight leading-none" style={{ fontSize: 'clamp(2.35rem,4vw,3.35rem)' }}>
+      <h1 className="text-foreground font-heading tracking-tight leading-none [font-variant-numeric:tabular-nums]" style={{ fontSize: 'clamp(2.35rem,4vw,3.35rem)' }}>
         {time}
         <span className="text-primary/45 ml-1 text-[36%]">{seconds}</span>
       </h1>
@@ -109,10 +109,10 @@ function MainHubWeatherTile() {
   const humidity = data?.humidity != null ? `${Math.round(data.humidity)}%` : '--';
 
   return (
-    <section className="w-full rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 shadow-inner md:w-[250px]" aria-label="Weather">
-      <div className="flex items-center gap-3">
+    <section className="w-full rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 shadow-inner md:w-[220px]" aria-label="Weather">
+      <div className="flex items-center gap-2.5">
         <span
-          className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[22px] text-primary"
+          className="material-symbols-outlined flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-[20px] text-primary"
           aria-hidden="true"
         >
           {iconName}
@@ -121,7 +121,7 @@ function MainHubWeatherTile() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Weather</p>
-              <p className="font-heading text-lg text-foreground">{temperature}</p>
+              <p className="font-heading text-base text-foreground">{temperature}</p>
             </div>
             <button
               type="button"
@@ -134,7 +134,7 @@ function MainHubWeatherTile() {
               </span>
             </button>
           </div>
-          <div className="mt-0.5 flex items-center gap-3 text-[11px] text-text-muted">
+          <div className="mt-0.5 flex items-center gap-2.5 text-[11px] text-text-muted">
             <span>Feels {feelsLike}</span>
             <span className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined !text-[16px]" aria-hidden="true">humidity_percentage</span>
@@ -273,6 +273,39 @@ type PrimaryNextAction = {
   title: string;
   detail: string;
   cta: string;
+};
+
+const PRIMARY_ACTION_TONE: Record<PrimaryNextActionKind, { card: string; icon: string; badge: string; rail: string }> = {
+  ai: {
+    card: 'border-primary/[0.35] bg-primary/[0.09] shadow-[0_18px_48px_rgba(56,189,248,0.11),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-primary/50 hover:bg-primary/[0.12]',
+    icon: 'bg-primary/[0.16] text-primary ring-primary/20',
+    badge: 'border-primary/25 bg-primary/10 text-primary',
+    rail: 'from-primary/70 via-primary/[0.22] to-transparent',
+  },
+  task: {
+    card: 'border-amber-300/[0.26] bg-amber-300/[0.075] shadow-[0_18px_48px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-amber-300/[0.42] hover:bg-amber-300/[0.105]',
+    icon: 'bg-amber-300/[0.14] text-amber-200 ring-amber-300/20',
+    badge: 'border-amber-300/25 bg-amber-300/10 text-amber-200',
+    rail: 'from-amber-300/[0.65] via-amber-300/[0.18] to-transparent',
+  },
+  calendar: {
+    card: 'border-white/[0.12] bg-white/[0.045] shadow-[0_18px_48px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-primary/[0.32] hover:bg-white/[0.06]',
+    icon: 'bg-primary/[0.12] text-primary ring-primary/[0.16]',
+    badge: 'border-white/10 bg-white/[0.045] text-text-muted',
+    rail: 'from-primary/50 via-primary/[0.14] to-transparent',
+  },
+  email: {
+    card: 'border-amber-300/[0.22] bg-amber-300/[0.06] shadow-[0_18px_48px_rgba(251,191,36,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-amber-300/[0.36] hover:bg-amber-300/[0.09]',
+    icon: 'bg-amber-300/[0.13] text-amber-200 ring-amber-300/[0.18]',
+    badge: 'border-amber-300/[0.24] bg-amber-300/10 text-amber-200',
+    rail: 'from-amber-300/[0.58] via-amber-300/[0.16] to-transparent',
+  },
+  clear: {
+    card: 'border-emerald-300/[0.18] bg-emerald-300/[0.045] shadow-[0_18px_48px_rgba(16,185,129,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-emerald-300/30 hover:bg-emerald-300/[0.065]',
+    icon: 'bg-emerald-300/[0.12] text-emerald-200 ring-emerald-300/[0.16]',
+    badge: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200',
+    rail: 'from-emerald-300/[0.58] via-emerald-300/[0.16] to-transparent',
+  },
 };
 
 type AttentionCounts = {
@@ -494,6 +527,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState('');
   const [showTaskMenu, setShowTaskMenu] = useState(false);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
   const taskMenuRef = useRef<HTMLDivElement>(null);
   const calendarMenuRef = useRef<HTMLDivElement>(null);
 
@@ -551,6 +585,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     firstFollowUpSender: followUpEmails[0]?.sender,
     now: currentTime,
   }), [activeTasks, currentTime, followUpEmails, pendingCount, scheduleGroups.displayable, unreadCount]);
+  const primaryActionTone = PRIMARY_ACTION_TONE[primaryNextAction.kind];
+  const primaryActionStatus = primaryNextAction.kind === 'clear' ? 'Clear' : 'Needs attention';
+  const hasActionCenterItems = followUpEmails.length > 0 || calendarConflicts.length > 0 || deferredTasks.length > 0;
 
   /** Next calendar line for digest (upcoming / now / all-day). */
   const digestNextEventSnippet = useMemo(() => {
@@ -1109,10 +1146,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   return (
     <div className="relative z-10 flex h-screen flex-1 flex-col overflow-hidden px-5 py-6 md:px-6 xl:px-7 w-full max-w-none">
-      <header className="glass-panel mb-3 flex-shrink-0 overflow-hidden px-4 py-3">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(210px,0.75fr)_minmax(360px,1.4fr)_auto] lg:items-center">
+      <header className="glass-panel dashboard-hero mb-3 flex-shrink-0 overflow-hidden px-4 py-3.5 md:px-5 md:py-4">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(190px,0.58fr)_minmax(420px,1.62fr)_minmax(200px,0.58fr)] lg:items-center">
           <div className="flex min-w-0 items-end justify-between gap-4 lg:block">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <ClockDisplay />
             </div>
             <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] lg:hidden ${
@@ -1130,41 +1167,35 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           <button
             type="button"
             onClick={handlePrimaryNextAction}
-            className={`group flex min-w-0 items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-              primaryNextAction.kind === 'ai'
-                ? 'border-primary/30 bg-primary/[0.08] hover:bg-primary/[0.12] motion-safe:animate-pulse'
-                : primaryNextAction.kind === 'clear'
-                  ? 'border-white/10 bg-white/[0.035] hover:bg-white/[0.055]'
-                  : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.06]'
-            }`}
+            className={`group relative flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border px-4 py-4 text-left transition-[background-color,border-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${primaryActionTone.card}`}
           >
-            <span className={`material-symbols-outlined flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[22px] ${
-              primaryNextAction.kind === 'ai'
-                ? 'bg-primary/15 text-primary'
-                : primaryNextAction.kind === 'clear'
-                  ? 'bg-white/[0.055] text-text-muted'
-                  : 'bg-white/[0.055] text-foreground/85'
-            }`} aria-hidden="true">
+            <span className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r ${primaryActionTone.rail}`} aria-hidden="true" />
+            <span className={`material-symbols-outlined flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[24px] ring-1 ${primaryActionTone.icon}`} aria-hidden="true">
               {primaryNextAction.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">
-                {primaryNextAction.label}
-              </span>
-              <span className="mt-0.5 flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-semibold text-foreground">{primaryNextAction.title}</span>
-                <span className="hidden shrink-0 text-[11px] font-semibold text-primary group-hover:underline sm:inline">
-                  {primaryNextAction.cta}
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">
+                  {primaryNextAction.label}
+                </span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${primaryActionTone.badge}`}>
+                  {primaryActionStatus}
                 </span>
               </span>
-              <span className="mt-0.5 block truncate text-xs text-text-muted">{primaryNextAction.detail}</span>
+              <span className="mt-1 block truncate font-heading text-lg font-semibold text-foreground md:text-xl">{primaryNextAction.title}</span>
+              <span className="mt-1 block truncate text-sm text-text-muted">{primaryNextAction.detail}</span>
             </span>
-            <span className="material-symbols-outlined shrink-0 text-[18px] text-text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true">
-              chevron_right
+            <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors group-hover:border-white/15 group-hover:bg-white/[0.07] sm:inline-flex">
+              {primaryNextAction.cta}
+              <span className="material-symbols-outlined !text-[16px] transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+                arrow_forward
+              </span>
             </span>
           </button>
 
-          <MainHubWeatherTile />
+          <div className="lg:justify-self-end">
+            <MainHubWeatherTile />
+          </div>
         </div>
       </header>
 
@@ -1273,56 +1304,94 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                   {followUpEmails.length + calendarConflicts.length + deferredTasks.length}
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('Communications')}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Follow-ups</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${followUpEmails.length > 0 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
-                      {followUpEmails.length > 0 ? `${followUpEmails.length} waiting` : 'Clear'}
+              {hasActionCenterItems ? (
+                <div className="grid grid-cols-1 gap-2">
+                  {followUpEmails.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentView('Communications')}
+                      className="rounded-lg border border-amber-300/25 bg-amber-300/[0.065] px-3 py-2.5 text-left transition-colors hover:border-amber-300/35 hover:bg-amber-300/[0.095] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Follow-ups</p>
+                        <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                          {followUpEmails.length} waiting
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between gap-3">
+                        <p className="min-w-0 truncate text-sm font-medium text-foreground">{followUpEmails[0]?.sender}</p>
+                        <p className="shrink-0 text-xs font-semibold text-amber-200">Review</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {calendarConflicts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSchedule(true)}
+                      className="rounded-lg border border-amber-300/25 bg-amber-300/[0.065] px-3 py-2.5 text-left transition-colors hover:border-amber-300/35 hover:bg-amber-300/[0.095] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Conflicts</p>
+                        <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                          {calendarConflicts.length} found
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between gap-3">
+                        <p className="min-w-0 truncate text-sm font-medium text-foreground">{calendarConflicts[0]?.[0].title}</p>
+                        <p className="shrink-0 text-xs font-semibold text-amber-200">View</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {deferredTasks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={scrollToTasks}
+                      className="rounded-lg border border-primary/25 bg-primary/[0.07] px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.105] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Deferred</p>
+                        <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          {deferredTasks.length} later
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between gap-3">
+                        <p className="min-w-0 truncate text-sm font-medium text-foreground">{deferredTasks[0]?.title}</p>
+                        <p className="shrink-0 text-xs font-semibold text-primary">Review</p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-emerald-300/[0.16] bg-emerald-300/[0.04] px-3 py-3">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-300/10 text-[18px] text-emerald-200" aria-hidden="true">
+                      done_all
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">No action items</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-text-muted">Follow-ups, conflicts, and deferred tasks are quiet.</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentView('Communications')}
+                          className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] font-semibold text-text-muted transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                          Inbox
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowSchedule(true)}
+                          className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] font-semibold text-text-muted transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                          Schedule
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
-                    <p className="shrink-0 text-xs text-primary">{followUpEmails.length > 0 ? 'Review' : 'Open'}</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSchedule(true)}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Conflicts</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${calendarConflicts.length > 0 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
-                      {calendarConflicts.length > 0 ? `${calendarConflicts.length} found` : 'Clear'}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
-                    <p className="shrink-0 text-xs text-primary">View</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={scrollToTasks}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Deferred</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${deferredTasks.length > 0 ? 'border-primary/25 bg-primary/10 text-primary' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
-                      {deferredTasks.length > 0 ? `${deferredTasks.length} later` : 'None'}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
-                    <p className="shrink-0 text-xs text-primary">{deferredTasks.length > 0 ? 'Review' : 'Open'}</p>
-                  </div>
-                </button>
-              </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -1691,23 +1760,46 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               )}
               {completedTasks.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border-glass">
-                  {completedTasks.map(task => (
-                    <div key={task.id} className="group/done flex items-start gap-3 p-3 rounded-xl opacity-40 hover:opacity-70 transition-opacity">
-                      <button
-                        onClick={() => toggleTask(task.id)}
-                        role="checkbox"
-                        aria-checked={true}
-                        aria-label={`Mark incomplete: ${task.title}`}
-                        className="mt-1 w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center text-primary cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                      >
-                        <span className="material-symbols-outlined !text-[14px] !font-bold" aria-hidden="true">check</span>
-                      </button>
-                      <span className="text-sm text-text-muted line-through flex-1">{task.title}</span>
-                      <button onClick={() => deleteTask(task.id)} aria-label={`Delete task: ${task.title}`} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-rose-400 flex-shrink-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
-                        <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
-                      </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletedTasks(value => !value)}
+                    aria-expanded={showCompletedTasks}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-left text-xs text-text-muted transition-colors hover:border-white/15 hover:bg-white/[0.045] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className="material-symbols-outlined !text-[16px]" aria-hidden="true">done_all</span>
+                      Completed
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono">
+                        {completedTasks.length}
+                      </span>
+                      <span className={`material-symbols-outlined !text-[16px] transition-transform ${showCompletedTasks ? 'rotate-180' : ''}`} aria-hidden="true">
+                        expand_more
+                      </span>
+                    </span>
+                  </button>
+                  {showCompletedTasks && (
+                    <div className="mt-2 flex flex-col gap-1">
+                      {completedTasks.map(task => (
+                        <div key={task.id} className="group/done flex items-start gap-3 p-3 rounded-xl opacity-50 transition-opacity hover:bg-white/[0.025] hover:opacity-85">
+                          <button
+                            onClick={() => toggleTask(task.id)}
+                            role="checkbox"
+                            aria-checked={true}
+                            aria-label={`Mark incomplete: ${task.title}`}
+                            className="mt-1 w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center text-primary cursor-pointer flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                          >
+                            <span className="material-symbols-outlined !text-[14px] !font-bold" aria-hidden="true">check</span>
+                          </button>
+                          <span className="min-w-0 flex-1 truncate text-sm text-text-muted line-through">{task.title}</span>
+                          <button onClick={() => deleteTask(task.id)} aria-label={`Delete task: ${task.title}`} className="opacity-0 group-hover/done:opacity-100 transition-opacity text-text-muted hover:text-rose-400 flex-shrink-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+                            <span className="material-symbols-outlined !text-sm" aria-hidden="true">close</span>
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -1722,7 +1814,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] p-5 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             aria-label="Open email inbox"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none"></div>
+            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r pointer-events-none ${
+              gmailServerError ? 'from-rose-300/55 via-rose-300/15 to-transparent' : 'from-primary/45 via-primary/12 to-transparent'
+            }`}></div>
             {unreadCount > 0 && (
               <div className="absolute top-5 right-5 w-2 h-2">
                 <span className="animate-pulse motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75" aria-hidden="true"></span>
@@ -1733,7 +1827,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">mail</span>
               Gmail Inbox
             </h2>
-            <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+            <div className={`rounded-lg border p-4 ${
+              gmailServerError
+                ? 'border-rose-300/24 bg-rose-300/[0.06]'
+                : 'border-white/10 bg-white/[0.025]'
+            }`}>
               {gmailConnected ? (
                 <>
                   <div className="flex items-center justify-between gap-3">
@@ -1749,7 +1847,18 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                   )}
                 </>
               ) : gmailServerError ? (
-                <p className="text-xs text-text-muted group-hover/box:text-foreground transition-colors">Server unreachable.</p>
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-300/12 text-[18px] text-rose-200" aria-hidden="true">
+                    error
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Server unreachable</p>
+                    <p className="mt-1 text-xs leading-relaxed text-text-muted group-hover/box:text-foreground transition-colors">
+                      Open Communications to retry or reconnect Gmail.
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold text-rose-200">Open Communications</p>
+                  </div>
+                </div>
               ) : (
                 <p className="text-xs text-text-muted group-hover/box:text-foreground transition-colors">Connect Gmail to see your inbox.</p>
               )}

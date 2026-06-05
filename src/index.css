@@ -40,10 +40,27 @@
 
   body {
     @apply min-h-screen bg-background-dark text-foreground antialiased;
+    overflow-x: hidden;
   }
 
   ::selection {
     @apply bg-primary/25 text-white;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  @supports (text-wrap: pretty) {
+    h1,
+    h2,
+    h3 {
+      text-wrap: pretty;
+    }
   }
 }
 
@@ -65,6 +82,15 @@
 
   .glass-panel-hover {
     @apply hover:bg-white/[0.04] hover:border-white/15 transition-colors duration-300;
+  }
+
+  .dashboard-hero {
+    background:
+      linear-gradient(110deg, rgba(56, 189, 248, 0.09) 0%, rgba(255, 255, 255, 0.025) 34%, rgba(255, 255, 255, 0.018) 100%),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.016) 48%, rgba(6, 7, 13, 0.34) 100%);
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.055);
   }
 
   .glass-search {

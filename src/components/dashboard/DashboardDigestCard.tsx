@@ -50,6 +50,41 @@ function briefErrorFromResponse(status: number, data: { code?: unknown; error?: 
     : `Failed to generate brief${status ? ` (HTTP ${status})` : ''}`;
 }
 
+type ReadinessTone = 'active' | 'warning' | 'error' | 'clear' | 'quiet';
+
+const READINESS_TONE_CLASS: Record<ReadinessTone, { item: string; icon: string; value: string; cta: string }> = {
+  active: {
+    item: 'border-primary/[0.28] bg-primary/[0.07] hover:border-primary/40 hover:bg-primary/[0.105]',
+    icon: 'bg-primary/[0.14] text-primary',
+    value: 'text-primary',
+    cta: 'text-primary',
+  },
+  warning: {
+    item: 'border-amber-300/[0.24] bg-amber-300/[0.065] hover:border-amber-300/[0.36] hover:bg-amber-300/[0.095]',
+    icon: 'bg-amber-300/[0.13] text-amber-200',
+    value: 'text-amber-200',
+    cta: 'text-amber-200',
+  },
+  error: {
+    item: 'border-rose-300/[0.24] bg-rose-300/[0.065] hover:border-rose-300/[0.36] hover:bg-rose-300/[0.095]',
+    icon: 'bg-rose-300/[0.13] text-rose-200',
+    value: 'text-rose-200',
+    cta: 'text-rose-200',
+  },
+  clear: {
+    item: 'border-emerald-300/[0.16] bg-emerald-300/[0.04] hover:border-emerald-300/[0.24] hover:bg-emerald-300/[0.06]',
+    icon: 'bg-emerald-300/10 text-emerald-200',
+    value: 'text-emerald-200',
+    cta: 'text-emerald-200',
+  },
+  quiet: {
+    item: 'border-white/10 bg-white/[0.022] hover:border-white/[0.14] hover:bg-white/[0.045]',
+    icon: 'bg-white/[0.055] text-text-muted',
+    value: 'text-foreground',
+    cta: 'text-primary',
+  },
+};
+
 export function DashboardDigestCard({
   setCurrentView,
   pendingAiSuggestionCount,
@@ -74,6 +109,55 @@ export function DashboardDigestCard({
   const showCalendarRow = calendarConnected && nextEventSnippet != null;
   const showTasksRow = remainingTasks > 0;
   const showDigestMeta = aiConfigured || showGithub || showDiscord;
+  const readinessSignalCount = [
+    pendingAiSuggestionCount > 0,
+    remainingTasks > 0,
+    gmailServerError || !gmailConnected || unreadCount > 0,
+    !calendarConnected,
+    githubUnreadCount > 0,
+  ].filter(Boolean).length;
+  const readinessItems = [
+    {
+      id: 'ai',
+      icon: 'auto_awesome',
+      label: 'AI Review',
+      value: pendingAiSuggestionCount > 0 ? `${pendingAiSuggestionCount} pending` : 'Clear',
+      detail: pendingAiSuggestionCount > 0 ? 'Review before adding tasks.' : 'No extracted tasks waiting.',
+      tone: pendingAiSuggestionCount > 0 ? 'active' : 'quiet',
+      cta: pendingAiSuggestionCount > 0 ? 'Review' : '',
+      onClick: pendingAiSuggestionCount > 0 ? onOpenAiReview : undefined,
+    },
+    {
+      id: 'tasks',
+      icon: 'task_alt',
+      label: 'Tasks',
+      value: showTasksRow ? `${remainingTasks} active` : 'Clear',
+      detail: showTasksRow ? 'Open the active list.' : 'No active tasks right now.',
+      tone: showTasksRow ? 'warning' : 'clear',
+      cta: showTasksRow ? 'Open' : 'Add',
+      onClick: onOpenTasks,
+    },
+    {
+      id: 'gmail',
+      icon: gmailServerError ? 'error' : 'mark_email_unread',
+      label: 'Gmail',
+      value: gmailServerError ? 'Server issue' : gmailConnected ? (unreadCount > 0 ? `${unreadCount} unread` : 'Clear') : 'Connect',
+      detail: gmailServerError ? 'Open Communications to retry.' : gmailConnected ? 'Inbox triage status.' : 'Connect Gmail for inbox triage.',
+      tone: gmailServerError ? 'error' : unreadCount > 0 || !gmailConnected ? 'warning' : 'clear',
+      cta: gmailServerError ? 'Retry' : unreadCount > 0 ? 'Triage' : !gmailConnected ? 'Connect' : 'Open',
+      onClick: () => setCurrentView(gmailConnected || gmailServerError ? 'Communications' : 'Integrations'),
+    },
+    {
+      id: 'calendar',
+      icon: calendarConnected ? 'event_available' : 'event_busy',
+      label: 'Calendar',
+      value: showCalendarRow ? 'Next up' : calendarConnected ? 'Clear' : 'Connect',
+      detail: showCalendarRow ? nextEventSnippet : calendarConnected ? 'No schedule pressure.' : 'Connect Google Calendar.',
+      tone: !calendarConnected ? 'warning' : showCalendarRow ? 'active' : 'clear',
+      cta: calendarConnected ? 'View' : 'Connect',
+      onClick: calendarConnected ? onOpenSchedule : () => setCurrentView('Integrations'),
+    },
+  ] as const;
 
   // AI daily brief — cached in localStorage per-day so tab switches don't waste tokens.
   const [brief, setBrief] = useState<string | null>(() => {
@@ -136,7 +220,7 @@ export function DashboardDigestCard({
     if (!aiConfigured) return null;
 
     return (
-      <div className="flex min-w-0 items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
+      <div className="flex min-w-0 items-start gap-3 rounded-lg border border-white/10 bg-white/[0.022] px-3 py-2.5">
         <span className="material-symbols-outlined mt-0.5 shrink-0 text-[19px] text-primary/80" aria-hidden="true">
           auto_awesome
         </span>
@@ -185,123 +269,109 @@ export function DashboardDigestCard({
 
   return (
     <section
-      className="glass-panel col-span-full relative flex min-h-0 flex-col gap-2.5 overflow-hidden p-3"
+      className="glass-panel col-span-full relative flex min-h-0 flex-col gap-3 overflow-hidden p-3.5 md:p-4"
       aria-label="Dashboard digest"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent" />
 
-      {allClear ? (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(280px,0.65fr)_minmax(420px,1fr)] xl:items-start">
-          <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
-            <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[20px] text-primary" aria-hidden="true">
-              verified
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Today&apos;s status</p>
-              <p className="mt-0.5 text-sm font-semibold text-foreground">All systems clear</p>
-              <p className="mt-0.5 truncate text-xs text-text-muted">No AI suggestions, task pressure, inbox triage, or schedule conflicts.</p>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,0.58fr)_minmax(0,1.42fr)] xl:items-stretch">
+        <div className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-3 ${
+          allClear
+            ? 'border-emerald-300/18 bg-emerald-300/[0.04]'
+            : 'border-white/10 bg-white/[0.025]'
+        }`}>
+          <span className={`material-symbols-outlined flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[21px] ${
+            allClear ? 'bg-emerald-300/10 text-emerald-200' : 'bg-primary/12 text-primary'
+          }`} aria-hidden="true">
+            {allClear ? 'verified' : 'radar'}
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Today&apos;s Readiness</p>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                allClear ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200' : 'border-amber-300/24 bg-amber-300/10 text-amber-200'
+              }`}>
+                {allClear ? 'Clear' : `${readinessSignalCount} signal${readinessSignalCount === 1 ? '' : 's'}`}
+              </span>
             </div>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {allClear ? 'Ready enough to focus' : 'Work cues are grouped by urgency'}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-text-muted">
+              {allClear ? 'Tasks, inbox, AI, and schedule look quiet.' : 'Clear items stay muted so active ones stand out.'}
+            </p>
           </div>
-          {renderBrief()}
         </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <button
-              type="button"
-              onClick={onOpenAiReview}
-              disabled={pendingAiSuggestionCount === 0}
-              className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default ${
-                pendingAiSuggestionCount > 0
-                  ? 'border-primary/30 bg-primary/[0.08] hover:bg-primary/[0.12] motion-safe:animate-pulse'
-                  : 'border-white/10 bg-white/[0.025] opacity-80'
-              }`}
-            >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-[20px] text-primary" aria-hidden="true">
-                auto_awesome
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">AI Review</span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
-                  {pendingAiSuggestionCount > 0 ? `${pendingAiSuggestionCount} pending` : 'Queue clear'}
-                </span>
-              </span>
-            </button>
 
-            <button
-              type="button"
-              onClick={onOpenTasks}
-              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
-                task_alt
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Tasks</span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
-                  {showTasksRow ? `${remainingTasks} active` : 'Task list clear'}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {readinessItems.map(item => {
+            const tone = READINESS_TONE_CLASS[item.tone];
+            const body = (
+              <>
+                <span className={`material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[20px] ${tone.icon}`} aria-hidden="true">
+                  {item.icon}
                 </span>
-              </span>
-            </button>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">{item.label}</span>
+                  <span className={`mt-0.5 block truncate text-sm font-semibold ${tone.value}`}>
+                    {item.value}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-text-muted">{item.detail}</span>
+                </span>
+                {item.cta && (
+                  <span className={`shrink-0 text-[11px] font-semibold ${tone.cta}`}>
+                    {item.cta}
+                  </span>
+                )}
+              </>
+            );
 
-            <button
-              type="button"
-              onClick={() => setCurrentView('Communications')}
-              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
-                mark_email_unread
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Gmail</span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
-                  {gmailServerError ? 'Server issue' : gmailConnected ? (unreadCount > 0 ? `${unreadCount} unread` : 'Inbox clear') : 'Connect Gmail'}
-                </span>
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenSchedule}
-              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
-                event_available
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Calendar</span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
-                  {showCalendarRow ? nextEventSnippet : calendarConnected ? 'Calendar clear' : 'Connect calendar'}
-                </span>
-              </span>
-            </button>
-          </div>
-          {showDigestMeta && (
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
-              {renderBrief()}
-              {(showGithub || showDiscord) && (
-                <div className="flex flex-wrap gap-2">
-                  {showGithub && (
-                    <button
-                      type="button"
-                      onClick={() => setCurrentView('Integrations')}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                    >
-                      <GithubMark className="h-3.5 w-3.5" />
-                      GitHub {githubUnreadCount}
-                    </button>
-                  )}
-                  {showDiscord && (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted">
-                      <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">chat_bubble</span>
-                      Discord ready
-                    </span>
-                  )}
+            if (!item.onClick) {
+              return (
+                <div key={item.id} className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 ${tone.item}`}>
+                  {body}
                 </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={item.onClick}
+                className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tone.item}`}
+              >
+                {body}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {showDigestMeta && (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
+          {renderBrief()}
+          {(showGithub || showDiscord) && (
+            <div className="flex flex-wrap gap-2">
+              {showGithub && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('Integrations')}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <GithubMark className="h-3.5 w-3.5" />
+                  GitHub {githubUnreadCount}
+                </button>
+              )}
+              {showDiscord && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted">
+                  <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">chat_bubble</span>
+                  Discord ready
+                </span>
               )}
             </div>
           )}
-        </>
+        </div>
       )}
     </section>
   );
