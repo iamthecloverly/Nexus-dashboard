@@ -62,11 +62,11 @@ function ClockDisplay() {
   }).format(now), [now]);
   return (
     <>
-      <h1 className="text-foreground font-heading tracking-tight drop-shadow-lg leading-none" style={{ fontSize: 'clamp(3rem,6vw,4.5rem)' }}>
+      <h1 className="text-foreground font-heading tracking-tight leading-none" style={{ fontSize: 'clamp(2.35rem,4vw,3.35rem)' }}>
         {time}
-        <span className="text-primary/40 ml-1 text-[40%]">{seconds}</span>
+        <span className="text-primary/45 ml-1 text-[36%]">{seconds}</span>
       </h1>
-      <p className="text-text-muted text-sm font-medium tracking-[0.2em] uppercase">{date}</p>
+      <p className="text-text-muted/95 text-[11px] font-medium tracking-[0.18em] uppercase">{date}</p>
     </>
   );
 }
@@ -109,10 +109,10 @@ function MainHubWeatherTile() {
   const humidity = data?.humidity != null ? `${Math.round(data.humidity)}%` : '--';
 
   return (
-    <section className="w-full rounded-xl border border-white/10 bg-white/[0.035] p-4 shadow-inner md:w-[300px]" aria-label="Weather">
-      <div className="flex items-start gap-3">
+    <section className="w-full rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 shadow-inner md:w-[250px]" aria-label="Weather">
+      <div className="flex items-center gap-3">
         <span
-          className="material-symbols-outlined flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[28px] text-primary"
+          className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[22px] text-primary"
           aria-hidden="true"
         >
           {iconName}
@@ -120,21 +120,21 @@ function MainHubWeatherTile() {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">Weather</p>
-              <p className="mt-1 font-heading text-2xl text-foreground">{temperature}</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Weather</p>
+              <p className="font-heading text-lg text-foreground">{temperature}</p>
             </div>
             <button
               type="button"
               onClick={refresh}
               aria-label="Refresh weather"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-white/[0.08] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-white/[0.08] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <span className={`material-symbols-outlined !text-[18px] ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">
+              <span className={`material-symbols-outlined !text-[17px] ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">
                 refresh
               </span>
             </button>
           </div>
-          <div className="mt-2 flex items-center gap-3 text-xs text-text-muted">
+          <div className="mt-0.5 flex items-center gap-3 text-[11px] text-text-muted">
             <span>Feels {feelsLike}</span>
             <span className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined !text-[16px]" aria-hidden="true">humidity_percentage</span>
@@ -144,7 +144,7 @@ function MainHubWeatherTile() {
           <button
             type="button"
             onClick={useMyLocation}
-            className="mt-2 text-[10px] font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+            className="mt-1 text-[10px] font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
           >
             {error ? 'Retry location' : 'My location'}
           </button>
@@ -263,6 +263,111 @@ const TIMELINE_STATUS_CLASS: Record<TodayTimelineItem['status'], string> = {
   done: 'border-white/10 bg-white/[0.025] text-text-muted/70',
   attention: 'border-amber-300/25 bg-amber-300/10 text-amber-200',
 };
+
+type PrimaryNextActionKind = 'ai' | 'task' | 'calendar' | 'email' | 'clear';
+
+type PrimaryNextAction = {
+  kind: PrimaryNextActionKind;
+  icon: string;
+  label: string;
+  title: string;
+  detail: string;
+  cta: string;
+};
+
+type AttentionCounts = {
+  pendingAiSuggestionCount: number;
+  remainingTasks: number;
+  unreadCount: number;
+  followUpCount: number;
+  conflictCount: number;
+  deferredCount: number;
+};
+
+function hasAnyAttention(counts: AttentionCounts): boolean {
+  return (
+    counts.pendingAiSuggestionCount > 0 ||
+    counts.remainingTasks > 0 ||
+    counts.unreadCount > 0 ||
+    counts.followUpCount > 0 ||
+    counts.conflictCount > 0 ||
+    counts.deferredCount > 0
+  );
+}
+
+function determinePrimaryNextAction({
+  pendingAiSuggestionCount,
+  tasks,
+  calendarItems,
+  followUpCount,
+  unreadCount,
+  firstFollowUpSender,
+  now = new Date(),
+}: {
+  pendingAiSuggestionCount: number;
+  tasks: Task[];
+  calendarItems: CalendarDisplayItem[];
+  followUpCount: number;
+  unreadCount: number;
+  firstFollowUpSender?: string;
+  now?: Date;
+}): PrimaryNextAction {
+  if (pendingAiSuggestionCount > 0) {
+    return {
+      kind: 'ai',
+      icon: 'auto_awesome',
+      label: 'Next Action',
+      title: `${pendingAiSuggestionCount} AI suggestion${pendingAiSuggestionCount !== 1 ? 's' : ''} ready`,
+      detail: 'Review extracted email tasks before they hit your list.',
+      cta: 'Review',
+    };
+  }
+
+  const today = startOfDay(now);
+  const task = tasks.find(item => !item.completed && (item.priority === 'Critical' || isOverdue(item, today)));
+  if (task) {
+    return {
+      kind: 'task',
+      icon: 'priority_high',
+      label: task.priority === 'Critical' ? 'Critical Task' : 'Overdue Task',
+      title: task.title,
+      detail: task.dueDate ? `Due ${formatDueDate(task.dueDate, today)}` : 'Needs attention today.',
+      cta: 'Open Tasks',
+    };
+  }
+
+  const calendarItem = calendarItems.find(item => item.state === 'current') ?? calendarItems.find(item => item.state === 'upcoming');
+  if (calendarItem) {
+    return {
+      kind: 'calendar',
+      icon: calendarItem.state === 'current' ? 'event_available' : 'event',
+      label: calendarItem.state === 'current' ? 'Happening Now' : 'Next Event',
+      title: calendarItem.title,
+      detail: formatCalendarEventTime(calendarItem, 'today'),
+      cta: 'Open Schedule',
+    };
+  }
+
+  if (followUpCount > 0 || unreadCount > 0) {
+    return {
+      kind: 'email',
+      icon: 'mark_email_unread',
+      label: followUpCount > 0 ? 'Email Follow-Up' : 'Inbox Triage',
+      title: followUpCount > 0 ? `${followUpCount} follow-up${followUpCount !== 1 ? 's' : ''}` : `${unreadCount} unread email${unreadCount !== 1 ? 's' : ''}`,
+      detail: firstFollowUpSender ? `Last from ${firstFollowUpSender}` : 'Open Communications to triage.',
+      cta: 'Open Inbox',
+    };
+  }
+
+  return {
+    kind: 'clear',
+    icon: 'verified',
+    label: 'All Clear',
+    title: 'Today is quiet',
+    detail: 'No inbox, task, AI, or schedule conflicts need attention.',
+    cta: 'Focus',
+  };
+}
 
 export default function MainHub({ setCurrentView, externalQuickAddTrigger, externalCalendarRefreshTrigger }: MainHubProps) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
@@ -428,6 +533,24 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
   const followUpEmails = useMemo(() => findFollowUpEmails(emails, currentTime), [emails, currentTime]);
   const calendarConflicts = useMemo(() => findCalendarConflicts(events, currentTime), [events, currentTime]);
+  const attentionCounts = useMemo(() => ({
+    pendingAiSuggestionCount: pendingCount,
+    remainingTasks,
+    unreadCount,
+    followUpCount: followUpEmails.length,
+    conflictCount: calendarConflicts.length,
+    deferredCount: deferredTasks.length,
+  }), [calendarConflicts.length, deferredTasks.length, followUpEmails.length, pendingCount, remainingTasks, unreadCount]);
+  const hasDashboardAttention = useMemo(() => hasAnyAttention(attentionCounts), [attentionCounts]);
+  const primaryNextAction = useMemo(() => determinePrimaryNextAction({
+    pendingAiSuggestionCount: pendingCount,
+    tasks: activeTasks,
+    calendarItems: scheduleGroups.displayable,
+    followUpCount: followUpEmails.length,
+    unreadCount,
+    firstFollowUpSender: followUpEmails[0]?.sender,
+    now: currentTime,
+  }), [activeTasks, currentTime, followUpEmails, pendingCount, scheduleGroups.displayable, unreadCount]);
 
   /** Next calendar line for digest (upcoming / now / all-day). */
   const digestNextEventSnippet = useMemo(() => {
@@ -498,6 +621,30 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     fetchEvents();
   }, [fetchCalendarList, fetchEvents]);
   const isCalendarRefreshPending = isRefreshingEvents || isRefreshingCalendarList;
+
+  const scrollToTasks = useCallback(() => {
+    document.getElementById('main-tasks-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const handlePrimaryNextAction = useCallback(() => {
+    if (primaryNextAction.kind === 'ai') {
+      setShowAiReview(true);
+      return;
+    }
+    if (primaryNextAction.kind === 'task') {
+      scrollToTasks();
+      return;
+    }
+    if (primaryNextAction.kind === 'calendar') {
+      setShowSchedule(true);
+      return;
+    }
+    if (primaryNextAction.kind === 'email') {
+      setCurrentView('Communications');
+      return;
+    }
+    setCurrentView('FocusMode');
+  }, [primaryNextAction.kind, scrollToTasks, setCurrentView]);
 
   // External triggers from command palette
   useEffect(() => {
@@ -967,32 +1114,82 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
       return;
     }
     if (item.kind === 'task') {
-      document.getElementById('main-tasks-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollToTasks();
       return;
     }
     if (item.kind === 'email') {
       setCurrentView('Communications');
     }
-  }, [setCurrentView]);
+  }, [scrollToTasks, setCurrentView]);
 
   return (
     <div className="relative z-10 flex h-screen flex-1 flex-col overflow-hidden px-5 py-6 md:px-6 xl:px-7 w-full max-w-none">
-      <header className="glass-panel mb-5 flex-shrink-0 overflow-hidden p-5 md:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-col gap-2">
-            <ClockDisplay />
+      <header className="glass-panel mb-3 flex-shrink-0 overflow-hidden px-4 py-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(210px,0.75fr)_minmax(360px,1.4fr)_auto] lg:items-center">
+          <div className="flex min-w-0 items-end justify-between gap-4 lg:block">
+            <div className="flex flex-col gap-1">
+              <ClockDisplay />
+            </div>
+            <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] lg:hidden ${
+              hasDashboardAttention
+                ? 'border-amber-300/25 bg-amber-300/10 text-amber-200'
+                : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'
+            }`}>
+              <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">
+                {hasDashboardAttention ? 'bolt' : 'verified'}
+              </span>
+              {hasDashboardAttention ? 'Attention' : 'Clear'}
+            </span>
           </div>
+
+          <button
+            type="button"
+            onClick={handlePrimaryNextAction}
+            className={`group flex min-w-0 items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+              primaryNextAction.kind === 'ai'
+                ? 'border-primary/30 bg-primary/[0.08] hover:bg-primary/[0.12] motion-safe:animate-pulse'
+                : primaryNextAction.kind === 'clear'
+                  ? 'border-emerald-300/18 bg-emerald-300/[0.055] hover:bg-emerald-300/[0.08]'
+                  : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.06]'
+            }`}
+          >
+            <span className={`material-symbols-outlined flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[22px] ${
+              primaryNextAction.kind === 'ai'
+                ? 'bg-primary/15 text-primary'
+                : primaryNextAction.kind === 'clear'
+                  ? 'bg-emerald-300/10 text-emerald-200'
+                  : 'bg-white/[0.055] text-foreground/85'
+            }`} aria-hidden="true">
+              {primaryNextAction.icon}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">
+                {primaryNextAction.label}
+              </span>
+              <span className="mt-0.5 flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-semibold text-foreground">{primaryNextAction.title}</span>
+                <span className="hidden shrink-0 text-[11px] font-semibold text-primary group-hover:underline sm:inline">
+                  {primaryNextAction.cta}
+                </span>
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-text-muted">{primaryNextAction.detail}</span>
+            </span>
+            <span className="material-symbols-outlined shrink-0 text-[18px] text-text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+              chevron_right
+            </span>
+          </button>
+
           <MainHubWeatherTile />
         </div>
       </header>
 
       {showOnboarding && tasks.length === 0 && !isCalendarConnected && (
-        <div className="flex-shrink-0 mb-5 glass-panel rounded-xl p-4 border-l-4 border-primary/60 flex items-start gap-4">
-          <span className="material-symbols-outlined text-primary text-[24px] flex-shrink-0 mt-0.5" aria-hidden="true">waving_hand</span>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-foreground mb-1">Welcome to your dashboard!</p>
-            <p className="text-xs text-text-muted">Get started by connecting your Google account for Calendar &amp; Gmail, or hit <span className="text-primary font-mono">+</span> to add your first task.</p>
-            <button onClick={() => setCurrentView('Integrations')} className="mt-2 text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
+        <div className="flex-shrink-0 mb-2 glass-panel rounded-xl p-2.5 border-l-4 border-primary/60 flex items-center gap-3">
+          <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0" aria-hidden="true">waving_hand</span>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-sm font-semibold text-foreground">Welcome to your dashboard!</p>
+            <p className="truncate text-xs text-text-muted">Connect Google for Calendar &amp; Gmail, or hit <span className="text-primary font-mono">+</span> to add your first task.</p>
+            <button onClick={() => setCurrentView('Integrations')} className="text-xs text-primary hover:underline font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">
               Connect integrations
             </button>
           </div>
@@ -1010,11 +1207,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
         className="flex-1 overflow-y-auto pr-2 pb-8 custom-scrollbar"
         style={{ contentVisibility: 'auto', containIntrinsicSize: '1100px 900px' }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-5 auto-rows-[minmax(190px,_auto)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 auto-rows-auto">
 
           {panelVisibility.digest && (
             <DashboardDigestCard
               setCurrentView={setCurrentView}
+              pendingAiSuggestionCount={pendingCount}
+              onOpenAiReview={() => setShowAiReview(true)}
+              onOpenTasks={scrollToTasks}
+              onOpenSchedule={() => setShowSchedule(true)}
+              allClear={!hasDashboardAttention}
               gmailConnected={gmailConnected}
               gmailServerError={gmailServerError}
               unreadCount={unreadCount}
@@ -1030,9 +1232,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           )}
 
           {panelVisibility.todayTimeline && (
-            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[250px] p-5 flex flex-col relative overflow-hidden scroll-mt-4">
+            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden scroll-mt-4">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/45 via-sky-400/12 to-transparent pointer-events-none" />
-              <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">timeline</span>
                   Today&apos;s Timeline
@@ -1042,7 +1244,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 </span>
               </div>
               {todayTimeline.length === 0 ? (
-                <div className="flex flex-1 flex-col justify-center rounded-lg border border-white/10 bg-white/[0.025] p-4 text-sm text-text-muted">
+                <div className="flex flex-1 flex-col justify-center rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-text-muted">
                   Nothing needs attention right now.
                 </div>
               ) : (
@@ -1075,9 +1277,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           )}
 
           {panelVisibility.alerts && (
-            <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[250px] p-5 flex flex-col relative overflow-hidden">
+            <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-300/45 via-amber-300/12 to-transparent pointer-events-none" />
-              <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-amber-300 text-[22px]" aria-hidden="true">release_alert</span>
                   Action Center
@@ -1090,26 +1292,45 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <button
                   type="button"
                   onClick={() => setCurrentView('Communications')}
-                  className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Follow-ups</p>
-                  <p className="mt-2 text-2xl font-heading text-foreground">{followUpEmails.length}</p>
-                  <p className="mt-1 truncate text-xs text-text-muted">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Follow-ups</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${followUpEmails.length > 0 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                      {followUpEmails.length > 0 ? `${followUpEmails.length} waiting` : 'Clear'}
+                    </span>
+                  </div>
+                  <p className="mt-3 truncate text-sm font-medium text-foreground">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
+                  <p className="mt-1 text-xs text-primary">{followUpEmails.length > 0 ? 'Review follow-ups' : 'Open Communications'}</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowSchedule(true)}
-                  className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Conflicts</p>
-                  <p className="mt-2 text-2xl font-heading text-foreground">{calendarConflicts.length}</p>
-                  <p className="mt-1 truncate text-xs text-text-muted">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Conflicts</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${calendarConflicts.length > 0 ? 'border-red-300/25 bg-red-300/10 text-red-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                      {calendarConflicts.length > 0 ? `${calendarConflicts.length} found` : 'Clear'}
+                    </span>
+                  </div>
+                  <p className="mt-3 truncate text-sm font-medium text-foreground">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
+                  <p className="mt-1 text-xs text-primary">{calendarConflicts.length > 0 ? 'Open schedule' : 'View schedule'}</p>
                 </button>
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Deferred</p>
-                  <p className="mt-2 text-2xl font-heading text-foreground">{deferredTasks.length}</p>
-                  <p className="mt-1 truncate text-xs text-text-muted">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={scrollToTasks}
+                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Deferred</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${deferredTasks.length > 0 ? 'border-sky-300/25 bg-sky-300/10 text-sky-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                      {deferredTasks.length > 0 ? `${deferredTasks.length} later` : 'None'}
+                    </span>
+                  </div>
+                  <p className="mt-3 truncate text-sm font-medium text-foreground">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
+                  <p className="mt-1 text-xs text-primary">{deferredTasks.length > 0 ? 'Review deferred' : 'Open tasks'}</p>
+                </button>
               </div>
             </section>
           )}
@@ -1301,9 +1522,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           </div>
           )}
 
-          {/* System — this machine (shared /api/system poll) */}
-          {panelVisibility.system && <SystemMetricsTile />}
-
           {/* Tasks */}
           {panelVisibility.tasks && (
           <div id="main-tasks-panel" className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] max-h-[360px] p-5 flex flex-col relative overflow-hidden scroll-mt-4">
@@ -1354,8 +1572,18 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               </div>
             </div>
             {tasks.length === 0 ? (
-              <div className="flex flex-1 items-center rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3">
-                <p className="text-sm text-text-muted">No active tasks right now.</p>
+              <div className="flex flex-1 items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Task list clear</p>
+                  <p className="mt-0.5 text-xs text-text-muted">No active tasks right now.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
+                  className="shrink-0 rounded-full border border-green-300/20 bg-green-300/10 px-3 py-1.5 text-xs font-semibold text-green-200 hover:bg-green-300/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  Add
+                </button>
               </div>
             ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar">
@@ -1517,15 +1745,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
               {gmailConnected ? (
                 <>
-                  <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">Gmail</p>
-                  <div className="flex items-baseline gap-2 mt-2 mb-1">
-                    <span className="text-3xl font-heading text-foreground">{unreadCount}</span>
-                    <span className="text-xs text-text-muted font-medium uppercase tracking-widest">Unread</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Gmail</p>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${unreadCount > 0 ? 'border-orange-300/25 bg-orange-300/10 text-orange-200' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'}`}>
+                      {unreadCount > 0 ? `${unreadCount} unread` : 'Inbox clear'}
+                    </span>
                   </div>
                   {lastUnreadEmail ? (
-                    <p className="text-xs text-text-muted truncate group-hover/box:text-foreground transition-colors">Last from <span className="text-primary group-hover/box:font-bold">{lastUnreadEmail.sender}</span></p>
+                    <p className="mt-3 text-xs text-text-muted truncate group-hover/box:text-foreground transition-colors">Last from <span className="text-primary group-hover/box:font-bold">{lastUnreadEmail.sender}</span></p>
                   ) : (
-                    <p className="text-xs text-text-muted">Inbox zero!</p>
+                    <p className="mt-3 text-xs text-text-muted">No unread messages need triage.</p>
                   )}
                 </>
               ) : gmailServerError ? (
@@ -1536,6 +1765,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </div>
           </button>
           )}
+
+          {/* System — this machine (shared /api/system poll) */}
+          {panelVisibility.system && <SystemMetricsTile />}
 
           {/* GitHub Notifications — only shown when connected */}
           {githubConnected && panelVisibility.github && (
@@ -1774,3 +2006,5 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     </div>
   );
 }
+
+export const __testOnly = { determinePrimaryNextAction, hasAnyAttention };

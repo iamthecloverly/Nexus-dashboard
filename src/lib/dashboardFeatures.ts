@@ -27,7 +27,7 @@ export const DEFAULT_DASHBOARD_PANEL_VISIBILITY: Record<DashboardPanelId, boolea
   github: false,
 };
 
-const DASHBOARD_PANEL_LAYOUT_VERSION = 3;
+const DASHBOARD_PANEL_LAYOUT_VERSION = 4;
 type StoredDashboardPanelVisibility = Partial<Record<DashboardPanelId, boolean>> & {
   __layoutVersion?: number;
 };

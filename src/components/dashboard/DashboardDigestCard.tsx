@@ -16,6 +16,11 @@ function GithubMark({ className }: { className?: string }) {
 
 type DigestProps = {
   setCurrentView: SetViewFn;
+  pendingAiSuggestionCount: number;
+  onOpenAiReview: () => void;
+  onOpenTasks: () => void;
+  onOpenSchedule: () => void;
+  allClear: boolean;
   gmailConnected: boolean;
   gmailServerError: boolean;
   unreadCount: number;
@@ -47,6 +52,11 @@ function briefErrorFromResponse(status: number, data: { code?: unknown; error?: 
 
 export function DashboardDigestCard({
   setCurrentView,
+  pendingAiSuggestionCount,
+  onOpenAiReview,
+  onOpenTasks,
+  onOpenSchedule,
+  allClear,
   gmailConnected,
   gmailServerError,
   unreadCount,
@@ -59,9 +69,11 @@ export function DashboardDigestCard({
   remainingTasks,
   aiConfigured,
 }: DigestProps) {
-  const showGmail = gmailConnected || gmailServerError;
   const showGithub = githubConnected;
   const showDiscord = discordWebhookConfigured;
+  const showCalendarRow = calendarConnected && nextEventSnippet != null;
+  const showTasksRow = remainingTasks > 0;
+  const showDigestMeta = aiConfigured || showGithub || showDiscord;
 
   // AI daily brief — cached in localStorage per-day so tab switches don't waste tokens.
   const [brief, setBrief] = useState<string | null>(() => {
@@ -120,184 +132,174 @@ export function DashboardDigestCard({
     return () => window.removeEventListener('dashboard:generate-brief', handler);
   }, [fetchBrief]);
 
-  const showCalendarRow = calendarConnected && nextEventSnippet != null;
-  const showTasksRow = remainingTasks > 0;
+  const renderBrief = () => {
+    if (!aiConfigured) return null;
 
-  const tileCount =
-    Number(showGmail) +
-    Number(showGithub) +
-    Number(showDiscord) +
-    Number(showCalendarRow) +
-    Number(showTasksRow);
-
-  if (tileCount === 0) return null;
+    return (
+      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-violet-400/15 bg-violet-400/[0.035] px-3 py-2">
+        <span className="material-symbols-outlined shrink-0 text-[19px] text-violet-300" aria-hidden="true">
+          auto_awesome
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Today&apos;s brief</p>
+            <button
+              type="button"
+              onClick={fetchBrief}
+              disabled={briefLoading}
+              aria-label="Generate AI daily brief"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded text-[11px] font-medium text-violet-300 transition-colors hover:text-violet-200 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-300"
+            >
+              <span className={`material-symbols-outlined !text-[15px] ${briefLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">
+                {briefLoading ? 'progress_activity' : brief ? 'refresh' : 'play_circle'}
+              </span>
+              {brief ? 'Refresh' : 'Generate'}
+            </button>
+          </div>
+          {brief ? (
+            <p className="mt-1 max-w-[65ch] truncate text-sm text-foreground/90">{brief}</p>
+          ) : briefError ? (
+            briefError === 'key_missing' || briefError === 'key_invalid' ? (
+              <p className="mt-1 text-xs text-red-300">
+                OpenAI key issue.{' '}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('Settings')}
+                  className="rounded underline underline-offset-2 hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300"
+                >
+                  Settings
+                </button>
+              </p>
+            ) : (
+              <p className="mt-1 truncate text-xs text-red-300">{briefError}</p>
+            )
+          ) : (
+            <p className="mt-1 text-xs text-text-muted">Generate when you want a quick read.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section
-      className="glass-panel col-span-full p-4 flex flex-col gap-3 relative overflow-hidden min-h-0"
+      className="glass-panel col-span-full relative flex min-h-0 flex-col gap-2.5 overflow-hidden p-3"
       aria-label="Dashboard digest"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/50 via-primary/25 to-violet-400/25" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/45 via-primary/20 to-emerald-300/20" />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-heading text-base text-foreground flex items-center gap-2">
-            <span className="material-symbols-outlined h-5 w-5 text-primary shrink-0 text-[20px]" aria-hidden="true">
-              rss_feed
-            </span>
-            At a glance
-          </h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {showCalendarRow && (
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex gap-3 items-start sm:col-span-2 lg:col-span-2">
-            <span className="material-symbols-outlined text-primary shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-              calendar_clock
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Next on calendar</p>
-              <p className="text-sm text-foreground leading-snug">{nextEventSnippet}</p>
-              <button
-                type="button"
-                onClick={() => setCurrentView('FocusMode')}
-                className="mt-2 text-[11px] font-medium text-primary hover:underline inline-flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
-              >
-                Focus mode
-                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
-                  chevron_right
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showTasksRow && (
-          <button
-            type="button"
-            onClick={() => {
-              document.getElementById('main-tasks-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3 items-start"
-          >
-            <span className="material-symbols-outlined text-emerald-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-              task_alt
+      {allClear ? (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(320px,0.8fr)_1fr] xl:items-center">
+          <div className="flex min-w-0 items-center gap-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3 py-2.5">
+            <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-300/10 text-[20px] text-emerald-200" aria-hidden="true">
+              verified
             </span>
             <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Tasks</p>
-              <p className="text-2xl font-heading text-foreground tabular-nums">{remainingTasks}</p>
-              <p className="text-xs text-text-muted mt-0.5">Active — scroll to task list</p>
-            </div>
-          </button>
-        )}
-
-        {showGmail && (
-          <button
-            type="button"
-            onClick={() => setCurrentView('Communications')}
-            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
-          >
-            <span className="material-symbols-outlined text-orange-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-              mark_email_unread
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Triage</p>
-              <p className="text-2xl font-heading text-foreground tabular-nums">{gmailServerError ? '—' : unreadCount}</p>
-              <p className="text-xs text-text-muted mt-1">
-                {gmailServerError ? 'Server unreachable' : unreadCount === 0 ? 'Inbox zero' : 'Unread'}
-              </p>
-            </div>
-          </button>
-        )}
-
-        {showGithub && (
-          <button
-            type="button"
-            onClick={() => setCurrentView('Integrations')}
-            className="text-left rounded-lg border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex gap-3"
-          >
-            <GithubMark className="h-5 w-5 shrink-0 mt-0.5 text-text-muted" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">GitHub</p>
-              <p className="text-2xl font-heading text-foreground tabular-nums">{githubUnreadCount}</p>
-              <p className="text-xs text-text-muted mt-1">{githubUnreadCount === 0 ? 'All clear' : 'Notifications'}</p>
-            </div>
-          </button>
-        )}
-
-        {showDiscord && (
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 flex gap-3">
-            <span className="material-symbols-outlined text-indigo-400/90 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-              chat_bubble
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-0.5">Discord</p>
-              <p className="text-lg font-heading text-foreground">Webhook ready</p>
-              <p className="text-xs text-text-muted mt-1">Outgoing alerts enabled</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Today&apos;s status</p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground">All systems clear</p>
+              <p className="mt-0.5 truncate text-xs text-text-muted">No AI suggestions, task pressure, inbox triage, or schedule conflicts.</p>
             </div>
           </div>
-        )}
-
-      </div>
-
-      {/* AI Daily Brief — only shown when AI is configured */}
-      {aiConfigured && (
-        <div className="rounded-lg border border-violet-500/15 bg-violet-500/[0.035] p-4 flex gap-3 items-start">
-          <span className="material-symbols-outlined text-violet-400 shrink-0 mt-0.5 text-[22px]" aria-hidden="true">
-            auto_awesome
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted">Today&apos;s brief</p>
-              <button
-                type="button"
-                onClick={fetchBrief}
-                disabled={briefLoading}
-                aria-label="Generate AI daily brief"
-                className="flex items-center gap-1 text-[11px] font-medium text-violet-400 hover:text-violet-300 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400 rounded"
-              >
-                <span className={`material-symbols-outlined text-[16px] ${briefLoading ? 'animate-spin' : ''}`} aria-hidden="true">
-                  {briefLoading ? 'progress_activity' : brief ? 'refresh' : 'play_circle'}
-                </span>
-                {brief ? 'Refresh' : 'Generate'}
-              </button>
-            </div>
-            {brief ? (
-              <p className="text-sm text-foreground/90 leading-relaxed">{brief}</p>
-            ) : briefError ? (
-              briefError === 'key_missing' ? (
-                <p className="text-xs text-red-400">
-                  OpenAI API key not configured.{' '}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('Settings')}
-                    className="underline hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400 rounded"
-                  >
-                    Go to Settings
-                  </button>{' '}
-                  to add your key.
-                </p>
-              ) : briefError === 'key_invalid' ? (
-                <p className="text-xs text-red-400">
-                  OpenAI API key is invalid.{' '}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('Settings')}
-                    className="underline hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400 rounded"
-                  >
-                    Go to Settings
-                  </button>{' '}
-                  to update your key.
-                </p>
-              ) : (
-                <p className="text-xs text-red-400">{briefError}</p>
-              )
-            ) : (
-              <p className="text-xs text-text-muted">No brief yet.</p>
-            )}
-          </div>
+          {renderBrief()}
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <button
+              type="button"
+              onClick={onOpenAiReview}
+              disabled={pendingAiSuggestionCount === 0}
+              className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default ${
+                pendingAiSuggestionCount > 0
+                  ? 'border-primary/30 bg-primary/[0.08] hover:bg-primary/[0.12] motion-safe:animate-pulse'
+                  : 'border-white/10 bg-white/[0.025] opacity-80'
+              }`}
+            >
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-[20px] text-primary" aria-hidden="true">
+                auto_awesome
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">AI Review</span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
+                  {pendingAiSuggestionCount > 0 ? `${pendingAiSuggestionCount} pending` : 'Queue clear'}
+                </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenTasks}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-300/10 text-[20px] text-emerald-200" aria-hidden="true">
+                task_alt
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Tasks</span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
+                  {showTasksRow ? `${remainingTasks} active` : 'Task list clear'}
+                </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentView('Communications')}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-300/10 text-[20px] text-orange-200" aria-hidden="true">
+                mark_email_unread
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Gmail</span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
+                  {gmailServerError ? 'Server issue' : gmailConnected ? (unreadCount > 0 ? `${unreadCount} unread` : 'Inbox clear') : 'Connect Gmail'}
+                </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenSchedule}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-[20px] text-sky-200" aria-hidden="true">
+                event_available
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Calendar</span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">
+                  {showCalendarRow ? nextEventSnippet : calendarConnected ? 'Calendar clear' : 'Connect calendar'}
+                </span>
+              </span>
+            </button>
+          </div>
+          {showDigestMeta && (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
+              {renderBrief()}
+              {(showGithub || showDiscord) && (
+                <div className="flex flex-wrap gap-2">
+                  {showGithub && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentView('Integrations')}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <GithubMark className="h-3.5 w-3.5" />
+                      GitHub {githubUnreadCount}
+                    </button>
+                  )}
+                  {showDiscord && (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-xs text-text-muted">
+                      <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">chat_bubble</span>
+                      Discord ready
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
