@@ -1,16 +1,23 @@
 import { useEffect, useRef } from 'react';
 import { useEmailContext } from '../contexts/emailContext';
 import { useTaskContext } from '../contexts/taskContext';
+import { useTaskSuggestionQueue } from '../contexts/taskSuggestionQueueContext';
 import { useToast } from '../components/Toast';
 import { csrfHeaders } from '../lib/csrf';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import type { GmailAccountId } from '../types/email';
+import type { Email, GmailAccountId } from '../types/email';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import type { TaskSuggestion } from '../types/taskSuggestion';
 
 const MAX_STORED_IDS = 400; // cap to avoid localStorage bloat
 const ACCOUNTS: GmailAccountId[] = ['primary', 'secondary'];
 type ExtractionMode = 'auto' | 'starred';
 type ExtractionJob = { accountId: GmailAccountId; mode: ExtractionMode; emailIds: string[] };
+type ProcessedEmail = { emailId: string; status: 'suggested' | 'no_action' | 'skipped' | 'error'; reason?: string };
+type ExtractTasksResponse = {
+  suggestions?: Partial<TaskSuggestion>[];
+  processed?: ProcessedEmail[];
+};
 
 function loadProcessedIds(key: string): Set<string> {
   try {
@@ -33,9 +40,48 @@ function taskTagsForMode(mode: ExtractionMode, tags: unknown): string[] {
   return Array.from(new Set([...base, ...aiTags])).slice(0, 5);
 }
 
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeSuggestion(
+  raw: Partial<TaskSuggestion>,
+  job: ExtractionJob,
+  emailById: Map<string, Email>,
+): TaskSuggestion | null {
+  if (typeof raw.id !== 'string' || typeof raw.emailId !== 'string' || typeof raw.title !== 'string') return null;
+  const sourceEmail = emailById.get(raw.emailId);
+  const priority = raw.priority === 'Priority' || raw.priority === 'Critical' ? raw.priority : 'Normal';
+  const group = raw.group === 'next' ? 'next' : 'now';
+  const tags = taskTagsForMode(job.mode, raw.tags);
+  return {
+    id: raw.id,
+    emailId: raw.emailId,
+    accountId: raw.accountId === 'primary' || raw.accountId === 'secondary' ? raw.accountId : job.accountId,
+    threadId: typeof raw.threadId === 'string' ? raw.threadId : sourceEmail?.threadId,
+    sender: typeof raw.sender === 'string' ? raw.sender : sourceEmail?.sender,
+    subject: typeof raw.subject === 'string' ? raw.subject : sourceEmail?.subject,
+    title: raw.title,
+    priority,
+    dueDate: typeof raw.dueDate === 'string' ? raw.dueDate : undefined,
+    group,
+    tags,
+    confidence: raw.confidence === 'low' || raw.confidence === 'medium' || raw.confidence === 'high' ? raw.confidence : 'medium',
+    reason: typeof raw.reason === 'string' ? raw.reason : '',
+    mode: raw.mode === 'manual' || raw.mode === 'auto' || raw.mode === 'starred' ? raw.mode : job.mode,
+    status: raw.status === 'accepted' || raw.status === 'dismissed' ? raw.status : 'pending',
+    accepted: raw.accepted ?? true,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+  };
+}
+
 export function useAutoEmailTasks() {
   const { state: { emailsByAccount, connectedByAccount, emailsLoadingByAccount } } = useEmailContext();
-  const { actions: { addTask } } = useTaskContext();
+  const { state: { tasks } } = useTaskContext();
+  const { actions: { enqueueSuggestions } } = useTaskSuggestionQueue();
   const { showToast } = useToast();
 
   // Persisted sets of email IDs already processed by auto-extraction
@@ -112,13 +158,31 @@ export function useAutoEmailTasks() {
           jobsByKey.set(key, job);
         }
 
-        let totalAdded = 0;
+        let totalQueued = 0;
         await Array.from(jobsByKey.values()).reduce(async (p, job) => {
           await p;
+          const emailById = new Map<string, Email>(
+            emailsByAccount[job.accountId]
+              .filter(e => job.emailIds.includes(e.id))
+              .map(e => [e.id, e]),
+          );
           const res = await fetchWithTimeout(`/api/ai/extract-tasks-bulk?accountId=${encodeURIComponent(job.accountId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-            body: JSON.stringify({ emailIds: job.emailIds, mode: job.mode }),
+            body: JSON.stringify({
+              emailIds: job.emailIds,
+              mode: job.mode,
+              clientToday: localDateKey(),
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              existingTasks: tasks
+                .filter(task => !task.completed)
+                .slice(-40)
+                .map(task => ({
+                  title: task.title,
+                  dueDate: task.dueDate,
+                  sourceEmailId: task.source?.type === 'email' ? task.source.id : undefined,
+                })),
+            }),
             timeoutMs: 30_000,
           });
 
@@ -126,35 +190,29 @@ export function useAutoEmailTasks() {
           // these IDs retryable for the next successful poll.
           if (!res.ok) return;
 
-          const data = await res.json();
+          const data = await res.json() as ExtractTasksResponse;
+          const retryableIds = new Set((data.processed ?? [])
+            .filter(item => item.status === 'error')
+            .map(item => item.emailId));
+          const processedIds = job.emailIds.filter(id => !retryableIds.has(id));
           if (job.mode === 'starred') {
-            job.emailIds.forEach(id => processedStarredRef.current.add(`${job.accountId}:${id}`));
+            processedIds.forEach(id => processedStarredRef.current.add(`${job.accountId}:${id}`));
             saveProcessedIds(STORAGE_KEYS.autoProcessedStarredEmailIds, processedStarredRef.current);
           } else {
-            job.emailIds.forEach(id => processedUnreadRef.current.add(`${job.accountId}:${id}`));
+            processedIds.forEach(id => processedUnreadRef.current.add(`${job.accountId}:${id}`));
             saveProcessedIds(STORAGE_KEYS.autoProcessedEmailIds, processedUnreadRef.current);
           }
           if (!data.suggestions?.length) return;
 
-          for (const s of data.suggestions) {
-            const tags = taskTagsForMode(job.mode, s.tags);
-            addTask({
-              id: s.id,
-              title: s.title,
-              priority: s.priority === 'Normal' ? undefined : s.priority,
-              dueDate: typeof s.dueDate === 'string' ? s.dueDate : undefined,
-              completed: false,
-              group: s.group,
-              source: { type: 'email', id: s.emailId, label: job.mode === 'starred' ? 'AI starred email' : 'AI auto extraction' },
-              createdAt: new Date().toISOString(),
-              tags,
-            });
-          }
-          totalAdded += data.suggestions.length;
+          const suggestions = data.suggestions
+            .map(s => normalizeSuggestion(s, job, emailById))
+            .filter((s): s is TaskSuggestion => !!s);
+          enqueueSuggestions(suggestions);
+          totalQueued += suggestions.length;
         }, Promise.resolve());
 
-        if (totalAdded > 0) {
-          showToast(`${totalAdded} task${totalAdded !== 1 ? 's' : ''} added from new email${newEmails.length !== 1 ? 's' : ''}`, 'success');
+        if (totalQueued > 0) {
+          showToast(`${totalQueued} AI task suggestion${totalQueued !== 1 ? 's' : ''} ready for review`, 'success');
         }
       } catch {
         // Auto mode fails silently — never interrupt the user
@@ -163,5 +221,5 @@ export function useAutoEmailTasks() {
         isProcessingRef.current = false;
       }
     })();
-  }, [emailsByAccount, connectedByAccount, emailsLoadingByAccount, addTask, showToast]);
+  }, [emailsByAccount, connectedByAccount, emailsLoadingByAccount, enqueueSuggestions, showToast, tasks]);
 }

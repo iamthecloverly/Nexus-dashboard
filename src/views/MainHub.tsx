@@ -4,6 +4,7 @@ import { parseISO, isBefore, differenceInMinutes, startOfDay, differenceInCalend
 import { Task, TaskPriority } from '../types/task';
 import { useTaskContext } from '../contexts/taskContext';
 import { useEmailContext } from '../contexts/emailContext';
+import { useTaskSuggestionQueue } from '../contexts/taskSuggestionQueueContext';
 import { useToast } from '../components/Toast';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { useCalendarNotifications } from '../hooks/useCalendarNotifications';
@@ -15,7 +16,9 @@ import { usePollingWhenVisible } from '../hooks/usePollingWhenVisible';
 import { useWeatherForecast } from '../hooks/useWeatherForecast';
 import { SystemMetricsTile } from '../components/dashboard/SystemMetricsTile';
 import { DashboardDigestCard } from '../components/dashboard/DashboardDigestCard';
+import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TagInput } from '../components/TagInput';
+import type { TaskSuggestion } from '../types/taskSuggestion';
 import type { SetViewFn } from '../config/navigation';
 import {
   formatCalendarEventTime,
@@ -264,6 +267,10 @@ const TIMELINE_STATUS_CLASS: Record<TodayTimelineItem['status'], string> = {
 export default function MainHub({ setCurrentView, externalQuickAddTrigger, externalCalendarRefreshTrigger }: MainHubProps) {
   const { state: { tasks }, actions: { toggleTask, addTask, deleteTask, updateTask, clearCompletedTasks } } = useTaskContext();
   const { state: { emailsByAccount, connectedByAccount, serverErrorByAccount } } = useEmailContext();
+  const {
+    state: { pendingSuggestions, pendingCount },
+    actions: { markAccepted, dismissSuggestions },
+  } = useTaskSuggestionQueue();
   const emails = emailsByAccount.primary;
   const gmailConnected = connectedByAccount.primary;
   const gmailServerError = serverErrorByAccount.primary;
@@ -375,6 +382,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [showEarlierEvents, setShowEarlierEvents] = useState(false);
   const [selectedCalendarItem, setSelectedCalendarItem] = useState<CalendarDisplayItem | null>(null);
+  const [showAiReview, setShowAiReview] = useState(false);
   const [panelVisibility, setPanelVisibility] = useState(readDashboardPanelVisibility);
 
   // Task inline edit
@@ -918,6 +926,36 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     showToast('Calendar prep task added', 'success');
   }, [addTask, showToast]);
 
+  const handleAddAiSuggestions = useCallback((accepted: TaskSuggestion[]) => {
+    const now = new Date().toISOString();
+    for (const suggestion of accepted) {
+      addTask({
+        id: suggestion.id,
+        title: suggestion.title,
+        priority: suggestion.priority === 'Normal' ? undefined : suggestion.priority,
+        dueDate: suggestion.dueDate,
+        completed: false,
+        group: suggestion.group,
+        source: {
+          type: 'email',
+          id: suggestion.emailId,
+          label: suggestion.mode === 'starred' ? 'AI starred email' : 'AI email suggestion',
+        },
+        createdAt: now,
+        tags: Array.from(new Set(['email', ...(suggestion.tags ?? [])])).slice(0, 5),
+      });
+    }
+    markAccepted(accepted.map(suggestion => suggestion.id));
+    setShowAiReview(false);
+    showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');
+  }, [addTask, markAccepted, showToast]);
+
+  const handleDismissAiSuggestions = useCallback((dismissed: TaskSuggestion[]) => {
+    dismissSuggestions(dismissed.map(suggestion => suggestion.id));
+    setShowAiReview(false);
+    showToast(`${dismissed.length} suggestion${dismissed.length !== 1 ? 's' : ''} dismissed`, 'info');
+  }, [dismissSuggestions, showToast]);
+
   const handleDeferTask = useCallback((task: Task) => {
     updateTask(task.id, { deferredUntil: tomorrowKey(currentTime), group: 'next' });
     showToast('Task deferred until tomorrow', 'info');
@@ -1277,6 +1315,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               </h2>
               <div className="flex items-center gap-1" ref={taskMenuRef}>
                 <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded mr-1">{remainingTasks} LEFT</span>
+                {pendingCount > 0 && (
+                  <button
+                    onClick={() => setShowAiReview(true)}
+                    aria-label={`${pendingCount} AI task suggestion${pendingCount !== 1 ? 's' : ''} ready for review`}
+                    className="h-7 inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 text-[10px] font-bold uppercase tracking-wider text-primary hover:bg-primary/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined !text-sm" aria-hidden="true">auto_awesome</span>
+                    {pendingCount}
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
                   aria-label="Add task"
@@ -1712,6 +1760,16 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </div>
           </div>
         </div>
+      )}
+
+      {showAiReview && pendingSuggestions.length > 0 && (
+        <TaskSuggestionModal
+          suggestions={pendingSuggestions}
+          context={`${pendingSuggestions.length} queued suggestion${pendingSuggestions.length !== 1 ? 's' : ''}`}
+          onAdd={handleAddAiSuggestions}
+          onDismiss={handleDismissAiSuggestions}
+          onClose={() => setShowAiReview(false)}
+        />
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useEmailContext, type EmailContextValue, type EmailState } from '../../contexts/emailContext';
 import { useTaskContext, type TaskContextValue } from '../../contexts/taskContext';
+import { useTaskSuggestionQueue, type TaskSuggestionQueueContextValue } from '../../contexts/taskSuggestionQueueContext';
 import { useToast } from '../../components/Toast';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 import type { Email, GmailAccountId } from '../../types/email';
@@ -16,16 +17,22 @@ vi.mock('../../contexts/taskContext', () => ({
   useTaskContext: vi.fn(),
 }));
 
+vi.mock('../../contexts/taskSuggestionQueueContext', () => ({
+  useTaskSuggestionQueue: vi.fn(),
+}));
+
 vi.mock('../../components/Toast', () => ({
   useToast: vi.fn(),
 }));
 
 const mockedUseEmailContext = vi.mocked(useEmailContext);
 const mockedUseTaskContext = vi.mocked(useTaskContext);
+const mockedUseTaskSuggestionQueue = vi.mocked(useTaskSuggestionQueue);
 const mockedUseToast = vi.mocked(useToast);
 
 let emailState: EmailState;
 const addTask = vi.fn();
+const enqueueSuggestions = vi.fn();
 const showToast = vi.fn();
 
 function email(accountId: GmailAccountId, id: string, overrides: Partial<Email> = {}): Email {
@@ -66,6 +73,7 @@ async function flushPromises() {
 describe('useAutoEmailTasks', () => {
   beforeEach(() => {
     addTask.mockReset();
+    enqueueSuggestions.mockReset();
     showToast.mockReset();
     localStorage.clear();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
@@ -100,6 +108,16 @@ describe('useAutoEmailTasks', () => {
         deleteTask: vi.fn(),
         updateTask: vi.fn(),
         clearCompletedTasks: vi.fn(),
+      },
+    }));
+    mockedUseTaskSuggestionQueue.mockImplementation((): TaskSuggestionQueueContextValue => ({
+      state: { suggestions: [], pendingSuggestions: [], pendingCount: 0 },
+      actions: {
+        enqueueSuggestions,
+        updateSuggestion: vi.fn(),
+        markAccepted: vi.fn(),
+        dismissSuggestions: vi.fn(),
+        clearResolved: vi.fn(),
       },
     }));
     mockedUseToast.mockImplementation(() => ({ showToast }));
@@ -138,13 +156,16 @@ describe('useAutoEmailTasks', () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain('accountId=secondary');
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+    expect(enqueueSuggestions).toHaveBeenCalledWith([expect.objectContaining({
       id: 'task-from-email',
+      accountId: 'secondary',
       dueDate: '2026-06-08',
       tags: ['email', 'reply', 'school'],
-      source: { type: 'email', id: 's-new', label: 'AI auto extraction' },
-    }));
-    expect(showToast).toHaveBeenCalledWith('1 task added from new email', 'success');
+      emailId: 's-new',
+      mode: 'auto',
+      status: 'pending',
+    })]);
+    expect(showToast).toHaveBeenCalledWith('1 AI task suggestion ready for review', 'success');
   });
 
   it('leaves failed auto-extraction emails retryable', async () => {
@@ -175,6 +196,7 @@ describe('useAutoEmailTasks', () => {
     expect(processed).toContain('primary:p-old');
     expect(processed).not.toContain('primary:p-new');
     expect(addTask).not.toHaveBeenCalled();
+    expect(enqueueSuggestions).not.toHaveBeenCalled();
   });
 
   it('does not process already-starred emails on initial sync', async () => {
@@ -231,19 +253,23 @@ describe('useAutoEmailTasks', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     const bodies = vi.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body ?? '{}')));
     expect(bodies).toEqual(expect.arrayContaining([
-      { emailIds: ['p-star-new'], mode: 'starred' },
-      { emailIds: ['s-star-new'], mode: 'starred' },
+      expect.objectContaining({ emailIds: ['p-star-new'], mode: 'starred' }),
+      expect.objectContaining({ emailIds: ['s-star-new'], mode: 'starred' }),
     ]));
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+    expect(enqueueSuggestions).toHaveBeenCalledWith([expect.objectContaining({
       id: 'task-p-star-new',
-      source: { type: 'email', id: 'p-star-new', label: 'AI starred email' },
+      emailId: 'p-star-new',
+      accountId: 'primary',
+      mode: 'starred',
       tags: ['email', 'starred', 'review'],
-    }));
-    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+    })]);
+    expect(enqueueSuggestions).toHaveBeenCalledWith([expect.objectContaining({
       id: 'task-s-star-new',
-      source: { type: 'email', id: 's-star-new', label: 'AI starred email' },
+      emailId: 's-star-new',
+      accountId: 'secondary',
+      mode: 'starred',
       tags: ['email', 'starred', 'review'],
-    }));
+    })]);
   });
 
   it('does not duplicate a newly starred unread email through auto mode', async () => {
@@ -265,8 +291,8 @@ describe('useAutoEmailTasks', () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body ?? '{}'));
-    expect(body).toEqual({ emailIds: ['p-star-unread'], mode: 'starred' });
-    expect(addTask).toHaveBeenCalledTimes(1);
+    expect(body).toEqual(expect.objectContaining({ emailIds: ['p-star-unread'], mode: 'starred' }));
+    expect(enqueueSuggestions).toHaveBeenCalledTimes(1);
   });
 
   it('leaves failed starred extraction emails retryable', async () => {
@@ -295,5 +321,6 @@ describe('useAutoEmailTasks', () => {
     const processedStarred = JSON.parse(localStorage.getItem(STORAGE_KEYS.autoProcessedStarredEmailIds) ?? '[]') as string[];
     expect(processedStarred).not.toContain('primary:p-star-new');
     expect(addTask).not.toHaveBeenCalled();
+    expect(enqueueSuggestions).not.toHaveBeenCalled();
   });
 });

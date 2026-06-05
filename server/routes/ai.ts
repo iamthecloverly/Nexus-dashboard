@@ -15,6 +15,8 @@ export const aiRouter = express.Router();
 
 // Rate limiter for AI endpoints (max 20 req/min — each call loops up to 10 OpenAI requests)
 const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false });
+const DEFAULT_TASK_MODEL = 'gpt-5.4-nano';
+const FALLBACK_TASK_MODEL = 'gpt-4o-mini';
 
 /** Recursively extract plain-text body from a Gmail MIME payload */
 function extractGmailBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
@@ -45,8 +47,8 @@ function extractGmailBody(payload: gmail_v1.Schema$MessagePart | null | undefine
 
 /** Manual mode: thorough extraction shown in review modal before adding */
 const AI_PROMPT_MANUAL = `You are a productivity assistant. Read the email and extract every actionable task the recipient needs to do.
-Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "low|medium|high", "reason": "..."}]}
 Rules:
+- Each suggestion must include the exact emailId supplied for its source email.
 - title: concise, starts with a verb (e.g. "Review proposal", "Reply to John", "Schedule meeting")
 - priority: "Critical" = hard deadline or blocker; "Priority" = important but flexible; "Normal" = nice to have
 - group: "now" = due today or very urgent; "next" = can be done later
@@ -55,7 +57,7 @@ Rules:
 - confidence: high only when the task is directly supported by the email
 - reason: one short sentence explaining why this task was extracted
 - max 5 tasks per email
-- if no actionable tasks exist, return {"tasks": []}`;
+- if no actionable tasks exist for an email, include no suggestions for it and mark it no_action in processed`;
 
 /** Auto mode: very conservative — only clear, high-value actions. Tasks added silently. */
 const AI_PROMPT_AUTO = `You are a strict task extraction assistant. Only extract tasks when a direct action is clearly required from the recipient.
@@ -75,13 +77,13 @@ EXCLUDE entirely:
 - Anything where taking action is optional
 
 Be very conservative. When in doubt, return no tasks.
-Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "medium|high", "reason": "..."}]}
-Max 3 tasks. Return {"tasks": []} if nothing is clearly actionable.`;
+Each suggestion must include the exact emailId supplied for its source email.
+Max 3 tasks per email. Mark emails with nothing clearly actionable as no_action in processed.`;
 
 /** Starred mode: the user explicitly signaled that this email should become a task. */
 const AI_PROMPT_STARRED = `You are a task extraction assistant. The user starred this email, so treat it as explicit intent to create a task.
-Return ONLY valid JSON: {"tasks": [{"title": "...", "priority": "Normal|Priority|Critical", "group": "now|next", "dueDate": "YYYY-MM-DD|null", "tags": ["..."], "confidence": "low|medium|high", "reason": "..."}]}
 Rules:
+- Each suggestion must include the exact emailId supplied for its source email.
 - Prefer specific actionable tasks directly requested in the email.
 - If there is no explicit ask, create one useful follow-up or review task from the subject and sender.
 - title: concise, starts with a verb, and does not include "starred email".
@@ -95,6 +97,10 @@ Rules:
 type AiTask = {
   id: string;
   emailId: string;
+  accountId: 'primary' | 'secondary';
+  threadId?: string;
+  sender?: string;
+  subject?: string;
   title: string;
   priority: 'Normal' | 'Priority' | 'Critical';
   group: 'now' | 'next';
@@ -102,10 +108,14 @@ type AiTask = {
   tags?: string[];
   confidence: 'low' | 'medium' | 'high';
   reason: string;
+  mode: AiTaskMode;
+  status: 'pending' | 'accepted' | 'dismissed';
+  createdAt: string;
   accepted: boolean;
 };
 
 type RawAiTask = {
+  emailId?: unknown;
   title?: unknown;
   priority?: unknown;
   group?: unknown;
@@ -115,6 +125,17 @@ type RawAiTask = {
   reason?: unknown;
 };
 type AiTaskMode = 'manual' | 'auto' | 'starred';
+type ProcessedStatus = 'suggested' | 'no_action' | 'skipped' | 'error';
+type ProcessedEmail = { emailId: string; status: ProcessedStatus; reason?: string };
+type ExistingTaskSummary = { title: string; dueDate?: string; sourceEmailId?: string };
+type EmailForAi = {
+  emailId: string;
+  threadId?: string;
+  sender: string;
+  subject: string;
+  snippet: string;
+  body: string;
+};
 
 const PRIORITIES = ['Normal', 'Priority', 'Critical'] as const;
 type Priority = (typeof PRIORITIES)[number];
@@ -165,15 +186,42 @@ function normalizeTags(value: unknown): string[] | undefined {
 }
 
 function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: AiTaskMode): AiTask[] {
+  const email: EmailForAi = {
+    emailId,
+    sender: '',
+    subject: '',
+    snippet: '',
+    body: '',
+  };
+  return normalizeAiTasksForEmails(rawTasks, new Map([[emailId, email]]), mode, 'primary', []);
+}
+
+function normalizeAiTasksForEmails(
+  rawTasks: RawAiTask[],
+  emailById: Map<string, EmailForAi>,
+  mode: AiTaskMode,
+  accountId: 'primary' | 'secondary',
+  existingTasks: ExistingTaskSummary[],
+): AiTask[] {
   const seen = new Set<string>();
+  const existingTitleKeys = new Set(existingTasks.map(t => normalizeTitle(t.title).toLowerCase()).filter(Boolean));
+  const existingSourceKeys = new Set(existingTasks
+    .filter(t => t.sourceEmailId)
+    .map(t => `${t.sourceEmailId}:${normalizeTitle(t.title).toLowerCase()}`));
   const out: AiTask[] = [];
   for (const raw of rawTasks) {
     if (typeof raw.title !== 'string') continue;
+    const rawEmailId = typeof raw.emailId === 'string' ? raw.emailId : emailById.size === 1 ? [...emailById.keys()][0] : null;
+    if (!rawEmailId) continue;
+    const sourceEmail = emailById.get(rawEmailId);
+    if (!sourceEmail) continue;
+
     const title = normalizeTitle(raw.title);
     if (!title) continue;
-    const key = title.toLowerCase();
+    const key = `${rawEmailId}:${title.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    if (existingTitleKeys.has(title.toLowerCase()) || existingSourceKeys.has(key)) continue;
 
     const priority: Priority = PRIORITIES.includes(raw.priority as Priority) ? (raw.priority as Priority) : 'Normal';
     const confidence: Confidence = CONFIDENCE.includes(raw.confidence as Confidence) ? (raw.confidence as Confidence) : 'medium';
@@ -183,7 +231,11 @@ function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: AiTaskMo
     const tags = normalizeTags(raw.tags);
     out.push({
       id: randomUUID(),
-      emailId,
+      emailId: rawEmailId,
+      accountId,
+      ...(sourceEmail.threadId ? { threadId: sourceEmail.threadId } : {}),
+      ...(sourceEmail.sender ? { sender: sourceEmail.sender } : {}),
+      ...(sourceEmail.subject ? { subject: sourceEmail.subject } : {}),
       title,
       priority,
       group: raw.group === 'next' ? 'next' : 'now',
@@ -191,62 +243,256 @@ function normalizeAiTasks(rawTasks: RawAiTask[], emailId: string, mode: AiTaskMo
       ...(tags ? { tags } : {}),
       confidence,
       reason: typeof raw.reason === 'string' ? raw.reason.trim().slice(0, 240) : '',
+      mode,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
       accepted: true,
     });
   }
   return out;
 }
 
-/** Shared logic: fetch one email's metadata + body, call GPT-4o-mini, return suggestions */
+const TASK_EXTRACTION_RESPONSE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    suggestions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          emailId: { type: 'string' },
+          title: { type: 'string' },
+          priority: { type: 'string', enum: ['Normal', 'Priority', 'Critical'] },
+          group: { type: 'string', enum: ['now', 'next'] },
+          dueDate: { type: ['string', 'null'] },
+          tags: { type: 'array', items: { type: 'string' } },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          reason: { type: 'string' },
+        },
+        required: ['emailId', 'title', 'priority', 'group', 'dueDate', 'tags', 'confidence', 'reason'],
+      },
+    },
+    processed: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          emailId: { type: 'string' },
+          status: { type: 'string', enum: ['suggested', 'no_action', 'skipped', 'error'] },
+          reason: { type: ['string', 'null'] },
+        },
+        required: ['emailId', 'status', 'reason'],
+      },
+    },
+  },
+  required: ['suggestions', 'processed'],
+} as const;
+
+function getTaskModel(): string {
+  return process.env.OPENAI_TASK_MODEL?.trim() || DEFAULT_TASK_MODEL;
+}
+
+function modelUnavailable(error: unknown): boolean {
+  const err = error as { status?: number; response?: { status?: number }; message?: string };
+  const status = err.status ?? err.response?.status;
+  if (status === 404) return true;
+  if (status !== 400) return false;
+  return /model|unsupported|does not exist|not found|invalid/i.test(err.message ?? '');
+}
+
+async function createTaskExtractionCompletion(
+  openai: OpenAI,
+  model: string,
+  mode: AiTaskMode,
+  messages: Array<{ role: 'system' | 'user'; content: string }>,
+): Promise<{ content: unknown; model: string }> {
+  const request = {
+    model,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'email_task_extraction',
+        strict: true,
+        schema: TASK_EXTRACTION_RESPONSE_SCHEMA,
+      },
+    },
+    temperature: mode === 'auto' ? 0 : 0.15,
+    messages,
+  } as const;
+
+  try {
+    const completion = await openai.chat.completions.create(request);
+    return { content: completion.choices?.[0]?.message?.content, model };
+  } catch (error) {
+    if (model !== FALLBACK_TASK_MODEL && modelUnavailable(error)) {
+      logger.warn({ model, fallback: FALLBACK_TASK_MODEL }, 'Task extraction model unavailable; using fallback');
+      const completion = await openai.chat.completions.create({ ...request, model: FALLBACK_TASK_MODEL });
+      return { content: completion.choices?.[0]?.message?.content, model: FALLBACK_TASK_MODEL };
+    }
+    throw error;
+  }
+}
+
+function asOpenAiPromptEmail(email: EmailForAi) {
+  return {
+    emailId: email.emailId,
+    from: email.sender,
+    subject: email.subject,
+    snippet: email.snippet,
+    body: email.body,
+  };
+}
+
+function extractionPromptForMode(mode: AiTaskMode): string {
+  if (mode === 'starred') return AI_PROMPT_STARRED;
+  if (mode === 'auto') return AI_PROMPT_AUTO;
+  return AI_PROMPT_MANUAL;
+}
+
+async function fetchEmailForAi(
+  gmail: ReturnType<typeof google.gmail>,
+  emailId: string,
+): Promise<EmailForAi> {
+  const full = await gmail.users.messages.get({ userId: 'me', id: emailId, format: 'full' });
+  const headers = full.data.payload?.headers ?? [];
+  const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value ?? '(no subject)';
+  const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value ?? '';
+  const body = cleanEmailBodyForAi(extractGmailBody(full.data.payload)).slice(0, 3500);
+  return {
+    emailId,
+    ...(full.data.threadId ? { threadId: full.data.threadId } : {}),
+    sender: from,
+    subject,
+    snippet: full.data.snippet ?? '',
+    body,
+  };
+}
+
+function authAffectsWholeBatch(error: unknown): boolean {
+  const err = error as { status?: number; response?: { status?: number }; message?: string };
+  const status = err.status ?? err.response?.status;
+  return status === 401 || err?.message?.includes('invalid_grant');
+}
+
+async function extractTasksFromEmails(
+  gmail: ReturnType<typeof google.gmail>,
+  openai: OpenAI,
+  emailIds: string[],
+  mode: AiTaskMode = 'manual',
+  accountId: 'primary' | 'secondary' = 'primary',
+  options: {
+    clientToday?: string;
+    timezone?: string;
+    existingTasks?: ExistingTaskSummary[];
+  } = {},
+): Promise<{ suggestions: AiTask[]; processed: ProcessedEmail[]; model: string }> {
+  const fetched = await mapWithConcurrency(emailIds, 4, async (emailId): Promise<{ email?: EmailForAi; processed?: ProcessedEmail }> => {
+    try {
+      return { email: await fetchEmailForAi(gmail, emailId) };
+    } catch (error) {
+      if (authAffectsWholeBatch(error)) throw error;
+      const err = error as { message?: string };
+      return { processed: { emailId, status: 'error', reason: err.message?.slice(0, 160) || 'Failed to fetch email' } };
+    }
+  });
+
+  const emails = fetched.map(item => item.email).filter((email): email is EmailForAi => !!email);
+  const processed = fetched.map(item => item.processed).filter((item): item is ProcessedEmail => !!item);
+  if (emails.length === 0) {
+    return { suggestions: [], processed, model: getTaskModel() };
+  }
+
+  const prompt = [
+    `Today: ${options.clientToday ?? todayKey()}`,
+    `Timezone: ${options.timezone ?? 'unknown'}`,
+    `Existing active tasks for dedupe: ${JSON.stringify((options.existingTasks ?? []).slice(0, 50))}`,
+    `Emails: ${JSON.stringify(emails.map(asOpenAiPromptEmail))}`,
+  ].join('\n');
+
+  const completion = await createTaskExtractionCompletion(openai, getTaskModel(), mode, [
+    { role: 'system', content: extractionPromptForMode(mode) },
+    { role: 'user', content: prompt },
+  ]);
+
+  const raw = parseAiExtractionJson(completion.content);
+  const emailById = new Map(emails.map(email => [email.emailId, email]));
+  const suggestions = normalizeAiTasksForEmails(raw.tasks, emailById, mode, accountId, options.existingTasks ?? []);
+  const suggestedIds = new Set(suggestions.map(s => s.emailId));
+  const knownIds = new Set(emailById.keys());
+
+  for (const item of raw.processed) {
+    if (!knownIds.has(item.emailId)) continue;
+    if (processed.some(p => p.emailId === item.emailId)) continue;
+    processed.push({
+      emailId: item.emailId,
+      status: suggestedIds.has(item.emailId) ? 'suggested' : item.status,
+      ...(item.reason ? { reason: item.reason } : {}),
+    });
+  }
+
+  for (const email of emails) {
+    if (processed.some(item => item.emailId === email.emailId)) continue;
+    processed.push({
+      emailId: email.emailId,
+      status: suggestedIds.has(email.emailId) ? 'suggested' : 'no_action',
+    });
+  }
+
+  return { suggestions, processed, model: completion.model };
+}
+
+/** Shared legacy wrapper: fetch one email body, call the bulk extractor, return suggestions */
 async function extractTasksFromEmail(
   gmail: ReturnType<typeof google.gmail>,
   openai: OpenAI,
   emailId: string,
   mode: AiTaskMode = 'manual',
-): Promise<AiTask[]> {
-  const [meta, full] = await Promise.all([
-    gmail.users.messages.get({ userId: 'me', id: emailId, format: 'metadata', metadataHeaders: ['From', 'Subject'] }),
-    gmail.users.messages.get({ userId: 'me', id: emailId, format: 'full' }),
-  ]);
-
-  const headers = meta.data.payload?.headers ?? [];
-  const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-  const from    = headers.find(h => h.name === 'From')?.value ?? '';
-  const body    = cleanEmailBodyForAi(extractGmailBody(full.data.payload)).slice(0, 5000);
-
-  const prompt = mode === 'starred'
-    ? AI_PROMPT_STARRED
-    : mode === 'auto'
-      ? AI_PROMPT_AUTO
-      : AI_PROMPT_MANUAL;
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    response_format: { type: 'json_object' },
-    temperature: mode === 'auto' ? 0 : 0.15,
-    messages: [
-      { role: 'system', content: prompt },
-      { role: 'user', content: `Today: ${todayKey()}\nFrom: ${from}\nSubject: ${subject}\n\n${body}` },
-    ],
-  });
-
-  const raw = parseAiTasksJson(completion.choices?.[0]?.message?.content);
-  return normalizeAiTasks(raw.tasks, emailId, mode);
+  accountId: 'primary' | 'secondary' = 'primary',
+): Promise<{ suggestions: AiTask[]; processed: ProcessedEmail[]; model: string }> {
+  return extractTasksFromEmails(gmail, openai, [emailId], mode, accountId);
 }
 
-export function parseAiTasksJson(content: unknown): { tasks: RawAiTask[] } {
-  if (typeof content !== 'string' || !content.trim()) return { tasks: [] };
+type RawProcessedEmail = { emailId?: unknown; status?: unknown; reason?: unknown };
+
+export function parseAiExtractionJson(content: unknown): { tasks: RawAiTask[]; processed: ProcessedEmail[] } {
+  if (typeof content !== 'string' || !content.trim()) return { tasks: [], processed: [] };
   const cleaned = content.trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '');
   try {
     const parsed = JSON.parse(cleaned) as Record<string, unknown> | RawAiTask[];
-    if (Array.isArray(parsed)) return { tasks: parsed as RawAiTask[] };
-    if (!parsed || typeof parsed !== 'object') return { tasks: [] };
-    const tasks = Array.isArray(parsed.tasks) ? (parsed.tasks as RawAiTask[]) : [];
-    return { tasks };
+    if (Array.isArray(parsed)) return { tasks: parsed as RawAiTask[], processed: [] };
+    if (!parsed || typeof parsed !== 'object') return { tasks: [], processed: [] };
+    const tasks = Array.isArray(parsed.tasks)
+      ? (parsed.tasks as RawAiTask[])
+      : Array.isArray(parsed.suggestions)
+        ? (parsed.suggestions as RawAiTask[])
+        : [];
+    const processed = Array.isArray(parsed.processed)
+      ? (parsed.processed as RawProcessedEmail[]).flatMap(item => {
+        if (typeof item.emailId !== 'string') return [];
+        const status: ProcessedStatus =
+          item.status === 'suggested' || item.status === 'no_action' || item.status === 'skipped' || item.status === 'error'
+            ? item.status
+            : 'no_action';
+        return [{
+          emailId: item.emailId,
+          status,
+          ...(typeof item.reason === 'string' && item.reason.trim() ? { reason: item.reason.trim().slice(0, 180) } : {}),
+        }];
+      })
+      : [];
+    return { tasks, processed };
   } catch {
-    return { tasks: [] };
+    return { tasks: [], processed: [] };
   }
+}
+
+export function parseAiTasksJson(content: unknown): { tasks: RawAiTask[] } {
+  return { tasks: parseAiExtractionJson(content).tasks };
 }
 
 async function mapWithConcurrency<T, R>(
@@ -317,9 +563,9 @@ aiRouter.post('/extract-tasks', aiLimiter, async (req, res) => {
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
 
-    const suggestions = await extractTasksFromEmail(gmail, openai, emailId);
-    logger.info({ emailId, count: suggestions.length }, 'Extracted tasks from email');
-    res.json({ suggestions });
+    const result = await extractTasksFromEmail(gmail, openai, emailId, 'manual', accountId);
+    logger.info({ emailId, count: result.suggestions.length, model: result.model }, 'Extracted tasks from email');
+    res.json(result);
   } catch (error) {
     const err = error as { status?: number; message?: string };
     logger.error({ error: err?.message, emailId }, 'AI extract-tasks error');
@@ -407,7 +653,7 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   const openAIKey = decryptedKey ?? process.env.OPENAI_API_KEY;
   if (!openAIKey) return res.status(503).json({ error: 'OpenAI API key not configured', code: 'NO_AI_KEY' });
 
-  const { emailIds, mode = 'manual' } = validation.data;
+  const { emailIds, mode = 'manual', clientToday, timezone, existingTasks = [] } = validation.data;
 
   try {
     const { tokens } = auth;
@@ -416,22 +662,14 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
     const gmail  = google.gmail({ version: 'v1', auth: oauth2Client });
     const openai = new OpenAI({ apiKey: openAIKey });
 
-    const perEmail = await mapWithConcurrency(emailIds, 3, async (emailId) => {
-      try {
-        return await extractTasksFromEmail(gmail, openai, emailId, mode);
-      } catch (err) {
-        // Re-throw auth errors so the outer handler can surface them to the client.
-        // An invalid OpenAI key (401) or expired Google token (invalid_grant) affects
-        // every email in the batch, so swallowing them would silently return no tasks.
-        const apiErr = err as { status?: number; message?: string };
-        if (apiErr?.status === 401 || apiErr?.message?.includes('invalid_grant')) throw err;
-        return [];
-      }
+    const result = await extractTasksFromEmails(gmail, openai, emailIds, mode, accountId, {
+      clientToday,
+      timezone,
+      existingTasks,
     });
-    const allSuggestions = perEmail.flat();
 
-    logger.info({ emailCount: emailIds.length, taskCount: allSuggestions.length }, 'Bulk extracted tasks');
-    res.json({ suggestions: allSuggestions });
+    logger.info({ emailCount: emailIds.length, taskCount: result.suggestions.length, model: result.model }, 'Bulk extracted tasks');
+    res.json(result);
   } catch (error) {
     const err = error as { status?: number; message?: string };
     logger.error({ error: err?.message }, 'AI extract-tasks-bulk error');
@@ -441,4 +679,4 @@ aiRouter.post('/extract-tasks-bulk', aiLimiter, async (req, res) => {
   }
 });
 
-export const __testOnly = { cleanEmailBodyForAi, extractGmailBody, normalizeAiTasks };
+export const __testOnly = { cleanEmailBodyForAi, extractGmailBody, normalizeAiTasks, normalizeAiTasksForEmails, extractTasksFromEmails };

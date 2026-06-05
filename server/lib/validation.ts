@@ -31,6 +31,13 @@ export const extractTasksSchema = z.object({
 export const extractTasksBulkSchema = z.object({
   emailIds: z.array(gmailIdSchema).min(1, 'At least one email ID required').max(10, 'Maximum 10 emails at once'),
   mode: z.enum(['manual', 'auto', 'starred']).optional(),
+  clientToday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid local date').optional(),
+  timezone: z.string().trim().min(1).max(80).optional(),
+  existingTasks: z.array(z.object({
+    title: z.string().trim().min(1).max(160),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    sourceEmailId: gmailIdSchema.optional(),
+  })).max(50).optional(),
 });
 
 export const dailyBriefSchema = z.object({

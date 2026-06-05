@@ -1,5 +1,5 @@
 import express from 'express';
-import { google } from 'googleapis';
+import { google, type gmail_v1 } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 
 import { parseJsonCookie } from '../lib/cookies.ts';
@@ -52,19 +52,164 @@ function formatEmailTime(receivedAt: string | null): string {
     : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+function emailFromMessage(accountId: GoogleAccountId, message: gmail_v1.Schema$Message, snippet?: string | null) {
+  const headers = message.payload?.headers || [];
+  const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
+  const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
+  const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
+
+  // Parse "Name <email>" or just "email"
+  const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
+  const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
+  const senderEmail = nameMatch?.[2] ?? fromHeader;
+  const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
+
+  const labelIds = message.labelIds ?? [];
+  const receivedAt = getMessageReceivedAt(message.internalDate, dateHeader);
+
+  return {
+    accountId,
+    id: message.id!,
+    threadId: message.threadId,
+    sender: senderName,
+    senderEmail,
+    initials,
+    receivedAt,
+    time: formatEmailTime(receivedAt),
+    subject,
+    preview: snippet ?? message.snippet ?? '',
+    unread: labelIds.includes('UNREAD'),
+    urgent: labelIds.includes('STARRED'),
+    archived: false,
+    deleted: false,
+    historyId: message.historyId ?? null,
+  };
+}
+
 /** Derive the cache key for a given google_tokens cookie value. */
 function gmailKey(tokensCookie: string, accountId: GoogleAccountId) {
   const tokens = parseJsonCookie<{ refresh_token?: string }>(tokensCookie);
   return tokenKey(`${accountId}:${tokens?.refresh_token ?? tokensCookie}`, 'gmail:messages');
 }
 
+function withoutMessageHistoryId<T extends { historyId?: string | null }>(email: T): Omit<T, 'historyId'> {
+  const { historyId: _historyId, ...rest } = email;
+  return rest;
+}
+
+async function fetchMessageSummary(
+  gmail: gmail_v1.Gmail,
+  accountId: GoogleAccountId,
+  messageId: string,
+) {
+  const msg = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'metadata',
+    metadataHeaders: ['From', 'Subject', 'Date'],
+  });
+  const labelIds = msg.data.labelIds ?? [];
+  if (!labelIds.includes('INBOX')) return null;
+  return emailFromMessage(accountId, msg.data, msg.data.snippet);
+}
+
+async function getPartialMessages(
+  gmail: gmail_v1.Gmail,
+  accountId: GoogleAccountId,
+  startHistoryId: string,
+) {
+  const changedIds = new Set<string>();
+  const removedIds = new Set<string>();
+  let pageToken: string | undefined;
+  let nextHistoryId = startHistoryId;
+
+  do {
+    const historyRes = await gmail.users.history.list({
+      userId: 'me',
+      startHistoryId,
+      labelId: 'INBOX',
+      historyTypes: ['messageAdded', 'messageDeleted', 'labelAdded', 'labelRemoved'],
+      maxResults: 500,
+      ...(pageToken ? { pageToken } : {}),
+    });
+
+    nextHistoryId = historyRes.data.historyId ?? nextHistoryId;
+    for (const history of historyRes.data.history ?? []) {
+      for (const item of history.messagesAdded ?? []) {
+        const id = item.message?.id;
+        if (id) changedIds.add(id);
+      }
+      for (const item of history.labelsAdded ?? []) {
+        const id = item.message?.id;
+        if (!id) continue;
+        if ((item.labelIds ?? []).some(label => label === 'INBOX' || label === 'UNREAD' || label === 'STARRED')) {
+          changedIds.add(id);
+        }
+      }
+      for (const item of history.labelsRemoved ?? []) {
+        const id = item.message?.id;
+        if (!id) continue;
+        if ((item.labelIds ?? []).includes('INBOX')) {
+          removedIds.add(id);
+        } else if ((item.labelIds ?? []).some(label => label === 'UNREAD' || label === 'STARRED')) {
+          changedIds.add(id);
+        }
+      }
+      for (const item of history.messagesDeleted ?? []) {
+        const id = item.message?.id;
+        if (id) removedIds.add(id);
+      }
+    }
+    pageToken = historyRes.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  const emails = (await Promise.all([...changedIds].map(async id => {
+    try {
+      return await fetchMessageSummary(gmail, accountId, id);
+    } catch (err: unknown) {
+      logger.warn({ error: err instanceof Error ? err.message : String(err), messageId: id }, 'Failed to fetch partial gmail message metadata');
+      return null;
+    }
+  }))).filter(Boolean);
+
+  return {
+    emails,
+    removedIds: [...removedIds],
+    historyId: nextHistoryId,
+  };
+}
+
 gmailRouter.get('/messages', async (req, res) => {
   const accountId = parseAccountId(req.query.accountId);
   const auth = getGoogleTokensFromCookie(req, accountId);
   if (!auth) return res.status(401).json({ error: 'Not authenticated' });
+  const requestedHistoryId = typeof req.query.historyId === 'string' && /^\d+$/.test(req.query.historyId)
+    ? req.query.historyId
+    : null;
 
   try {
     const { tokensCookie, tokens } = auth;
+
+    if (requestedHistoryId) {
+      const oauth2Client = createAuthedGoogleClient(req, res, tokens, accountId);
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      try {
+        const partial = await getPartialMessages(gmail, accountId, requestedHistoryId);
+        return res.json({
+          partial: true,
+          emails: partial.emails.map(withoutMessageHistoryId),
+          removedIds: partial.removedIds,
+          historyId: partial.historyId,
+        });
+      } catch (error: unknown) {
+        const err = asApiError(error);
+        const status = err?.response?.status ?? err?.code;
+        if (status === 404) {
+          return res.json({ partial: false, needsFullSync: true });
+        }
+        throw error;
+      }
+    }
 
     const cacheKey = gmailKey(tokensCookie, accountId);
 
@@ -82,7 +227,7 @@ gmailRouter.get('/messages', async (req, res) => {
 
       const threadList = threadsRes.data.threads || [];
 
-      const emails = (await Promise.all(threadList.map(async (t) => {
+      const emailsWithHistory = (await Promise.all(threadList.map(async (t) => {
         const threadRes = await gmail.users.threads.get({
             userId: 'me',
             id: t.id!,
@@ -99,43 +244,19 @@ gmailRouter.get('/messages', async (req, res) => {
         const latestMsg = messages[messages.length - 1];
         if (!latestMsg) return null;
 
-        const headers = latestMsg.payload?.headers || [];
-        const fromHeader = headers.find(h => h.name === 'From')?.value ?? '';
-        const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-        const dateHeader = headers.find(h => h.name === 'Date')?.value ?? '';
-
-        // Parse "Name <email>" or just "email"
-        const nameMatch = fromHeader.match(/^"?([^"<]+?)"?\s*(?:<(.+?)>)?$/);
-        const senderName = nameMatch?.[1]?.trim() ?? fromHeader;
-        const senderEmail = nameMatch?.[2] ?? fromHeader;
-        const initials = senderName.split(/\s+/).map((n: string) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
-
-        const labelIds = latestMsg.labelIds ?? [];
-        const isUnread = labelIds.includes('UNREAD');
-        const isUrgent = labelIds.includes('STARRED');
-
-        const receivedAt = getMessageReceivedAt(latestMsg.internalDate, dateHeader);
-
         return {
-          accountId,
-          id: latestMsg.id!,
+          ...emailFromMessage(accountId, latestMsg, threadRes.data.snippet ?? latestMsg.snippet),
           threadId: t.id!,
           messageCount,
-          sender: senderName,
-          senderEmail,
-          initials,
-          receivedAt,
-          time: formatEmailTime(receivedAt),
-          subject,
-          preview: threadRes.data.snippet ?? latestMsg.snippet ?? '',
-          unread: isUnread,
-          urgent: isUrgent,
-          archived: false,
-          deleted: false,
         };
       }))).filter(Boolean);
 
-      return { emails };
+      const historyId = emailsWithHistory.find(email => email.historyId)?.historyId ?? null;
+      return {
+        emails: emailsWithHistory.map(withoutMessageHistoryId),
+        historyId,
+        partial: false,
+      };
     });
 
     res.json(result);

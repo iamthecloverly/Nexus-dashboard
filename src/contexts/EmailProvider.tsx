@@ -7,12 +7,43 @@ import type { Email, GmailAccountId, ThreadMessage } from '../types/email';
 import { EmailContext } from './emailContext';
 import { formatEmailTime } from '../lib/emailTime';
 import { markSyncStatus } from '../lib/dashboardFeatures';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 const ACCOUNTS: GmailAccountId[] = ['primary', 'secondary'];
 
 function accountParam(accountId: GmailAccountId) {
   return `accountId=${encodeURIComponent(accountId)}`;
 }
+
+function loadGmailHistoryIds(): Partial<Record<GmailAccountId, string>> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.gmailHistoryIds);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<Record<GmailAccountId, unknown>>;
+    return {
+      ...(typeof parsed.primary === 'string' ? { primary: parsed.primary } : {}),
+      ...(typeof parsed.secondary === 'string' ? { secondary: parsed.secondary } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function saveGmailHistoryIds(historyIds: Partial<Record<GmailAccountId, string>>) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.gmailHistoryIds, JSON.stringify(historyIds));
+  } catch {
+    // quota exceeded
+  }
+}
+
+type GmailMessagesResponse = {
+  emails?: Email[];
+  historyId?: string | null;
+  partial?: boolean;
+  removedIds?: string[];
+  needsFullSync?: boolean;
+};
 
 async function readApiErrorMessage(res: Response): Promise<string> {
   try {
@@ -48,19 +79,47 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     primary: false,
     secondary: false,
   });
+  const gmailHistoryIdsRef = useRef<Partial<Record<GmailAccountId, string>>>(loadGmailHistoryIds());
 
-  const refreshEmails = useCallback(async (accountId: GmailAccountId) => {
+  const refreshEmails = useCallback(async (accountId: GmailAccountId, forceFull = false) => {
     setEmailsLoadingByAccount(prev => ({ ...prev, [accountId]: true }));
     try {
-      const res = await fetchWithTimeout(`/api/gmail/messages?${accountParam(accountId)}`, { timeoutMs: 15_000 });
+      const historyId = forceFull ? null : gmailHistoryIdsRef.current[accountId];
+      const params = new URLSearchParams({ accountId });
+      if (historyId) params.set('historyId', historyId);
+      const res = await fetchWithTimeout(`/api/gmail/messages?${params.toString()}`, { timeoutMs: 15_000 });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json() as GmailMessagesResponse;
+        if (data.needsFullSync && !forceFull) {
+          delete gmailHistoryIdsRef.current[accountId];
+          saveGmailHistoryIds(gmailHistoryIdsRef.current);
+          await refreshEmails(accountId, true);
+          return;
+        }
         const emails: Email[] = (data.emails ?? []).map((e: Email) => ({
           ...e,
           accountId,
           time: formatEmailTime(e.receivedAt, e.time),
         }));
-        setEmailsByAccount(prev => ({ ...prev, [accountId]: emails }));
+        setEmailsByAccount(prev => {
+          if (!data.partial) return { ...prev, [accountId]: emails };
+          const removedIds = new Set(data.removedIds ?? []);
+          const upsertIds = new Set(emails.map(email => email.id));
+          const upsertThreadIds = new Set(emails.map(email => email.threadId).filter((id): id is string => !!id));
+          const merged = [
+            ...emails,
+            ...prev[accountId].filter(email => {
+              if (removedIds.has(email.id) || upsertIds.has(email.id)) return false;
+              if (email.threadId && upsertThreadIds.has(email.threadId)) return false;
+              return true;
+            }),
+          ];
+          return { ...prev, [accountId]: merged };
+        });
+        if (data.historyId) {
+          gmailHistoryIdsRef.current = { ...gmailHistoryIdsRef.current, [accountId]: data.historyId };
+          saveGmailHistoryIds(gmailHistoryIdsRef.current);
+        }
         setConnectedByAccount(prev => ({ ...prev, [accountId]: true }));
         setServerErrorByAccount(prev => ({ ...prev, [accountId]: false }));
         markSyncStatus(accountId === 'primary' ? 'gmailPrimary' : 'gmailSecondary', 'ok');

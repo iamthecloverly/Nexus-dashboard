@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TaskSuggestion } from '../types/taskSuggestion';
 
 interface Props {
   suggestions: TaskSuggestion[];
   context: string; // email subject or "N unread emails"
   onAdd: (accepted: TaskSuggestion[]) => void;
+  onDismiss?: (dismissed: TaskSuggestion[]) => void;
   onClose: () => void;
 }
 
@@ -23,10 +24,14 @@ function formatDueDate(dueDate?: string): string | null {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export default function TaskSuggestionModal({ suggestions: initial, context, onAdd, onClose }: Props) {
+export default function TaskSuggestionModal({ suggestions: initial, context, onAdd, onDismiss, onClose }: Props) {
   const [items, setItems] = useState<TaskSuggestion[]>(initial);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
 
   const acceptedCount = items.filter(i => i.accepted).length;
 
@@ -43,6 +48,9 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
   const toggleGroup = (id: string) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, group: i.group === 'now' ? 'next' : 'now' } : i));
 
+  const updateDueDate = (id: string, dueDate: string) =>
+    setItems(prev => prev.map(i => i.id === id ? { ...i, dueDate: dueDate || undefined } : i));
+
   const commitEdit = (id: string) => {
     if (editDraft.trim()) {
       setItems(prev => prev.map(i => i.id === id ? { ...i, title: editDraft.trim() } : i));
@@ -51,6 +59,10 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
   };
 
   const handleAdd = () => onAdd(items.filter(i => i.accepted));
+  const handleDismiss = () => {
+    if (onDismiss) onDismiss(items);
+    else onClose();
+  };
 
   return (
     <div
@@ -132,6 +144,12 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                     </button>
                   )}
 
+                  {(item.sender || item.subject) && (
+                    <p className="text-[11px] text-text-muted/80 leading-snug mb-1 truncate">
+                      {[item.sender, item.subject].filter(Boolean).join(' - ')}
+                    </p>
+                  )}
+
                   {/* Reason */}
                   {item.reason && (
                     <p className="text-[11px] text-text-muted leading-snug mb-2">{item.reason}</p>
@@ -153,6 +171,16 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
                     >
                       {item.group === 'now' ? '⚡ Now' : '→ Next'}
                     </button>
+                    <label className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-text-muted">
+                      Due
+                      <input
+                        type="date"
+                        value={item.dueDate ?? ''}
+                        onChange={e => updateDueDate(item.id, e.target.value)}
+                        aria-label={`Due date for ${item.title}`}
+                        className="w-[112px] bg-transparent text-[10px] text-foreground focus-visible:outline-none"
+                      />
+                    </label>
                     {formatDueDate(item.dueDate) && (
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-300/20 bg-amber-300/10 text-amber-200">
                         Due {formatDueDate(item.dueDate)}
@@ -189,10 +217,10 @@ export default function TaskSuggestionModal({ suggestions: initial, context, onA
             Add {acceptedCount} task{acceptedCount !== 1 ? 's' : ''}
           </button>
           <button
-            onClick={onClose}
+            onClick={handleDismiss}
             className="px-5 py-2.5 rounded-xl border border-white/10 text-sm font-medium text-text-muted hover:text-white hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
-            Dismiss
+            Dismiss All
           </button>
         </div>
       </div>

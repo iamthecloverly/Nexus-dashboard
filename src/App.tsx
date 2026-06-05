@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
 import { TaskProvider } from './contexts/TaskProvider';
 import { useTaskContext } from './contexts/taskContext';
+import { TaskSuggestionQueueProvider } from './contexts/TaskSuggestionQueueProvider';
 import { EmailProvider } from './contexts/EmailProvider';
 import { useEmailContext } from './contexts/emailContext';
 import { MusicProvider } from './contexts/MusicProvider';
@@ -284,28 +285,30 @@ function AppContent() {
   return (
     <SystemMetricsProvider>
       <TaskProvider>
-        <EmailProvider>
-          <MusicProvider>
-            <AppAuthed
-              currentView={currentView}
-              setCurrentView={setCurrentView}
-              isLg={isLg}
-              quickAddTrigger={quickAddTrigger}
-              composeTrigger={composeTrigger}
-              calendarRefreshTrigger={calendarRefreshTrigger}
-              focusStartTrigger={focusStartTrigger}
-              commandPaletteOpen={commandPaletteOpen}
-              setCommandPaletteOpen={setCommandPaletteOpen}
-              handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
-              handlePaletteComposeEmail={handlePaletteComposeEmail}
-              handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
-              handlePaletteOpenTimeline={handlePaletteOpenTimeline}
-              handlePaletteGenerateBrief={handlePaletteGenerateBrief}
-              handlePaletteExportData={handlePaletteExportData}
-              handlePaletteStartFocus={handlePaletteStartFocus}
-            />
-          </MusicProvider>
-        </EmailProvider>
+        <TaskSuggestionQueueProvider>
+          <EmailProvider>
+            <MusicProvider>
+              <AppAuthed
+                currentView={currentView}
+                setCurrentView={setCurrentView}
+                isLg={isLg}
+                quickAddTrigger={quickAddTrigger}
+                composeTrigger={composeTrigger}
+                calendarRefreshTrigger={calendarRefreshTrigger}
+                focusStartTrigger={focusStartTrigger}
+                commandPaletteOpen={commandPaletteOpen}
+                setCommandPaletteOpen={setCommandPaletteOpen}
+                handlePaletteOpenQuickAdd={handlePaletteOpenQuickAdd}
+                handlePaletteComposeEmail={handlePaletteComposeEmail}
+                handlePaletteRefreshCalendar={handlePaletteRefreshCalendar}
+                handlePaletteOpenTimeline={handlePaletteOpenTimeline}
+                handlePaletteGenerateBrief={handlePaletteGenerateBrief}
+                handlePaletteExportData={handlePaletteExportData}
+                handlePaletteStartFocus={handlePaletteStartFocus}
+              />
+            </MusicProvider>
+          </EmailProvider>
+        </TaskSuggestionQueueProvider>
       </TaskProvider>
     </SystemMetricsProvider>
   );

@@ -5,6 +5,7 @@ import { List, type ListImperativeAPI, type RowComponentProps } from 'react-wind
 import type { Email, GmailAccountId, ThreadMessage } from '../types/email';
 import { useEmailContext } from '../contexts/emailContext';
 import { useTaskContext } from '../contexts/taskContext';
+import { useTaskSuggestionQueue } from '../contexts/taskSuggestionQueueContext';
 import { useToast } from '../components/Toast';
 import TaskSuggestionModal from '../components/TaskSuggestionModal';
 import { TaskSuggestion } from '../types/taskSuggestion';
@@ -130,6 +131,13 @@ function EmailBodyDisplay({
 const isValidEmail = (addr: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.trim());
 /** Valid task priority values — declared at module level to avoid per-render Set creation */
 const VALID_PRIORITIES = new Set<TaskPriority>(['Priority', 'Critical']);
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -426,7 +434,11 @@ function InboxPane({
   externalComposeTrigger?: number;
 }) {
   const { state, actions } = useEmailContext();
-  const { actions: { addTask } } = useTaskContext();
+  const { state: { tasks }, actions: { addTask } } = useTaskContext();
+  const {
+    state: { pendingSuggestions },
+    actions: { enqueueSuggestions, markAccepted, dismissSuggestions },
+  } = useTaskSuggestionQueue();
   const { showToast } = useToast();
 
   const emails = state.emailsByAccount[accountId];
@@ -453,13 +465,18 @@ function InboxPane({
   const threadCacheRef = useRef<Map<string, { messages: ThreadMessage[]; at: number }>>(new Map());
   const threadPrefetchInflightRef = useRef<Set<string>>(new Set());
 
-  // AI task extraction (primary only for now; server bulk endpoint assumes primary auth)
+  // AI task extraction review queue
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
   const [isAnalyzingDetail, setIsAnalyzingDetail] = useState(false);
-  const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([]);
+  const [showSuggestionReview, setShowSuggestionReview] = useState(false);
   const [suggestionContext, setSuggestionContext] = useState('');
+  const pendingSuggestionsForAccount = useMemo(
+    () => pendingSuggestions.filter(suggestion => suggestion.accountId === accountId),
+    [accountId, pendingSuggestions],
+  );
 
   const handleAddSuggestions = (accepted: TaskSuggestion[]) => {
+    const now = new Date().toISOString();
     for (const s of accepted) {
       const priority: TaskPriority | undefined = VALID_PRIORITIES.has(s.priority as TaskPriority)
         ? (s.priority as TaskPriority)
@@ -472,13 +489,20 @@ function InboxPane({
         dueDate: s.dueDate,
         completed: false,
         group: s.group,
-        source: { type: 'email', id: s.emailId, label: 'AI suggestion' },
-        createdAt: new Date().toISOString(),
+        source: { type: 'email', id: s.emailId, label: s.mode === 'starred' ? 'AI starred email' : 'AI suggestion' },
+        createdAt: now,
         tags,
       });
     }
+    markAccepted(accepted.map(s => s.id));
     showToast(`${accepted.length} task${accepted.length !== 1 ? 's' : ''} added`, 'success');
-    setSuggestions([]);
+    setShowSuggestionReview(false);
+  };
+
+  const handleDismissSuggestions = (dismissed: TaskSuggestion[]) => {
+    dismissSuggestions(dismissed.map(s => s.id));
+    showToast(`${dismissed.length} suggestion${dismissed.length !== 1 ? 's' : ''} dismissed`, 'info');
+    setShowSuggestionReview(false);
   };
 
   const lowerQuery = deferredSearchQuery.toLowerCase();
@@ -556,19 +580,55 @@ function InboxPane({
     showToast('Email marked unread', 'info');
   }, [accountId, detail, showToast, toggleRead]);
 
+  const normalizeAiSuggestions = useCallback((rawSuggestions: Partial<TaskSuggestion>[], mode: TaskSuggestion['mode']): TaskSuggestion[] => {
+    const emailById = new Map<string, Email>(emails.map(email => [email.id, email]));
+    return rawSuggestions.flatMap(raw => {
+      if (typeof raw.id !== 'string' || typeof raw.emailId !== 'string' || typeof raw.title !== 'string') return [];
+      const sourceEmail = emailById.get(raw.emailId);
+      return [{
+        id: raw.id,
+        emailId: raw.emailId,
+        accountId: raw.accountId === 'primary' || raw.accountId === 'secondary' ? raw.accountId : accountId,
+        threadId: typeof raw.threadId === 'string' ? raw.threadId : sourceEmail?.threadId,
+        sender: typeof raw.sender === 'string' ? raw.sender : sourceEmail?.sender,
+        subject: typeof raw.subject === 'string' ? raw.subject : sourceEmail?.subject,
+        title: raw.title,
+        priority: raw.priority === 'Priority' || raw.priority === 'Critical' ? raw.priority : 'Normal',
+        group: raw.group === 'next' ? 'next' : 'now',
+        dueDate: typeof raw.dueDate === 'string' ? raw.dueDate : undefined,
+        tags: Array.isArray(raw.tags) ? raw.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
+        confidence: raw.confidence === 'low' || raw.confidence === 'medium' || raw.confidence === 'high' ? raw.confidence : 'medium',
+        reason: typeof raw.reason === 'string' ? raw.reason : '',
+        mode: raw.mode === 'auto' || raw.mode === 'starred' || raw.mode === 'manual' ? raw.mode : mode,
+        status: 'pending',
+        accepted: raw.accepted ?? true,
+        createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+      }];
+    });
+  }, [accountId, emails]);
+
   const analyzeDetailEmail = useCallback(async () => {
     if (!detail) return;
-    if (accountId !== 'primary') {
-      showToast('AI analysis is currently only enabled for Inbox 1', 'info');
-      return;
-    }
 
     setIsAnalyzingDetail(true);
     try {
-      const res = await fetchWithTimeout('/api/ai/extract-tasks-bulk', {
+      const res = await fetchWithTimeout(`/api/ai/extract-tasks-bulk?accountId=${encodeURIComponent(accountId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-        body: JSON.stringify({ emailIds: [detail.id] }),
+        body: JSON.stringify({
+          emailIds: [detail.id],
+          mode: 'manual',
+          clientToday: localDateKey(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          existingTasks: tasks
+            .filter(task => !task.completed)
+            .slice(-40)
+            .map(task => ({
+              title: task.title,
+              dueDate: task.dueDate,
+              sourceEmailId: task.source?.type === 'email' ? task.source.id : undefined,
+            })),
+        }),
         timeoutMs: 30_000,
       });
       const data = await res.json();
@@ -581,28 +641,38 @@ function InboxPane({
         showToast('No actionable task found in this email', 'info');
         return;
       }
-      setSuggestions(data.suggestions);
+      enqueueSuggestions(normalizeAiSuggestions(data.suggestions, 'manual'));
       setSuggestionContext(detail.subject || 'selected email');
+      setShowSuggestionReview(true);
     } catch {
       showToast('Failed to reach the AI service', 'error');
     } finally {
       setIsAnalyzingDetail(false);
     }
-  }, [accountId, detail, showToast]);
+  }, [accountId, detail, enqueueSuggestions, normalizeAiSuggestions, showToast, tasks]);
 
   const analyzeAllUnread = async () => {
-    if (accountId !== 'primary') {
-      showToast('AI analysis is currently only enabled for Inbox 1', 'info');
-      return;
-    }
     const ids = visibleEmails.filter(e => e.unread).slice(0, 10).map(e => e.id);
     if (ids.length === 0) { showToast('No unread emails to analyze', 'info'); return; }
     setIsAnalyzingAll(true);
     try {
-      const res = await fetchWithTimeout('/api/ai/extract-tasks-bulk', {
+      const res = await fetchWithTimeout(`/api/ai/extract-tasks-bulk?accountId=${encodeURIComponent(accountId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-        body: JSON.stringify({ emailIds: ids }),
+        body: JSON.stringify({
+          emailIds: ids,
+          mode: 'manual',
+          clientToday: localDateKey(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          existingTasks: tasks
+            .filter(task => !task.completed)
+            .slice(-40)
+            .map(task => ({
+              title: task.title,
+              dueDate: task.dueDate,
+              sourceEmailId: task.source?.type === 'email' ? task.source.id : undefined,
+            })),
+        }),
         timeoutMs: 30_000,
       });
       const data = await res.json();
@@ -611,9 +681,10 @@ function InboxPane({
         else showToast(data.error ?? 'Failed to analyze emails', 'error');
         return;
       }
-      if (data.suggestions.length === 0) { showToast('No actionable tasks found in unread emails', 'info'); return; }
-      setSuggestions(data.suggestions);
+      if (!data.suggestions?.length) { showToast('No actionable tasks found in unread emails', 'info'); return; }
+      enqueueSuggestions(normalizeAiSuggestions(data.suggestions, 'manual'));
       setSuggestionContext(`${ids.length} unread email${ids.length !== 1 ? 's' : ''}`);
+      setShowSuggestionReview(true);
     } catch {
       showToast('Failed to reach the AI service', 'error');
     } finally {
@@ -946,9 +1017,9 @@ function InboxPane({
           </button>
           <button
             onClick={analyzeAllUnread}
-            disabled={isAnalyzingAll || !gmailConnected || accountId !== 'primary'}
+            disabled={isAnalyzingAll || !gmailConnected}
             aria-label="Analyze all unread emails with AI"
-            title={accountId === 'primary' ? 'Extract tasks from all unread emails' : 'AI analysis is currently only enabled for Inbox 1'}
+            title="Extract tasks from all unread emails"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/25 transition-colors disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
             {isAnalyzingAll
@@ -1347,12 +1418,13 @@ function InboxPane({
       )}
 
       {/* AI Task Suggestion Modal */}
-      {suggestions.length > 0 && (
+      {showSuggestionReview && pendingSuggestionsForAccount.length > 0 && (
         <TaskSuggestionModal
-          suggestions={suggestions}
+          suggestions={pendingSuggestionsForAccount}
           context={suggestionContext}
           onAdd={handleAddSuggestions}
-          onClose={() => setSuggestions([])}
+          onDismiss={handleDismissSuggestions}
+          onClose={() => setShowSuggestionReview(false)}
         />
       )}
     </div>
