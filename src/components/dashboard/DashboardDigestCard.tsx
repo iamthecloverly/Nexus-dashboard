@@ -136,8 +136,8 @@ export function DashboardDigestCard({
     if (!aiConfigured) return null;
 
     return (
-      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-violet-400/15 bg-violet-400/[0.035] px-3 py-2">
-        <span className="material-symbols-outlined shrink-0 text-[19px] text-violet-300" aria-hidden="true">
+      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
+        <span className="material-symbols-outlined shrink-0 text-[19px] text-primary/80" aria-hidden="true">
           auto_awesome
         </span>
         <div className="min-w-0 flex-1">
@@ -148,7 +148,7 @@ export function DashboardDigestCard({
               onClick={fetchBrief}
               disabled={briefLoading}
               aria-label="Generate AI daily brief"
-              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded text-[11px] font-medium text-violet-300 transition-colors hover:text-violet-200 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-300"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded text-[11px] font-medium text-primary transition-colors hover:text-primary/80 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
               <span className={`material-symbols-outlined !text-[15px] ${briefLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">
                 {briefLoading ? 'progress_activity' : brief ? 'refresh' : 'play_circle'}
@@ -186,12 +186,12 @@ export function DashboardDigestCard({
       className="glass-panel col-span-full relative flex min-h-0 flex-col gap-2.5 overflow-hidden p-3"
       aria-label="Dashboard digest"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-400/45 via-primary/20 to-emerald-300/20" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent" />
 
       {allClear ? (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(320px,0.8fr)_1fr] xl:items-center">
-          <div className="flex min-w-0 items-center gap-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3 py-2.5">
-            <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-300/10 text-[20px] text-emerald-200" aria-hidden="true">
+          <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
+            <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[20px] text-primary" aria-hidden="true">
               verified
             </span>
             <div className="min-w-0">
@@ -231,7 +231,7 @@ export function DashboardDigestCard({
               onClick={onOpenTasks}
               className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-300/10 text-[20px] text-emerald-200" aria-hidden="true">
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
                 task_alt
               </span>
               <span className="min-w-0">
@@ -247,7 +247,7 @@ export function DashboardDigestCard({
               onClick={() => setCurrentView('Communications')}
               className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-300/10 text-[20px] text-orange-200" aria-hidden="true">
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
                 mark_email_unread
               </span>
               <span className="min-w-0">
@@ -263,7 +263,7 @@ export function DashboardDigestCard({
               onClick={onOpenSchedule}
               className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-[20px] text-sky-200" aria-hidden="true">
+              <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[20px] text-text-muted" aria-hidden="true">
                 event_available
               </span>
               <span className="min-w-0">

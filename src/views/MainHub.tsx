@@ -954,22 +954,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
     }
 
     if (scheduleGroups.displayable.length === 0) {
-      const debugHref = (() => {
-        try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          const dtf = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-          const parts = dtf.formatToParts(new Date());
-          const y = parts.find(p => p.type === 'year')?.value ?? '';
-          const m = parts.find(p => p.type === 'month')?.value ?? '';
-          const d = parts.find(p => p.type === 'day')?.value ?? '';
-          if (!tz || !y || !m || !d) return null;
-          const day = `${y}-${m}-${d}`;
-          const q = new URLSearchParams({ day, tz, debug: '1' });
-          return `/api/calendar/events?${q.toString()}`;
-        } catch {
-          return null;
-        }
-      })();
       const clearCalendarFilters = () => {
         setMainCalendarId(null);
         setIncludedCalendarIds(null);
@@ -991,15 +975,26 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             </>
           ) : (
             <div className="flex flex-col items-center gap-1.5">
-              <button
-                type="button"
-                onClick={refreshCalendar}
-                disabled={isCalendarRefreshPending}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                <span className={`material-symbols-outlined text-[15px] ${isCalendarRefreshPending ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
-                {isCalendarRefreshPending ? 'Refreshing...' : 'Refresh calendar'}
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={refreshCalendar}
+                  disabled={isCalendarRefreshPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className={`material-symbols-outlined text-[15px] ${isCalendarRefreshPending ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden="true">refresh</span>
+                  {isCalendarRefreshPending ? 'Refreshing...' : 'Refresh calendar'}
+                </button>
+                <a
+                  href="https://calendar.google.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className="material-symbols-outlined text-[15px]" aria-hidden="true">open_in_new</span>
+                  Open Google Calendar
+                </a>
+              </div>
               <button
                 type="button"
                 onClick={goIntegrations}
@@ -1008,16 +1003,6 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 Manage Google connection
               </button>
             </div>
-          )}
-          {import.meta.env.DEV && debugHref && (
-            <a
-              href={debugHref}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[10px] text-text-muted hover:text-foreground/80 underline underline-offset-2 decoration-white/15 hover:decoration-white/35 transition-colors"
-            >
-              Diagnose (dev) →
-            </a>
           )}
         </div>
       );
@@ -1133,7 +1118,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] lg:hidden ${
               hasDashboardAttention
                 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200'
-                : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'
+                : 'border-white/10 bg-white/[0.035] text-text-muted'
             }`}>
               <span className="material-symbols-outlined !text-[14px]" aria-hidden="true">
                 {hasDashboardAttention ? 'bolt' : 'verified'}
@@ -1149,7 +1134,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               primaryNextAction.kind === 'ai'
                 ? 'border-primary/30 bg-primary/[0.08] hover:bg-primary/[0.12] motion-safe:animate-pulse'
                 : primaryNextAction.kind === 'clear'
-                  ? 'border-emerald-300/18 bg-emerald-300/[0.055] hover:bg-emerald-300/[0.08]'
+                  ? 'border-white/10 bg-white/[0.035] hover:bg-white/[0.055]'
                   : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.06]'
             }`}
           >
@@ -1157,7 +1142,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               primaryNextAction.kind === 'ai'
                 ? 'bg-primary/15 text-primary'
                 : primaryNextAction.kind === 'clear'
-                  ? 'bg-emerald-300/10 text-emerald-200'
+                  ? 'bg-white/[0.055] text-text-muted'
                   : 'bg-white/[0.055] text-foreground/85'
             }`} aria-hidden="true">
               {primaryNextAction.icon}
@@ -1233,7 +1218,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
           {panelVisibility.todayTimeline && (
             <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden scroll-mt-4">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/45 via-sky-400/12 to-transparent pointer-events-none" />
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none" />
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">timeline</span>
@@ -1278,10 +1263,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
 
           {panelVisibility.alerts && (
             <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-300/45 via-amber-300/12 to-transparent pointer-events-none" />
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none" />
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
-                  <span className="material-symbols-outlined text-amber-300 text-[22px]" aria-hidden="true">release_alert</span>
+                  <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">release_alert</span>
                   Action Center
                 </h2>
                 <span className="text-[10px] font-mono text-text-muted bg-surface px-2 py-0.5 rounded">
@@ -1310,7 +1295,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Conflicts</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${calendarConflicts.length > 0 ? 'border-red-300/25 bg-red-300/10 text-red-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${calendarConflicts.length > 0 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
                       {calendarConflicts.length > 0 ? `${calendarConflicts.length} found` : 'Clear'}
                     </span>
                   </div>
@@ -1324,7 +1309,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Deferred</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${deferredTasks.length > 0 ? 'border-sky-300/25 bg-sky-300/10 text-sky-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${deferredTasks.length > 0 ? 'border-primary/25 bg-primary/10 text-primary' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
                       {deferredTasks.length > 0 ? `${deferredTasks.length} later` : 'None'}
                     </span>
                   </div>
@@ -1525,7 +1510,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           {/* Tasks */}
           {panelVisibility.tasks && (
           <div id="main-tasks-panel" className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] max-h-[360px] p-5 flex flex-col relative overflow-hidden scroll-mt-4">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-400/45 via-green-400/12 to-transparent pointer-events-none"></div>
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                 <span className="material-symbols-outlined text-text-muted text-[22px]" aria-hidden="true">checklist</span>
@@ -1580,7 +1565,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <button
                   type="button"
                   onClick={() => { setShowQuickAdd(true); setTimeout(() => quickAddRef.current?.focus(), 50); }}
-                  className="shrink-0 rounded-full border border-green-300/20 bg-green-300/10 px-3 py-1.5 text-xs font-semibold text-green-200 hover:bg-green-300/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="shrink-0 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   Add
                 </button>
@@ -1731,7 +1716,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
             className="glass-panel col-span-1 md:col-span-1 xl:col-span-2 min-h-[190px] p-5 flex flex-col relative group/box cursor-pointer overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             aria-label="Open email inbox"
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-400/45 via-orange-400/12 to-transparent pointer-events-none"></div>
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none"></div>
             {unreadCount > 0 && (
               <div className="absolute top-5 right-5 w-2 h-2">
                 <span className="animate-pulse motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75" aria-hidden="true"></span>
@@ -1739,7 +1724,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
               </div>
             )}
             <h2 className="font-heading text-lg text-foreground mb-6 flex items-center gap-3">
-              <span className="material-symbols-outlined text-orange-300 text-[22px]" aria-hidden="true">mail</span>
+              <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">mail</span>
               Gmail Inbox
             </h2>
             <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
@@ -1747,7 +1732,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 <>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted/95">Gmail</p>
-                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${unreadCount > 0 ? 'border-orange-300/25 bg-orange-300/10 text-orange-200' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'}`}>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${unreadCount > 0 ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-white/10 bg-white/[0.035] text-text-muted'}`}>
                       {unreadCount > 0 ? `${unreadCount} unread` : 'Inbox clear'}
                     </span>
                   </div>
