@@ -1217,7 +1217,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           )}
 
           {panelVisibility.todayTimeline && (
-            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden scroll-mt-4">
+            <section id="main-today-timeline-panel" className="glass-panel col-span-1 md:col-span-2 xl:col-span-4 self-start p-4 flex flex-col relative overflow-hidden scroll-mt-4">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none" />
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
@@ -1229,11 +1229,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                 </span>
               </div>
               {todayTimeline.length === 0 ? (
-                <div className="flex flex-1 flex-col justify-center rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-text-muted">
+                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-text-muted">
                   Nothing needs attention right now.
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">
                   {todayTimeline.map(item => (
                     <button
                       key={item.id}
@@ -1253,7 +1253,7 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-text-muted">{item.subtitle}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] font-mono text-text-muted">{item.timeLabel}</span>
+                      <span className="shrink-0 self-start text-[11px] font-mono text-text-muted">{item.timeLabel}</span>
                     </button>
                   ))}
                 </div>
@@ -1262,9 +1262,9 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
           )}
 
           {panelVisibility.alerts && (
-            <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-3 min-h-[195px] p-4 flex flex-col relative overflow-hidden">
+            <section className="glass-panel col-span-1 md:col-span-2 xl:col-span-2 self-start p-4 flex flex-col relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent pointer-events-none" />
-              <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
                 <h2 className="font-heading text-lg text-foreground flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">release_alert</span>
                   Action Center
@@ -1273,11 +1273,11 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                   {followUpEmails.length + calendarConflicts.length + deferredTasks.length}
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-2">
                 <button
                   type="button"
                   onClick={() => setCurrentView('Communications')}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Follow-ups</p>
@@ -1285,13 +1285,15 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       {followUpEmails.length > 0 ? `${followUpEmails.length} waiting` : 'Clear'}
                     </span>
                   </div>
-                  <p className="mt-3 truncate text-sm font-medium text-foreground">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
-                  <p className="mt-1 text-xs text-primary">{followUpEmails.length > 0 ? 'Review follow-ups' : 'Open Communications'}</p>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{followUpEmails[0]?.sender ?? 'No waiting emails'}</p>
+                    <p className="shrink-0 text-xs text-primary">{followUpEmails.length > 0 ? 'Review' : 'Open'}</p>
+                  </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowSchedule(true)}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Conflicts</p>
@@ -1299,13 +1301,15 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       {calendarConflicts.length > 0 ? `${calendarConflicts.length} found` : 'Clear'}
                     </span>
                   </div>
-                  <p className="mt-3 truncate text-sm font-medium text-foreground">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
-                  <p className="mt-1 text-xs text-primary">{calendarConflicts.length > 0 ? 'Open schedule' : 'View schedule'}</p>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{calendarConflicts[0]?.[0].title ?? 'Calendar clear'}</p>
+                    <p className="shrink-0 text-xs text-primary">View</p>
+                  </div>
                 </button>
                 <button
                   type="button"
                   onClick={scrollToTasks}
-                  className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left hover:bg-white/[0.055] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted/95">Deferred</p>
@@ -1313,8 +1317,10 @@ export default function MainHub({ setCurrentView, externalQuickAddTrigger, exter
                       {deferredTasks.length > 0 ? `${deferredTasks.length} later` : 'None'}
                     </span>
                   </div>
-                  <p className="mt-3 truncate text-sm font-medium text-foreground">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
-                  <p className="mt-1 text-xs text-primary">{deferredTasks.length > 0 ? 'Review deferred' : 'Open tasks'}</p>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-medium text-foreground">{deferredTasks[0]?.title ?? 'Nothing deferred'}</p>
+                    <p className="shrink-0 text-xs text-primary">{deferredTasks.length > 0 ? 'Review' : 'Open'}</p>
+                  </div>
                 </button>
               </div>
             </section>

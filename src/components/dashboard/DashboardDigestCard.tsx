@@ -136,8 +136,8 @@ export function DashboardDigestCard({
     if (!aiConfigured) return null;
 
     return (
-      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
-        <span className="material-symbols-outlined shrink-0 text-[19px] text-primary/80" aria-hidden="true">
+      <div className="flex min-w-0 items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
+        <span className="material-symbols-outlined mt-0.5 shrink-0 text-[19px] text-primary/80" aria-hidden="true">
           auto_awesome
         </span>
         <div className="min-w-0 flex-1">
@@ -157,7 +157,9 @@ export function DashboardDigestCard({
             </button>
           </div>
           {brief ? (
-            <p className="mt-1 max-w-[65ch] truncate text-sm text-foreground/90">{brief}</p>
+            <p className="mt-1 max-w-[75ch] text-sm leading-relaxed text-foreground/90">
+              {brief}
+            </p>
           ) : briefError ? (
             briefError === 'key_missing' || briefError === 'key_invalid' ? (
               <p className="mt-1 text-xs text-red-300">
@@ -189,7 +191,7 @@ export function DashboardDigestCard({
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/45 via-primary/12 to-transparent" />
 
       {allClear ? (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(320px,0.8fr)_1fr] xl:items-center">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(280px,0.65fr)_minmax(420px,1fr)] xl:items-start">
           <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
             <span className="material-symbols-outlined flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[20px] text-primary" aria-hidden="true">
               verified
